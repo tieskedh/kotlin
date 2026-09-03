@@ -232,6 +232,19 @@ private class InlineMethodProducerRoute<T> {
         val callerMarkerAlias: R = marker
         return sourceNaturalAlias.produce<R>(callerMarkerAlias)
     }
+
+    fun routePrivateCallerMethodArgument(
+        source: InlineMethodProducer<T>,
+        marker: T,
+    ): T = privateCallerMethodArgument<T>(source, marker)
+
+    private fun <R> privateCallerMethodArgument(
+        source: InlineMethodProducer<T>,
+        marker: R,
+    ): T {
+        val privateCallerMarkerAlias: R = marker
+        return source.produce<R>(privateCallerMarkerAlias)
+    }
 }
 
 private class InlineIntMethodProducer(private val value: Int) : InlineMethodProducer<Int> {
@@ -244,6 +257,16 @@ private class InlineIntMethodProducer(private val value: Int) : InlineMethodProd
 private class InlineStringMethodProducer(private val value: String) : InlineMethodProducer<String> {
     override fun <R> produce(marker: R): String {
         if (marker != value) error("unexpected String MethodSpec marker")
+        return value
+    }
+}
+
+private class InlineIntMarkedStringProducer(
+    private val value: String,
+    private val expectedMarker: Int,
+) : InlineMethodProducer<String> {
+    override fun <R> produce(marker: R): String {
+        if (marker != expectedMarker) error("unexpected mixed MethodSpec marker")
         return value
     }
 }
@@ -622,6 +645,22 @@ fun box(): String {
             InlineIntMethodProducer(48), 48
         ) != 48) {
         return "caller MethodDef MethodSpec route"
+    }
+    val distinctCallerMarker: Any? = "distinct caller MethodDef"
+    if (InlineMethodProducerRoute<String>().routeCallerMethodArgument(
+            InlineStringMethodProducer("distinct caller MethodDef"), distinctCallerMarker
+        ) != "distinct caller MethodDef") {
+        return "distinct owner and caller MethodDef parameters"
+    }
+    if (InlineMethodProducerRoute<String>().routeCallerMethodArgument(
+            InlineIntMarkedStringProducer("value caller MethodDef", 53), 53
+        ) != "value caller MethodDef") {
+        return "reference owner and value caller MethodDef parameters"
+    }
+    if (InlineMethodProducerRoute<String>().routePrivateCallerMethodArgument(
+            InlineStringMethodProducer("private caller MethodDef"), "private caller MethodDef"
+        ) != "private caller MethodDef") {
+        return "private caller MethodDef entry"
     }
 
     val intMethodLookupRoute = InlineMethodLookupRoute<Int>()

@@ -153,6 +153,8 @@ internal class DotNetGenericOwnerPhysicalValueRetainedProducedCarrier internal c
     fun bindEmitterCarrierOrNull(
         typeMapper: DotNetIlTypeMapper,
         physicalMethodOwner: DotNetIlClassInfo,
+        physicalMethodIdentity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local? = null,
+        physicalMethodGenericArity: Int = 0,
         liveInitializer: IrExpression?,
         initializerCarrier: DotNetIlValueType?,
         initializerDirectStorageReadCarrier: DotNetIlValueType?,
@@ -187,8 +189,19 @@ internal class DotNetGenericOwnerPhysicalValueRetainedProducedCarrier internal c
                         emitterValidation !=
                         DotNetGenericOwnerPhysicalValueEmitterValidation.DIRECT_CALL_RESULT_CARRIER)
             ) return null
-            val expected = parameter.bindOwnerParameterOrNull(typeMapper, physicalMethodOwner)
-                ?: return null
+            val expected = when (parameter.binder) {
+                is DotNetGenericOwnerPhysicalGenericBinderReference.Type ->
+                    parameter.bindOwnerParameterOrNull(typeMapper, physicalMethodOwner)
+                is DotNetGenericOwnerPhysicalGenericBinderReference.Method -> {
+                    if (emitterValidation !=
+                        DotNetGenericOwnerPhysicalValueEmitterValidation.DIRECT_STORAGE_READ_CARRIER
+                    ) return null
+                    parameter.bindCurrentMethodParameterOrNull(
+                        physicalMethodIdentity,
+                        physicalMethodGenericArity,
+                    )
+                }
+            } ?: return null
             val actual = when (emitterValidation) {
                 DotNetGenericOwnerPhysicalValueEmitterValidation.DIRECT_STORAGE_READ_CARRIER ->
                     initializerDirectStorageReadCarrier
@@ -803,6 +816,7 @@ internal class DotNetGenericOwnerPhysicalValueLocalPlacementAuthority private co
                         IrSimpleFunctionSymbol,
                         Map<IrValueSymbol, DotNetGenericOwnerPhysicalValueRetainedProducedCarrier>,
                         > = emptyMap(),
+            localPhysicalAuthority: DotNetLocalGenericOwnerPhysicalAuthority? = null,
         ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerPhysicalValueLocalPlacementAuthority> {
             val authoritativeOperationsByCallIdentity = IdentityHashMap<
                     IrCall,
@@ -981,22 +995,52 @@ internal class DotNetGenericOwnerPhysicalValueLocalPlacementAuthority private co
                     }
                     val emitterValidation = when (val symbolic = direct.carrier.type) {
                         is DotNetGenericOwnerSymbolicCarrierReference.Parameter -> {
-                            val binder = (symbolic.binder as?
-                                    DotNetGenericOwnerPhysicalGenericBinderReference.Type)
-                                ?.definition as? DotNetGenericOwnerPhysicalTypeDefIdentity.Local
-                                ?: return@forEach
                             if (direct.carrier.nullEncoding !=
-                                DotNetGenericOwnerPhysicalNullEncoding.SUBSTITUTION_DEPENDENT ||
-                                binder.owner !== physicalOwner ||
-                                symbolic.index !in physicalOwner.owner.typeParameters.indices ||
-                                (initializer is IrWhen && directResultInitializerPlan == null)
+                                DotNetGenericOwnerPhysicalNullEncoding.SUBSTITUTION_DEPENDENT
                             ) return@forEach
-                            if (directResultInitializerPlan != null) {
-                                DotNetGenericOwnerPhysicalValueEmitterValidation
-                                    .DIRECT_CALL_RESULT_CARRIER
-                            } else {
-                                initializer.directPhysicalValueEmitterValidationOrNull()
-                                    ?: return@forEach
+                            when (val parameterBinder = symbolic.binder) {
+                                is DotNetGenericOwnerPhysicalGenericBinderReference.Type -> {
+                                    val binder = parameterBinder.definition as?
+                                            DotNetGenericOwnerPhysicalTypeDefIdentity.Local
+                                            ?: return@forEach
+                                    if (binder.owner !== physicalOwner ||
+                                        symbolic.index !in physicalOwner.owner.typeParameters.indices ||
+                                        (initializer is IrWhen && directResultInitializerPlan == null)
+                                    ) return@forEach
+                                    if (directResultInitializerPlan != null) {
+                                        DotNetGenericOwnerPhysicalValueEmitterValidation
+                                            .DIRECT_CALL_RESULT_CARRIER
+                                    } else {
+                                        initializer.directPhysicalValueEmitterValidationOrNull()
+                                            ?: return@forEach
+                                    }
+                                }
+                                is DotNetGenericOwnerPhysicalGenericBinderReference.Method -> {
+                                    val binder = parameterBinder.definition as?
+                                            DotNetGenericOwnerPhysicalMethodDefIdentity.Local
+                                            ?: return@forEach
+                                    val current = localPhysicalAuthority
+                                        ?.currentMethodOrNull(record.physicalFunction)
+                                        ?: return@forEach
+                                    val method = localPhysicalAuthority.boundDeclarations
+                                        ?.methodDescriptionOrNull(current) ?: return@forEach
+                                    if (!binder.sameLocalMethodIdentityAs(current) ||
+                                        binder.function !== record.physicalFunction ||
+                                        binder.role != DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY ||
+                                        method.declaringType !=
+                                            DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+                                                physicalOwner,
+                                                view = null,
+                                            ) ||
+                                        symbolic.index !in 0 until method.signature.genericArity ||
+                                        initializer.directPhysicalValueEmitterValidationOrNull() !=
+                                            DotNetGenericOwnerPhysicalValueEmitterValidation
+                                                .DIRECT_STORAGE_READ_CARRIER ||
+                                        directResultInitializerPlan != null
+                                    ) return@forEach
+                                    DotNetGenericOwnerPhysicalValueEmitterValidation
+                                        .DIRECT_STORAGE_READ_CARRIER
+                                }
                             }
                         }
                         is DotNetGenericOwnerSymbolicCarrierReference.Constructed -> {
@@ -1188,6 +1232,20 @@ private fun DotNetGenericOwnerSymbolicCarrierReference.Parameter.bindOwnerParame
         index !in 0 until physicalMethodOwner.typeParameterCount
     ) return null
     return DotNetIlValueType.TypeParameter(index, isMethodParameter = false)
+}
+
+/** `!!n` is meaningful only inside the exact MethodDef which owns that GenericParam row. */
+private fun DotNetGenericOwnerSymbolicCarrierReference.Parameter.bindCurrentMethodParameterOrNull(
+    physicalMethodIdentity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local?,
+    physicalMethodGenericArity: Int,
+): DotNetIlValueType.TypeParameter? {
+    val binder = (binder as? DotNetGenericOwnerPhysicalGenericBinderReference.Method)
+        ?.definition as? DotNetGenericOwnerPhysicalMethodDefIdentity.Local ?: return null
+    if (physicalMethodIdentity == null ||
+        !binder.sameLocalMethodIdentityAs(physicalMethodIdentity) ||
+        index !in 0 until physicalMethodGenericArity
+    ) return null
+    return DotNetIlValueType.TypeParameter(index, isMethodParameter = true)
 }
 
 private fun DotNetGenericOwnerSymbolicCarrierReference.Parameter.bindDeclaredParameterOrNull(

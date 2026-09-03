@@ -41,6 +41,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalGenericPara
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalGenericBinderReference
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalInterfaceEdgeInput
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalInterfaceCapabilityDispatcherSelection
+import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalCurrentMethodInput
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalStateFamilyInput
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalStateInput
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalTypeInput
@@ -63,6 +64,7 @@ import org.jetbrains.kotlin.backend.dotnet.declarationIndependentLeafCarrierOrNu
 import org.jetbrains.kotlin.backend.dotnet.genericOwnerDeclarationIndependentLeafPrototypeOrNull
 import org.jetbrains.kotlin.backend.dotnet.genericOwnerPrototypePhysicalGenericParameters
 import org.jetbrains.kotlin.backend.dotnet.isReifiedByGenericOwnerRehearsal
+import org.jetbrains.kotlin.backend.dotnet.isDotNetStdlibImplementation
 import org.jetbrains.kotlin.backend.dotnet.markBoundGenericOwnerStateWrites
 import org.jetbrains.kotlin.backend.dotnet.referencesTypeParameterOf
 import org.jetbrains.kotlin.backend.dotnet.requiresExactInputView
@@ -82,11 +84,14 @@ import org.jetbrains.kotlin.ir.expressions.IrSetField
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
+import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.defaultType
 import org.jetbrains.kotlin.ir.types.isAny
 import org.jetbrains.kotlin.ir.types.isMarkedNullable
 import org.jetbrains.kotlin.ir.types.isNullableAny
+import org.jetbrains.kotlin.ir.util.isPublishedApi
+import org.jetbrains.kotlin.ir.util.isOriginallyLocalDeclaration
 import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
 import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 import org.jetbrains.kotlin.ir.visitors.acceptVoid
@@ -321,6 +326,25 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
                 }
             }
             val methodDefinitions = mutableListOf<DotNetGenericOwnerPhysicalMethodDefReference>()
+            val currentMethods = mutableListOf<DotNetLocalGenericOwnerPhysicalCurrentMethodInput>()
+            for (plan in context.genericOwnerArchitecturePlans.values) {
+                if (!plan.isReifiedByGenericOwnerRehearsal || plan.owner.kind != ClassKind.CLASS) continue
+                for (entry in plan.memberFamilies.entries) {
+                    val source = entry.key
+                    val family = entry.value
+                    val selection = bindCurrentTypedMethodDefOrNull(
+                        plan.owner,
+                        source,
+                        family,
+                        plan.prototypeMembers[source]
+                            ?.get(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY),
+                        inputsByIdentity,
+                        declarations,
+                    ) ?: continue
+                    methodDefinitions += selection.first
+                    currentMethods += selection.second
+                }
+            }
             val callableFamilies = mutableListOf<DotNetLocalGenericOwnerPhysicalCallableFamilyInput>()
             val directProducerSelections = IdentityHashMap<IrSimpleFunction, CallableSelection>()
             for (entry in context.genericOwnerCapabilitySlots.entries) {
@@ -373,6 +397,7 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
             DotNetGenericOwnerPhysicalBindingResult.Bound(
                 DotNetLocalGenericOwnerPhysicalBoundInput(
                     methodDefinitions = methodDefinitions.distinct(),
+                    currentMethods = currentMethods.distinct(),
                     callableFamilies = callableFamilies,
                     directSupertypeEdgeSets = edgeSets.distinct(),
                     completeEmissionFamilies = completeEmissionFamilies,
@@ -388,6 +413,303 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
                 error("Internal .NET backend error: ${bound.reason}")
             DotNetGenericOwnerPhysicalBindingResult.Unavailable -> Unit
         }
+    }
+
+    /**
+     * Binds the first complete caller-MethodDef grammar selected by RepresentationPlan.
+     *
+     * This is intentionally narrower than general MethodSpec support: one final typed entry owns
+     * one unconstrained `!!R`; only a bare `R` input may later seed value flow. Other signature
+     * slots are still recorded completely so partial MethodDef authority can never escape.
+     */
+    private fun bindCurrentTypedMethodDefOrNull(
+        owner: IrClass,
+        source: IrSimpleFunction,
+        family: org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberFamilyPlan,
+        prototype: org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeMember?,
+        inputsByIdentity: Map<
+                DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+                DotNetLocalGenericOwnerPhysicalTypeInput,
+                >,
+        declarations: org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalDeclarationIndex,
+    ): Pair<DotNetGenericOwnerPhysicalMethodDefReference, DotNetLocalGenericOwnerPhysicalCurrentMethodInput>? {
+        prototype ?: return null
+        val physical = prototype.function
+        if (source.parent !== owner || prototype.source !== source || physical.parent !== owner ||
+            context.preLoweringGenericOwnerFunctionInputAuthorities[source] == null ||
+            source.isFakeOverride || source.body == null || source.isSuspend || source.isPublishedApi() ||
+            source.isOriginallyLocalDeclaration ||
+            source.correspondingPropertySymbol != null || source.modality != Modality.FINAL ||
+            source.overriddenSymbols.isNotEmpty() ||
+            DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY !in family.roles ||
+            DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in family.roles ||
+            family.roles.any { role ->
+                role != DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY &&
+                        role != DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER
+            } ||
+            family.maskedDefaultDispatcher != null || family.requiresDirectSuperTargets ||
+            family.directSuperCallCount != 0 || family.directSuperCalls.isNotEmpty() ||
+            physical.modality != Modality.FINAL || physical.visibility != source.visibility
+        ) return null
+        val sourceMethodParameter = source.typeParameters.singleOrNull() ?: return null
+        val prototypeMethodParameter = physical.typeParameters.singleOrNull() ?: return null
+        if (!sourceMethodParameter.isUnconstrainedInvariantMethodParameter() ||
+            !prototypeMethodParameter.isUnconstrainedInvariantMethodParameter()
+        ) return null
+        val sourceParameters = source.parameters.filter { parameter ->
+            parameter.kind == IrParameterKind.Regular
+        }
+        val prototypeParameters = physical.parameters.filter { parameter ->
+            parameter.kind == IrParameterKind.Regular
+        }
+        if (source.dispatchReceiverParameter == null || physical.dispatchReceiverParameter == null ||
+            source.parameters.any { parameter ->
+                parameter.kind != IrParameterKind.DispatchReceiver &&
+                        parameter.kind != IrParameterKind.Regular
+            } || physical.parameters.any { parameter ->
+                parameter.kind != IrParameterKind.DispatchReceiver &&
+                        parameter.kind != IrParameterKind.Regular
+            } || sourceParameters.size != prototypeParameters.size ||
+            sourceParameters.size != family.parameterSlotDomains.size ||
+            sourceParameters.any { parameter ->
+                parameter.defaultValue != null || parameter.varargElementType != null
+            } || prototypeParameters.any { parameter ->
+                parameter.defaultValue != null || parameter.varargElementType != null
+            } || source.returnType.isMarkedNullable() || physical.returnType.isMarkedNullable()
+        ) return null
+
+        val ownerIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(owner.symbol, view = null)
+        if (inputsByIdentity[ownerIdentity]?.role != DotNetLocalGenericOwnerPhysicalTypeRole.GENERIC_CLASS) {
+            return null
+        }
+        val methodIdentity = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+            source.symbol,
+            DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+        )
+        var bareMethodParameterCount = 0
+        val parameterSlots = sourceParameters.indices.map { index ->
+            val sourceParameter = sourceParameters[index]
+            val prototypeParameter = prototypeParameters[index]
+            val carrier = bindCurrentMethodPrototypeCarrierOrNull(
+                prototypeParameter.type,
+                sourceParameter.type,
+                owner,
+                physical,
+                source,
+                ownerIdentity,
+                methodIdentity,
+                inputsByIdentity,
+                declarations,
+                allowMethodParameter = true,
+            ) ?: return null
+            val methodParameter = carrier as? DotNetGenericOwnerSymbolicCarrierReference.Parameter
+            val isBareCurrentMethodParameter = methodParameter?.binder ==
+                    DotNetGenericOwnerPhysicalGenericBinderReference.Method(methodIdentity) &&
+                    methodParameter.index == 0
+            if (isBareCurrentMethodParameter) bareMethodParameterCount++
+            val domain = family.parameterSlotDomains[index]
+            val validDomain = when {
+                isBareCurrentMethodParameter ->
+                    domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT
+                carrier.referencesCurrentOwnerParameter(ownerIdentity) ->
+                    domain == DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT
+                else -> domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT
+            }
+            if (!validDomain) return null
+            DotNetGenericOwnerPhysicalCallableValueSlotReference(domain, carrier)
+        }
+        if (bareMethodParameterCount != 1 ||
+            family.returnSlotDomain != DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT
+        ) return null
+        val resultCarrier = bindBareCurrentOwnerParameterPairOrNull(
+            physical.returnType,
+            source.returnType,
+            owner,
+            ownerIdentity,
+            declarations,
+        ) ?: return null
+        val visibility = when {
+            source.isDotNetStdlibImplementation ->
+                DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC
+            source.visibility == DescriptorVisibilities.PUBLIC ->
+                DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC
+            source.visibility == DescriptorVisibilities.PROTECTED ->
+                DotNetGenericOwnerPhysicalMemberVisibility.FAMILY
+            source.visibility == DescriptorVisibilities.INTERNAL ->
+                DotNetGenericOwnerPhysicalMemberVisibility.ASSEMBLY
+            source.visibility == DescriptorVisibilities.PRIVATE ->
+                DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE
+            else -> return null
+        }
+        val method = DotNetGenericOwnerPhysicalMethodDefReference(
+            identity = methodIdentity,
+            declaringType = ownerIdentity,
+            visibility = visibility,
+            dispatch = DotNetGenericOwnerPhysicalMemberDispatch.FINAL,
+            signature = DotNetGenericOwnerPhysicalMethodSignatureReference(
+                isInstance = true,
+                genericArity = 1,
+                resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct(
+                    DotNetGenericOwnerPhysicalCallableValueSlotReference(
+                        family.returnSlotDomain,
+                        resultCarrier,
+                    ),
+                ),
+                parameterSlots = parameterSlots,
+            ),
+            genericParameters = listOf(
+                DotNetGenericOwnerPhysicalGenericParameterReference(
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                    constraints = emptyList(),
+                ),
+            ),
+        )
+        return method to DotNetLocalGenericOwnerPhysicalCurrentMethodInput(
+            source.symbol,
+            methodIdentity,
+        )
+    }
+
+    private fun org.jetbrains.kotlin.ir.declarations.IrTypeParameter
+            .isUnconstrainedInvariantMethodParameter(): Boolean =
+        variance == Variance.INVARIANT && !isReified &&
+                superTypes.all { bound -> bound.isAny() || bound.isNullableAny() }
+
+    /** Binds only the signature atoms admitted by the first caller-MethodDef grammar. */
+    private fun bindCurrentMethodPrototypeCarrierOrNull(
+        prototypeType: IrType,
+        sourceType: IrType,
+        owner: IrClass,
+        prototypeMethod: IrSimpleFunction,
+        sourceMethod: IrSimpleFunction,
+        ownerIdentity: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+        methodIdentity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local,
+        inputsByIdentity: Map<
+                DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+                DotNetLocalGenericOwnerPhysicalTypeInput,
+                >,
+        declarations: org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalDeclarationIndex,
+        allowMethodParameter: Boolean,
+    ): DotNetGenericOwnerSymbolicCarrierReference? {
+        if (prototypeType.isMarkedNullable() || sourceType.isMarkedNullable()) return null
+        val prototypeSimple = prototypeType as? IrSimpleType ?: return null
+        val sourceSimple = sourceType as? IrSimpleType ?: return null
+        val prototypeParameter = (prototypeSimple.classifier as? IrTypeParameterSymbol)?.owner
+        val sourceParameter = (sourceSimple.classifier as? IrTypeParameterSymbol)?.owner
+        if (prototypeParameter != null || sourceParameter != null) {
+            if (prototypeParameter == null || sourceParameter == null ||
+                prototypeSimple.arguments.isNotEmpty() || sourceSimple.arguments.isNotEmpty()
+            ) return null
+            val prototypeMethodIndex = prototypeMethod.typeParameters.indexOf(prototypeParameter)
+            val sourceMethodIndex = sourceMethod.typeParameters.indexOf(sourceParameter)
+            if (prototypeMethodIndex >= 0 || sourceMethodIndex >= 0) {
+                if (!allowMethodParameter || prototypeMethodIndex != sourceMethodIndex ||
+                    prototypeMethodIndex != 0
+                ) return null
+                return DotNetGenericOwnerSymbolicCarrierReference.Parameter
+                    .methodParameterReference(methodIdentity, prototypeMethodIndex)
+            }
+            val prototypeOwnerIndex = owner.typeParameters.indexOf(prototypeParameter)
+            val sourceOwnerIndex = owner.typeParameters.indexOf(sourceParameter)
+            if (prototypeOwnerIndex < 0 || prototypeOwnerIndex != sourceOwnerIndex) return null
+            return when (val binding = declarations.typeParameterOrError(
+                ownerIdentity,
+                prototypeOwnerIndex,
+            )) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict,
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+                -> null
+            }
+        }
+        val prototypeLeaf = prototypeType.genericOwnerDeclarationIndependentLeafPrototypeOrNull()
+            ?.declarationIndependentLeafCarrierOrNull()
+        val sourceLeaf = sourceType.genericOwnerDeclarationIndependentLeafPrototypeOrNull()
+            ?.declarationIndependentLeafCarrierOrNull()
+        if (prototypeLeaf != null || sourceLeaf != null) {
+            return prototypeLeaf.takeIf { it != null && it == sourceLeaf }
+        }
+        val prototypeClassifier = prototypeSimple.classifier as? IrClassSymbol ?: return null
+        val sourceClassifier = sourceSimple.classifier as? IrClassSymbol ?: return null
+        if (prototypeClassifier !== sourceClassifier ||
+            prototypeSimple.arguments.size != prototypeClassifier.owner.typeParameters.size ||
+            prototypeSimple.arguments.size != sourceSimple.arguments.size ||
+            prototypeSimple.arguments.isEmpty()
+        ) return null
+        val definition = listOfNotNull(
+            DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+                prototypeClassifier,
+                view = null,
+            ).takeIf { candidate ->
+                inputsByIdentity[candidate]?.role ==
+                        DotNetLocalGenericOwnerPhysicalTypeRole.GENERIC_CLASS
+            },
+            DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+                prototypeClassifier,
+                DotNetGenericInterfaceView.DECLARED,
+            ).takeIf { candidate ->
+                inputsByIdentity[candidate]?.role ==
+                        DotNetLocalGenericOwnerPhysicalTypeRole.NATURAL_INTERFACE
+            },
+        ).singleOrNull() ?: return null
+        val arguments = prototypeSimple.arguments.indices.map { index ->
+            val prototypeProjection = prototypeSimple.arguments[index] as? IrTypeProjection ?: return null
+            val sourceProjection = sourceSimple.arguments[index] as? IrTypeProjection ?: return null
+            if (prototypeProjection.variance != Variance.INVARIANT ||
+                sourceProjection.variance != Variance.INVARIANT
+            ) return null
+            val argument = bindBareCurrentOwnerParameterPairOrNull(
+                prototypeProjection.type,
+                sourceProjection.type,
+                owner,
+                ownerIdentity,
+                declarations,
+            ) ?: return null
+            argument
+        }
+        return when (val binding = declarations.constructTypeOrError(definition, arguments)) {
+            is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+            is DotNetGenericOwnerPhysicalBindingResult.Conflict,
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            -> null
+        }
+    }
+
+    private fun bindBareCurrentOwnerParameterPairOrNull(
+        prototypeType: IrType,
+        sourceType: IrType,
+        owner: IrClass,
+        ownerIdentity: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+        declarations: org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalDeclarationIndex,
+    ): DotNetGenericOwnerSymbolicCarrierReference.Parameter? {
+        val prototypeSimple = prototypeType as? IrSimpleType ?: return null
+        val sourceSimple = sourceType as? IrSimpleType ?: return null
+        if (prototypeSimple.isMarkedNullable() || sourceSimple.isMarkedNullable() ||
+            prototypeSimple.arguments.isNotEmpty() || sourceSimple.arguments.isNotEmpty()
+        ) return null
+        val prototypeParameter = (prototypeSimple.classifier as? IrTypeParameterSymbol)?.owner ?: return null
+        val sourceParameter = (sourceSimple.classifier as? IrTypeParameterSymbol)?.owner ?: return null
+        val prototypeIndex = owner.typeParameters.indexOf(prototypeParameter)
+        val sourceIndex = owner.typeParameters.indexOf(sourceParameter)
+        if (prototypeIndex < 0 || prototypeIndex != sourceIndex) return null
+        return when (val binding = declarations.typeParameterOrError(ownerIdentity, prototypeIndex)) {
+            is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+            is DotNetGenericOwnerPhysicalBindingResult.Conflict,
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            -> null
+        }
+    }
+
+    private fun DotNetGenericOwnerSymbolicCarrierReference.referencesCurrentOwnerParameter(
+        ownerIdentity: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+    ): Boolean = when (this) {
+        is DotNetGenericOwnerSymbolicCarrierReference.Parameter ->
+            binder == DotNetGenericOwnerPhysicalGenericBinderReference.Type(ownerIdentity)
+        is DotNetGenericOwnerSymbolicCarrierReference.Constructed ->
+            arguments.any { argument -> argument.referencesCurrentOwnerParameter(ownerIdentity) }
+        is DotNetGenericOwnerSymbolicCarrierReference.SzArray ->
+            element.referencesCurrentOwnerParameter(ownerIdentity)
+        is DotNetGenericOwnerSymbolicCarrierReference.Leaf -> false
     }
 
     /**

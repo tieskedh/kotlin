@@ -1069,16 +1069,37 @@ internal class DotNetLocalGenericOwnerPhysicalStateFamilyInput(
 /** All declaration facts selected together for the one BOUND authority epoch. */
 internal class DotNetLocalGenericOwnerPhysicalBoundInput(
     methodDefinitions: Iterable<DotNetGenericOwnerPhysicalMethodDefReference>,
+    currentMethods: Iterable<DotNetLocalGenericOwnerPhysicalCurrentMethodInput> = emptyList(),
     callableFamilies: Iterable<DotNetLocalGenericOwnerPhysicalCallableFamilyInput>,
     directSupertypeEdgeSets: Iterable<DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet>,
     completeEmissionFamilies: Iterable<DotNetLocalGenericOwnerPhysicalCompleteEmissionFamilyInput> = emptyList(),
     stateFamilies: Iterable<DotNetLocalGenericOwnerPhysicalStateFamilyInput> = emptyList(),
 ) {
     val methodDefinitions = methodDefinitions.toList()
+    val currentMethods = currentMethods.toList()
     val callableFamilies = callableFamilies.toList()
     val directSupertypeEdgeSets = directSupertypeEdgeSets.toList()
     val completeEmissionFamilies = completeEmissionFamilies.toList()
     val stateFamilies = stateFamilies.toList()
+}
+
+/**
+ * One emitted function whose complete current MethodDef was selected by RepresentationPlan.
+ *
+ * The detached prototype supplies the signature evidence, but it is never emitted. Therefore the
+ * identity is anchored to [emittedFunction]. The first admitted grammar is deliberately the
+ * ordinary typed entry; generated semantic roles remain outside this catalogue.
+ */
+internal data class DotNetLocalGenericOwnerPhysicalCurrentMethodInput(
+    val emittedFunction: IrSimpleFunctionSymbol,
+    val identity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local,
+) {
+    init {
+        require(identity.function === emittedFunction &&
+                identity.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY) {
+            "a current local MethodDef input requires its exact emitted typed-entry identity"
+        }
+    }
 }
 
 /**
@@ -1096,11 +1117,14 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
     inputsByIdentity: Map<DotNetGenericOwnerPhysicalTypeDefIdentity.Local, DotNetLocalGenericOwnerPhysicalTypeInput>,
     callableFamiliesByLogicalMember:
             Map<IrSimpleFunctionSymbol, DotNetLocalGenericOwnerPhysicalCallableFamily>,
+    currentMethodsByEmittedFunction:
+            Map<IrSimpleFunctionSymbol, DotNetGenericOwnerPhysicalMethodDefIdentity.Local>,
     completeEmissionFamilies: List<DotNetLocalGenericOwnerPhysicalCompleteEmissionFamily>,
     stateFamilies: List<DotNetLocalGenericOwnerPhysicalStateFamilyInput>,
 ) {
     private val inputsByIdentity = inputsByIdentity.toMap()
     private val callableFamiliesByLogicalMember = callableFamiliesByLogicalMember.toMap()
+    private val currentMethodsByEmittedFunction = currentMethodsByEmittedFunction.toMap()
     private val completeEmissionFamilies = completeEmissionFamilies.toList()
     private val stateFamilies = stateFamilies.toList()
     private val statesByField = stateFamilies
@@ -1125,6 +1149,16 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
         kind: DotNetLocalGenericOwnerPhysicalCallableEntryKind,
     ): DotNetGenericOwnerPhysicalMethodDefIdentity? =
         callableFamiliesByLogicalMember[logicalMember]?.selectedMethod(kind)
+
+    /** Exact BOUND MethodDef identity for the live function, never inferred from `!!n`. */
+    fun currentMethodOrNull(
+        emittedFunction: IrSimpleFunctionSymbol,
+    ): DotNetGenericOwnerPhysicalMethodDefIdentity.Local? =
+        currentMethodsByEmittedFunction[emittedFunction]
+
+    internal fun currentMethodEmissionBindings():
+            Map<IrSimpleFunctionSymbol, DotNetGenericOwnerPhysicalMethodDefIdentity.Local> =
+        currentMethodsByEmittedFunction
 
     internal fun completeEmissionFamilies(): List<DotNetLocalGenericOwnerPhysicalCompleteEmissionFamily> =
         completeEmissionFamilies
@@ -1179,6 +1213,30 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
             DotNetGenericOwnerPhysicalMethodDefEmissionFamilyComparisonSnapshot::ownerName,
             DotNetGenericOwnerPhysicalMethodDefEmissionFamilyComparisonSnapshot::logicalMemberName,
         ))
+
+    /** Compares each standalone current MethodDef against one final emitter transaction. */
+    internal fun compareFinalCurrentMethodDefHeaders(
+        scope: DotNetIlEmissionScope,
+        observations: List<DotNetGenericOwnerPhysicalMethodDefHeaderObservation>,
+        otherScopeObservations: List<DotNetGenericOwnerPhysicalMethodDefHeaderObservation> = emptyList(),
+    ): List<DotNetGenericOwnerPhysicalCurrentMethodDefEmissionComparison> {
+        val declarations = boundDeclarations ?: return emptyList()
+        return currentMethodsByEmittedFunction.values.mapNotNull { identity ->
+            val reference = declarations.methodDescriptionOrNull(identity)
+                ?: error("BOUND current MethodDef authority lost its complete description")
+            compareDotNetGenericOwnerPhysicalCurrentMethodDefEmission(
+                this,
+                scope,
+                identity,
+                reference,
+                observations,
+                otherScopeObservations,
+            )
+        }.sortedWith(compareBy(
+            DotNetGenericOwnerPhysicalCurrentMethodDefEmissionComparison::ownerName,
+            DotNetGenericOwnerPhysicalCurrentMethodDefEmissionComparison::logicalMemberName,
+        ))
+    }
 
     internal fun compareFinalCompleteEmissionFamilies(
         successfulEmissions: List<DotNetGenericOwnerCompleteEmissionScopeObservations>,
@@ -1258,6 +1316,77 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
                 return DotNetGenericOwnerPhysicalBindingResult.Conflict(binding.reason)
             DotNetGenericOwnerPhysicalBindingResult.Unavailable ->
                 return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        }
+        val currentMethods = linkedMapOf<
+                IrSimpleFunctionSymbol,
+                DotNetGenericOwnerPhysicalMethodDefIdentity.Local,
+                >()
+        for (candidate in boundInput.currentMethods) {
+            val previous = currentMethods.putIfAbsent(candidate.emittedFunction, candidate.identity)
+            if (previous != null && !previous.sameLocalMethodIdentityAs(candidate.identity)) {
+                return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "one emitted function received contradictory current MethodDef authority",
+                )
+            }
+            val method = bound.methodDescriptionOrNull(candidate.identity)
+                ?: return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "a current MethodDef input must name one complete BOUND MethodDef",
+                )
+            val owner = candidate.emittedFunction.owner.parent as? IrClass
+                ?: return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "a current generic-owner MethodDef must belong to a local class",
+                )
+            val ownerIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(owner.symbol, view = null)
+            val directResult = method.signature.resultLayout as?
+                    DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct
+            val resultParameter = directResult?.slot?.carrier as?
+                    DotNetGenericOwnerSymbolicCarrierReference.Parameter
+            val resultBinder = resultParameter?.binder as?
+                    DotNetGenericOwnerPhysicalGenericBinderReference.Type
+            val methodParameterReferences = buildList {
+                method.signature.parameterSlots.forEach { slot ->
+                    addAll(slot.carrier.methodParameterReferences())
+                }
+                directResult?.slot?.carrier?.let { carrier ->
+                    addAll(carrier.methodParameterReferences())
+                }
+            }
+            val bareMethodParameterSlots = method.signature.parameterSlots.filter { slot ->
+                val parameter = slot.carrier as?
+                        DotNetGenericOwnerSymbolicCarrierReference.Parameter ?: return@filter false
+                val binder = parameter.binder as?
+                        DotNetGenericOwnerPhysicalGenericBinderReference.Method ?: return@filter false
+                val identity = binder.definition as?
+                        DotNetGenericOwnerPhysicalMethodDefIdentity.Local ?: return@filter false
+                identity.sameLocalMethodIdentityAs(candidate.identity) && parameter.index == 0
+            }
+            if (mergedInputs[ownerIdentity]?.role != DotNetLocalGenericOwnerPhysicalTypeRole.GENERIC_CLASS ||
+                method.identity !is DotNetGenericOwnerPhysicalMethodDefIdentity.Local ||
+                !method.identity.sameLocalMethodIdentityAs(candidate.identity) ||
+                method.declaringType != ownerIdentity ||
+                method.dispatch != DotNetGenericOwnerPhysicalMemberDispatch.FINAL ||
+                !method.signature.isInstance || method.signature.genericArity != 1 ||
+                method.genericParameters.singleOrNull()?.isUnconstrained != true ||
+                directResult?.slot?.domain != DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT ||
+                resultParameter == null ||
+                resultBinder?.definition != ownerIdentity ||
+                resultParameter.index !in 0 until mergedInputs.getValue(ownerIdentity).genericArity ||
+                methodParameterReferences.size != 1 ||
+                methodParameterReferences.single().let { reference ->
+                    val binder = reference.binder as?
+                            DotNetGenericOwnerPhysicalGenericBinderReference.Method
+                    val identity = binder?.definition as?
+                            DotNetGenericOwnerPhysicalMethodDefIdentity.Local
+                    identity?.sameLocalMethodIdentityAs(candidate.identity) != true ||
+                            reference.index != 0
+                } ||
+                bareMethodParameterSlots.singleOrNull()?.domain !=
+                    DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT
+            ) {
+                return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                    "a current MethodDef input must retain one exact final generic-class typed entry",
+                )
+            }
         }
         val mergedCallableFamilies = linkedMapOf<
                 IrSimpleFunctionSymbol,
@@ -1372,6 +1501,7 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
                 boundDeclarations = bound,
                 inputsByIdentity = mergedInputs,
                 callableFamiliesByLogicalMember = mergedCallableFamilies,
+                currentMethodsByEmittedFunction = currentMethods,
                 completeEmissionFamilies = completeEmissionFamilies,
                 stateFamilies = stateFamilies,
             ),
@@ -1457,20 +1587,40 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
 
     private fun parameterSnapshotOrNull(
         parameter: DotNetGenericOwnerSymbolicCarrierReference.Parameter,
-    ): DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot? {
-        val binder = (parameter.binder as?
-                DotNetGenericOwnerPhysicalGenericBinderReference.Type)
-            ?.definition as? DotNetGenericOwnerPhysicalTypeDefIdentity.Local ?: return null
-        val binderInput = inputsByIdentity[binder] ?: return null
-        if (binderInput.role == DotNetLocalGenericOwnerPhysicalTypeRole.SEMANTIC_CAPABILITY) {
-            return null
+    ): DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot? = when (val binder = parameter.binder) {
+        is DotNetGenericOwnerPhysicalGenericBinderReference.Type -> {
+            val definition = binder.definition as? DotNetGenericOwnerPhysicalTypeDefIdentity.Local
+                ?: return null
+            val binderInput = inputsByIdentity[definition] ?: return null
+            if (binderInput.role == DotNetLocalGenericOwnerPhysicalTypeRole.SEMANTIC_CAPABILITY) {
+                return null
+            }
+            DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot(
+                kind = DotNetGenericOwnerPhysicalValueShadowCarrierKind.OWNER_TYPE_PARAMETER,
+                ownerParameterIndices = listOf(parameter.index),
+                parameterBinderOwnerName = binderInput.logicalOwnerName,
+                parameterBinderTypeDefView = definition.view?.toShadowView(),
+            )
         }
-        return DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot(
-            kind = DotNetGenericOwnerPhysicalValueShadowCarrierKind.OWNER_TYPE_PARAMETER,
-            ownerParameterIndices = listOf(parameter.index),
-            parameterBinderOwnerName = binderInput.logicalOwnerName,
-            parameterBinderTypeDefView = binder.view?.toShadowView(),
-        )
+        is DotNetGenericOwnerPhysicalGenericBinderReference.Method -> {
+            val definition = binder.definition as? DotNetGenericOwnerPhysicalMethodDefIdentity.Local
+                ?: return null
+            val role = definition.role ?: return null
+            val method = boundDeclarations?.methodDescriptionOrNull(definition) ?: return null
+            val declaringType = method.declaringType as?
+                    DotNetGenericOwnerPhysicalTypeDefIdentity.Local ?: return null
+            val binderInput = inputsByIdentity[declaringType] ?: return null
+            if (currentMethodsByEmittedFunction[definition.function]
+                    ?.sameLocalMethodIdentityAs(definition) != true
+            ) return null
+            DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot(
+                kind = DotNetGenericOwnerPhysicalValueShadowCarrierKind.METHOD_TYPE_PARAMETER,
+                methodParameterIndices = listOf(parameter.index),
+                parameterBinderOwnerName = binderInput.logicalOwnerName,
+                parameterBinderMethodName = definition.function.owner.name.asString(),
+                parameterBinderMethodRole = role,
+            )
+        }
     }
 
     companion object {
@@ -1513,12 +1663,26 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
                     boundDeclarations = null,
                     inputsByIdentity = byIdentity,
                     callableFamiliesByLogicalMember = emptyMap(),
+                    currentMethodsByEmittedFunction = emptyMap(),
                     completeEmissionFamilies = emptyList(),
                     stateFamilies = emptyList(),
                 ),
             )
         }
     }
+}
+
+private fun DotNetGenericOwnerSymbolicCarrierReference.methodParameterReferences():
+        List<DotNetGenericOwnerSymbolicCarrierReference.Parameter> = when (this) {
+    is DotNetGenericOwnerSymbolicCarrierReference.Parameter ->
+        listOf(this).takeIf {
+            binder is DotNetGenericOwnerPhysicalGenericBinderReference.Method
+        }.orEmpty()
+    is DotNetGenericOwnerSymbolicCarrierReference.Constructed ->
+        arguments.flatMap { argument -> argument.methodParameterReferences() }
+    is DotNetGenericOwnerSymbolicCarrierReference.SzArray ->
+        element.methodParameterReferences()
+    is DotNetGenericOwnerSymbolicCarrierReference.Leaf -> emptyList()
 }
 
 private fun DotNetGenericInterfaceView.toShadowView(): DotNetGenericOwnerPhysicalValueShadowTypeDefView =

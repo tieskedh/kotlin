@@ -150,6 +150,18 @@ MethodDef, a separately compiled producer-recorded MethodDef verified against
 its DLL, and a retained foreign MethodDef/MethodImpl. These endpoint kinds may
 share the same structural signature but never exchange authority by name.
 
+A role-specific detached `RepresentationPlan` is only symbolic early evidence
+for a current MethodDef. It becomes current-MethodDef authority only when BOUND
+declaration validation has registered its complete physical signature under an
+exact role-qualified identity. A successful final emission scope must then
+contain exactly one matching observation for the same IR function and
+`TYPED_ENTRY`: owner and scope, identity, visibility and dispatch, generic
+arity and GenericParam rows/constraints, parameters, and result must agree.
+Missing, duplicate, cross-scope, same-role sibling-function, or structurally
+different evidence is unavailable or conflicting; expected BOUND data cannot
+fill it. This standalone seal creates neither callable-family equivalence nor
+operation authority.
+
 For a Kotlin-produced natural slot, declaration authority and implementation-
 family evidence are independent. A declaration-level natural-slot seal records
 the final natural TypeDef row, final MethodDef row, logical parameter domains,
@@ -463,7 +475,7 @@ physical MethodDef owner, and the emitter independently observes a direct
 `ldarg`/`ldloc` read with exactly that `!n`. The logical source parameter type,
 parameter name, and IR origin are not evidence. Nullable, converted, joined,
 foreign, method-parameter, and nested parameter carriers remain unavailable in
-this slice.
+this owner-parameter entry slice.
 
 The fourth bounded form admits a parameterless, non-method-generic exact
 natural call whose authority-recorded direct result is either `!n` or an exact
@@ -725,6 +737,30 @@ Every other MethodSpec shape, every fixed leaf combined with a MethodSpec, and
 every unsupported mixed-domain input shape remain unavailable; the fifth and
 sixth forms remain independently bounded.
 
+The eighth bounded form admits the entry and one immutable local for a real
+current caller-MethodDef parameter. Its owner is one admitted local generic
+class and its callable is a final concrete source-owned `TYPED_ENTRY` with
+exactly one invariant unconstrained MethodDef parameter. Exactly one ordinary
+parameter slot contains the bare outer-unmarked logical `R` and is recorded as
+`DECLARATION_INDEPENDENT(!!0)`; the remaining complete signature stays within
+the already admitted fixed-leaf, bare-owner-parameter, or one-level natural/
+generic-class construction grammar. Its direct non-null result is one strict
+owner parameter. No semantic hook, override/default/direct-super obligation,
+property, suspend, local or `@PublishedApi` function, vararg, constraint,
+nullable/value-class MethodDef parameter, or additional MethodDef binder is
+admitted.
+
+The early plan cannot seed `!!0`: current-MethodDef authority exists only after
+the complete signature is BOUND. POST-final-routing may then produce the bare
+method parameter with direct `MAYBE_NULL` layout and no invented guaranteed
+view or lineage. One equal immutable alias may retain that carrier. Late
+placement must observe the same current MethodDef identity and arity and an
+exact direct `ldarg`/`ldloc` `!!0`; final successful emission must satisfy the
+standalone MethodDef seal above. PRE remains unavailable. Mutation, joins,
+conversion, capture/state, nesting `!!0` in a construction, multiple or
+constrained binders, foreign/separate-consumer entry, and using this retained
+value as an authenticated callee MethodSpec argument remain separate proofs.
+
 #### Joins
 
 - Logical Kotlin type joining and verifier-valid carrier placement are separate.
@@ -945,6 +981,7 @@ the shared model runs in shadow mode. Their architectural disposition is:
 | `03cd3271` parameterless exact result chains | an authority-recorded producer result may carry exact provenance through a chain | **Derivable; authoritative consumers landed.** A bound natural MethodDef with an already-guaranteed receiver construction produces its `Direct` result through the shared operation query and may retain equal owner-bound `!n` storage after live emitter validation. Local result placement covers parameterless `SplitNullable`, a complete empty-MethodSpec vector of exact-natural strict-owner and fixed declaration-independent leaf operations, and the exact `<R>(K, R): V?` MethodSpec composition. Each admitted pair may have a positive number of mutually exclusive terminal direct-return uses; every other use category, unsupported control-flow join, unsupported mixed-domain vector, or other MethodSpec operation requires an independent policy. |
 | `030bb9e1` generated-owner captures | an exact captured definition may enter a field whose producer-wide storage plan selects that exact carrier | **Derivable and removable.** Generated/anonymous status is never evidence; capture definition, constructor transfer, and field plan are. |
 | Stage 6 producer-wide FieldDef authority | detached families, private helpers, state, and output pairing reach one monotone fixpoint; final per-field requirements select state before BOUND identity/writer freezing and actual-only sealing | **Fundamental authority rule with a temporary proof grammar.** Retain fixpoint closure, field-set and writer-lineage preservation, final-requirement admission, and actual-only sealing; generalize the admitted field/carrier grammar structurally. |
+| current caller-MethodDef `!!R` entry/local | a parameter read is produced by its exact BOUND current MethodDef entry environment, not by its logical type or an owner binder | **Derivable entry-environment rule with a temporary first grammar.** Retain BOUND identity, POST-only production, equal-carrier placement, live `ldarg`/`ldloc` rebinding, and final same-function header sealing; generalize binder count, constraints, carriers, and consumers independently. |
 
 None of the bounded positive proofs is presently classified as unsound within
 its asserted restrictions. Three tempting generalizations are unsound and are
@@ -1590,9 +1627,11 @@ expected `I<!T,...>` against the final verifier-visible storage-read slot rather
 than a carrier reconstructed from its logical whole expression. This late check
 cannot mint provenance and fails closed on disagreement. Remaining constructed
 entry forms expand only through enumerated independent emitter observations,
-starting with the actually selected direct-call MethodDef result, before real
-caller-MethodDef `!!R` entry and explicit conversions—not another state or
-stdlib recognizer.
+starting with the actually selected direct-call MethodDef result, before
+authenticated callee use of a caller-MethodDef `!!R` value and explicit
+conversions—not another state or stdlib recognizer. The first caller `!!R`
+entry/local carrier is now independently BOUND and late-sealed, but grants no
+callee operation authority.
 
 ## Consequences
 

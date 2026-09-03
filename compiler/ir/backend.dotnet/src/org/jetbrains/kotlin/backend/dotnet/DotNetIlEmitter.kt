@@ -2249,8 +2249,26 @@ internal class DotNetIlEmitter(
         ): DotNetGenericOwnerObservedLocalCarrier = when (val carrier = raw.carrier) {
             DotNetIlValueType.Object -> DotNetGenericOwnerObservedLocalCarrier.Object
             is DotNetIlValueType.TypeParameter -> when {
-                carrier.isMethodParameter -> DotNetGenericOwnerObservedLocalCarrier.Unbindable(
-                    "the emitted local is bound by a MethodDef generic parameter",
+                carrier.isMethodParameter && raw.genericOwnerPhysicalMethodIdentity == null ->
+                    DotNetGenericOwnerObservedLocalCarrier.Unbindable(
+                        "the emitted method-parameter local has no exact MethodDef identity",
+                    )
+                carrier.isMethodParameter &&
+                        raw.genericOwnerPhysicalMethodIdentity?.function !== raw.function ->
+                    DotNetGenericOwnerObservedLocalCarrier.Unbindable(
+                        "the emitted method-parameter local has a different MethodDef binder",
+                    )
+                carrier.isMethodParameter && raw.genericOwnerPhysicalMethodIdentity?.role == null ->
+                    DotNetGenericOwnerObservedLocalCarrier.Unbindable(
+                        "the emitted method-parameter local has no exact physical MethodDef role",
+                    )
+                carrier.isMethodParameter && carrier.index !in 0 until raw.methodGenericArity ->
+                    DotNetGenericOwnerObservedLocalCarrier.Unbindable(
+                        "the emitted method-parameter local exceeds its physical MethodDef arity",
+                    )
+                carrier.isMethodParameter -> DotNetGenericOwnerObservedLocalCarrier.MethodParameter(
+                    checkNotNull(raw.genericOwnerPhysicalMethodIdentity),
+                    carrier.index,
                 )
                 physicalOwner == null -> DotNetGenericOwnerObservedLocalCarrier.Unbindable(
                     "the emitted owner-parameter local has no local physical TypeDef binder",
@@ -2314,6 +2332,7 @@ internal class DotNetIlEmitter(
             DotNetGenericOwnerPhysicalValueLocalPlacementObservation(
                 physicalFunction = raw.function,
                 physicalMethodOwner = physicalOwner,
+                physicalMethodIdentity = raw.genericOwnerPhysicalMethodIdentity,
                 variable = raw.variable,
                 slotIndex = raw.slotIndex,
                 layout = raw.layout,

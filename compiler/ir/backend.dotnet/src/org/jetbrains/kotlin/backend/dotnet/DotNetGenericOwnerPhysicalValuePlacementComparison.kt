@@ -46,6 +46,17 @@ internal sealed interface DotNetGenericOwnerObservedLocalCarrier {
         }
     }
 
+    data class MethodParameter(
+        val parameterBinder: DotNetGenericOwnerPhysicalMethodDefIdentity.Local,
+        val index: Int,
+    ) : DotNetGenericOwnerObservedLocalCarrier {
+        init {
+            require(index >= 0 && parameterBinder.role != null) {
+                "an observed method-parameter local requires an exact role and non-negative index"
+            }
+        }
+    }
+
     data class LocalConstruction(
         val definition: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
         val parameterBinder: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
@@ -75,6 +86,7 @@ internal sealed interface DotNetGenericOwnerObservedLocalCarrier {
 internal data class DotNetGenericOwnerPhysicalValueLocalPlacementObservation(
     val physicalFunction: IrFunctionSymbol,
     val physicalMethodOwner: DotNetGenericOwnerPhysicalTypeDefIdentity.Local?,
+    val physicalMethodIdentity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local?,
     val variable: IrValueSymbol,
     val slotIndex: Int,
     val layout: DotNetGenericOwnerPhysicalValueLayoutKind,
@@ -277,10 +289,17 @@ private fun DotNetGenericOwnerPhysicalCarrier.toObservedCarrierOrNull():
 }
 
 private fun DotNetGenericOwnerSymbolicCarrierReference.Parameter.toObservedCarrierOrNull():
-        DotNetGenericOwnerObservedLocalCarrier.OwnerParameter? {
-    val binder = (binder as? DotNetGenericOwnerPhysicalGenericBinderReference.Type)
-        ?.definition as? DotNetGenericOwnerPhysicalTypeDefIdentity.Local ?: return null
-    return DotNetGenericOwnerObservedLocalCarrier.OwnerParameter(binder, index)
+        DotNetGenericOwnerObservedLocalCarrier? = when (val parameterBinder = binder) {
+    is DotNetGenericOwnerPhysicalGenericBinderReference.Type -> {
+        val definition = parameterBinder.definition as?
+                DotNetGenericOwnerPhysicalTypeDefIdentity.Local ?: return null
+        DotNetGenericOwnerObservedLocalCarrier.OwnerParameter(definition, index)
+    }
+    is DotNetGenericOwnerPhysicalGenericBinderReference.Method -> {
+        val definition = parameterBinder.definition as?
+                DotNetGenericOwnerPhysicalMethodDefIdentity.Local ?: return null
+        DotNetGenericOwnerObservedLocalCarrier.MethodParameter(definition, index)
+    }
 }
 
 private fun DotNetGenericOwnerSymbolicCarrierReference.Constructed.toObservedCarrierOrNull():
@@ -312,6 +331,15 @@ internal fun DotNetGenericOwnerObservedLocalCarrier.toSnapshot():
             ownerParameterIndices = listOf(index),
             parameterBinderOwnerName = parameterBinder.owner.owner.dotNetPhysicalValueStableName(),
             parameterBinderTypeDefView = parameterBinder.view?.toShadowView(),
+        )
+    is DotNetGenericOwnerObservedLocalCarrier.MethodParameter ->
+        DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot(
+            kind = DotNetGenericOwnerPhysicalValueShadowCarrierKind.METHOD_TYPE_PARAMETER,
+            methodParameterIndices = listOf(index),
+            parameterBinderOwnerName = (parameterBinder.function.owner.parent as IrClass)
+                .dotNetPhysicalValueStableName(),
+            parameterBinderMethodName = parameterBinder.function.owner.name.asString(),
+            parameterBinderMethodRole = checkNotNull(parameterBinder.role),
         )
     is DotNetGenericOwnerObservedLocalCarrier.LocalConstruction ->
         DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot(

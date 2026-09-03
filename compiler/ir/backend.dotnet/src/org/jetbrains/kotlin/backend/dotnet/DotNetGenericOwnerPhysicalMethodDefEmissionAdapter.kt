@@ -115,6 +115,78 @@ internal fun compareDotNetGenericOwnerPhysicalMethodDefEmissionFamily(
     )
 }
 
+/** Seals one standalone current MethodDef without manufacturing a callable-family peer. */
+internal fun compareDotNetGenericOwnerPhysicalCurrentMethodDefEmission(
+    authority: DotNetLocalGenericOwnerPhysicalAuthority,
+    scope: DotNetIlEmissionScope,
+    identity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local,
+    reference: DotNetGenericOwnerPhysicalMethodDefReference,
+    observations: List<DotNetGenericOwnerPhysicalMethodDefHeaderObservation>,
+    otherScopeObservations: List<DotNetGenericOwnerPhysicalMethodDefHeaderObservation>,
+): DotNetGenericOwnerPhysicalCurrentMethodDefEmissionComparison? {
+    val declarations = authority.boundDeclarations ?: return null
+    val logicalOwner = identity.function.owner.parent as? IrClass ?: return null
+    val expectedOwner = reference.declaringType as?
+            DotNetGenericOwnerPhysicalTypeDefIdentity.Local ?: return null
+    check(expectedOwner.owner === logicalOwner.symbol) {
+        "a BOUND current MethodDef stopped naming its logical generic-class owner"
+    }
+    val logicalScope = DotNetIlEmissionScope.entries.single { candidate ->
+        candidate.owns(logicalOwner)
+    }
+    if (logicalScope != scope) return null
+
+    val allocator = EmissionIdentityAllocator()
+    val input = EndpointInput(
+        DotNetGenericOwnerPhysicalMethodDefEmissionEntryKind.CURRENT_TYPED_ENTRY,
+        identity,
+        reference,
+    )
+    val expected = buildExpectedHeader(
+        authority,
+        declarations,
+        allocator,
+        identity,
+        reference,
+    ) ?: error("BOUND current MethodDef authority lost its complete signature")
+    check(reference.genericParameters.all { parameter -> parameter.isUnconstrained }) {
+        "the first current MethodDef grammar must remain unconstrained"
+    }
+    val candidates = correlateActualHeaders(
+        authority,
+        allocator,
+        input,
+        familyIdentities = listOf(identity),
+        observations = observations,
+        otherScopeObservations = otherScopeObservations,
+    ) { observation ->
+        when {
+            observation.physicalFunction !== identity.function ->
+                "the emitted current MethodDef observation belongs to another IR function"
+            observation.genericParameters.size != reference.genericParameters.size ->
+                "the emitted current MethodDef has a different GenericParam vector"
+            observation.genericParameters.zip(reference.genericParameters).any { pair ->
+                pair.first.variance != pair.second.variance ||
+                        pair.first.constraints.isNotEmpty()
+            } -> "the emitted current MethodDef changed its unconstrained GenericParam row"
+            else -> null
+        }
+    }
+    val endpoint = compareDotNetGenericOwnerPhysicalMethodDefEmissionEndpoint(
+        entryKind = input.entryKind,
+        methodRole = identity.role,
+        expectedShape = expected.shape,
+        expectedSnapshot = expected.snapshot,
+        actualCandidates = candidates,
+    )
+    return DotNetGenericOwnerPhysicalCurrentMethodDefEmissionComparison(
+        scope,
+        logicalOwner.dotNetPhysicalValueStableName(),
+        identity.function.owner.name.asString(),
+        endpoint,
+    )
+}
+
 private data class EndpointInput(
     val entryKind: DotNetGenericOwnerPhysicalMethodDefEmissionEntryKind,
     val identity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local,
@@ -478,6 +550,9 @@ private fun correlateActualHeaders(
     familyIdentities: List<DotNetGenericOwnerPhysicalMethodDefIdentity.Local>,
     observations: List<DotNetGenericOwnerPhysicalMethodDefHeaderObservation>,
     otherScopeObservations: List<DotNetGenericOwnerPhysicalMethodDefHeaderObservation>,
+    validateMatchingHeader: (DotNetGenericOwnerPhysicalMethodDefHeaderObservation) -> String? = {
+        null
+    },
 ): List<DotNetGenericOwnerPhysicalMethodDefEmissionHeaderEvidence> {
     val expectedOwner = input.reference.declaringType as DotNetGenericOwnerPhysicalTypeDefIdentity.Local
     val expectedOwnerArity = authority.inputOrNull(expectedOwner)?.genericArity
@@ -505,6 +580,10 @@ private fun correlateActualHeaders(
                 return@forEach
             }
             DotNetGenericOwnerPhysicalMethodDefEmissionIdentityRelation.MATCHING_ENDPOINT -> Unit
+        }
+        validateMatchingHeader(observation)?.let { reason ->
+            candidates += DotNetGenericOwnerPhysicalMethodDefEmissionHeaderEvidence.Conflict(reason)
+            return@forEach
         }
         when (val owner = observation.physicalMethodOwner) {
             is DotNetGenericOwnerObservedMethodDefOwner.Local -> {

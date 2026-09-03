@@ -14,6 +14,11 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-physical-caller-methoddef-entry-2026-09-03.md`](generic-owner-physical-caller-methoddef-entry-2026-09-03.md)
+  records the first exact BOUND current caller-MethodDef `!!R` entry/local,
+  POST-only provenance, live `ldarg`/`ldloc` rebinding, same-function final
+  MethodDef-header seal, mixed `!T`/`!!R` execution, and unchanged production-
+  erased inverse without claiming the separate callee MethodSpec route.
 - [`generic-owner-path-complete-direct-result-calls-2026-09-03.md`](generic-owner-path-complete-direct-result-calls-2026-09-03.md)
   records the identity-bound result-path plan for direct generic-owner calls
   through single-expression non-returnable block/composite spines and

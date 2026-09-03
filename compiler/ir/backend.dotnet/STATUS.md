@@ -41,14 +41,15 @@ physical identities may still be corrected atomically.
 
 ## Latest focused verification
 
-The 2026-09-03 path-complete direct-result consumer is newer than the
-target-wide gate below. Backend source and test compilation passed, and the
-shared physical-value model reported 94/94 tests green. Its focused fixture
-passed through PSI and LightTree on .NET 10 and Framework 4.8 in both candidate
-and production-erased inverse modes: four tests per mode, with zero failures,
-errors, or skips by direct XML audit. Exact grammar, hostile controls, physical
-IL obligations, and inverse scope are recorded in the
-[path-complete-call archive](docs/archive/generic-owner-path-complete-direct-result-calls-2026-09-03.md).
+The 2026-09-03 caller-MethodDef entry/local consumer is newer than the target-
+wide gate below. Backend and FIR test compilation passed; the shared physical-
+value model reported 96/96 tests green and the MethodDef-emission comparison
+model reported 14/14. Its focused fixture passed through PSI and LightTree on
+.NET 10 and Framework 4.8 in both candidate and production-erased inverse
+modes: four tests per mode, with zero failures, errors, or skips by direct XML
+audit. Exact grammar, hostile controls, physical IL obligations, and inverse
+scope are recorded in the
+[caller-MethodDef archive](docs/archive/generic-owner-physical-caller-methoddef-entry-2026-09-03.md).
 This focused evidence does not claim a new full-target checkpoint; the latest
 fresh aggregate remains the one below.
 
@@ -259,6 +260,17 @@ Framework 4.8, and .NET 10, with no failures, errors, or skips.
 The source-built Stdlib census remains paused while generic-owner physical
 authority and value provenance are consolidated in rehearsal mode.
 
+One current generic-class `TYPED_ENTRY` MethodDef may now become complete BOUND
+authority under the first caller-binder grammar. POST-final-routing provenance
+can seed its single bare unconstrained `!!0` parameter and retain that direct
+carrier through one equal immutable local; PRE receives no current-MethodDef
+authority. Late placement requires the exact current MethodDef identity,
+generic arity, and verifier-visible `ldarg`/`ldloc`, while the successful
+emission scope must independently seal the same IR function, owner, role,
+GenericParam row, parameters, and result. Public and private typed entries and
+distinct owner `!T` versus caller `!!R` substitutions are executable evidence.
+This entry/local fact does not authorize the callee operation or its MethodSpec.
+
 The local placement consumer now covers direct equal-carrier aliases, one
 exhaustive reference-shaped control-flow join, exact bare-owner and constructed-
 natural parameter entries, one exact direct natural-MethodDef result, and one
@@ -335,8 +347,8 @@ type. A logically widened open-interface call remains guarded semantic dispatch
 by default: exact construction proves verifier legality, not semantic
 equivalence of every dynamic implementation. Constructor
 allocation is currently only a bounded exact receiver root; general constructor-
-produced placement, prefix-bearing container obligations, and real caller-
-MethodDef `!!R` entry remain separate. Every non-return,
+produced placement, prefix-bearing container obligations, and authenticated use
+of retained caller `!!R` as a callee MethodSpec argument remain separate. Every non-return,
 mixed, protected, other-target, or sequential consumer still requires its own
 independent transfer policy. MethodSpecs
 other than the exact `<R>(K, R): V?` owner-bound form, including concrete,
@@ -518,7 +530,7 @@ The shared model and remaining boundary are owned by the
 and [way forward](docs/programmes/way-forward.md).
 
 The retained-metadata model gate passes 85 tests, the shared physical-value
-model passes 94 tests (179 combined), and the producer-delegate authority gate
+model passes 96 tests (181 combined), and the producer-delegate authority gate
 passes 8 tests. All six unconstrained
 memberless pipelines pass under both FIR parsers (12 tests), with zero failures,
 errors, or skips.
@@ -526,11 +538,11 @@ errors, or skips.
 ## Current blockers
 
 - External `K` consumption is still intentionally narrow and is not widened by
-  the local direct-result path proof. Real caller-MethodDef `!!R` entries,
-  additional non-materializing uses, broader MethodSpec/argument/result shapes,
-  nullable joins, captures, properties, class nodes, and MethodImpl composition
-  require independent value and operation proofs before they can leave semantic
-  routing.
+  the local direct-result or current-caller-entry proofs. Authenticated callee
+  use of retained caller `!!R`, additional non-materializing uses, broader
+  MethodSpec/argument/result shapes, nullable joins, captures, properties,
+  class nodes, and MethodImpl composition require independent value and
+  operation proofs before they can leave semantic routing.
 - Direct-result paths with sequential prefixes, returnable blocks, `try`, or
   mixed call/read/null/bottom leaves remain unavailable. The existing flat
   split-nullable arm walker must later converge on the shared structural

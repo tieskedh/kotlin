@@ -46,6 +46,8 @@ private fun buildGenericOwnerPhysicalMethodDefEmissionBindings(
     capabilityDispatchers: Map<IrSimpleFunction, IrSimpleFunction>,
     interfaceCapabilityDispatchers:
             List<DotNetLocalGenericOwnerPhysicalInterfaceCapabilityDispatcherSelection>,
+    currentMethods:
+            Map<IrSimpleFunctionSymbol, DotNetGenericOwnerPhysicalMethodDefIdentity.Local>,
 ): Map<IrSimpleFunction, DotNetGenericOwnerPhysicalMethodDefIdentity.Local> {
     val bindings = IdentityHashMap<IrSimpleFunction, DotNetGenericOwnerPhysicalMethodDefIdentity.Local>()
 
@@ -94,6 +96,17 @@ private fun buildGenericOwnerPhysicalMethodDefEmissionBindings(
             selection.dispatcher.owner,
             role = null,
         )
+    }
+    currentMethods.forEach { entry ->
+        val emittedFunction = entry.key.owner
+        val identity = entry.value
+        check(identity.function === entry.key) {
+            "a BOUND current MethodDef identity stopped naming its emitted function"
+        }
+        val previous = bindings.put(emittedFunction, identity)
+        check(previous == null || previous.sameLocalMethodIdentityAs(identity)) {
+            "BOUND and lowering-selected MethodDef identities disagree for one emitted function"
+        }
     }
     return bindings
 }
@@ -297,6 +310,35 @@ object DotNetBackend {
                 is DotNetGenericOwnerPhysicalBindingResult.Conflict,
                 DotNetGenericOwnerPhysicalBindingResult.Unavailable,
                 -> return emptyList()
+            }
+            val currentMethodComparisons = successfulPhysicalMethodDefHeaders
+                .flatMap { successfulScope ->
+                    val otherScopeObservations = successfulPhysicalMethodDefHeaders
+                        .asSequence()
+                        .filter { candidate -> candidate.first != successfulScope.first }
+                        .flatMap { candidate -> candidate.second.asSequence() }
+                        .toList()
+                    authority.compareFinalCurrentMethodDefHeaders(
+                        successfulScope.first,
+                        successfulScope.second,
+                        otherScopeObservations,
+                    )
+                }
+            val successfulScopes = successfulPhysicalMethodDefHeaders
+                .mapTo(linkedSetOf()) { successfulScope -> successfulScope.first }
+            val expectedCurrentMethods = authority.currentMethodEmissionBindings().values
+                .count { identity ->
+                    val owner = identity.function.owner.parent as? IrClass
+                        ?: error("a current MethodDef stopped belonging to a local class")
+                    successfulScopes.any { scope -> scope.owns(owner) }
+                }
+            check(currentMethodComparisons.size == expectedCurrentMethods &&
+                    currentMethodComparisons.all { comparison ->
+                        comparison.endpoint.status ==
+                                DotNetGenericOwnerPhysicalMethodDefEmissionComparisonStatus.MATCH
+                    }) {
+                "BOUND current MethodDef authority did not match final emitter headers: " +
+                        currentMethodComparisons
             }
             return successfulPhysicalMethodDefHeaders
                 .flatMap { successfulScope ->
@@ -820,6 +862,17 @@ object DotNetBackend {
         } else {
             emptyList()
         }
+        val localGenericOwnerPhysicalAuthority =
+            if (configuration.dotNetGenericOwnerRehearsal) {
+                when (val binding = context.localGenericOwnerPhysicalAuthority) {
+                    is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                    is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                        error("Internal .NET backend error: ${binding.reason}")
+                    DotNetGenericOwnerPhysicalBindingResult.Unavailable -> null
+                }
+            } else {
+                null
+            }
         val genericOwnerPhysicalMethodDefEmissionBindings =
             if (configuration.dotNetGenericOwnerRehearsal) {
                 buildGenericOwnerPhysicalMethodDefEmissionBindings(
@@ -828,6 +881,7 @@ object DotNetBackend {
                     context.genericOwnerSemanticHooks,
                     context.genericOwnerCapabilityDispatchers,
                     context.localGenericOwnerPhysicalInterfaceCapabilityDispatcherSelections,
+                    localGenericOwnerPhysicalAuthority?.currentMethodEmissionBindings().orEmpty(),
                 )
             } else {
                 emptyMap()
@@ -839,17 +893,6 @@ object DotNetBackend {
                 }
             } else {
                 emptyMap()
-            }
-        val localGenericOwnerPhysicalAuthority =
-            if (configuration.dotNetGenericOwnerRehearsal) {
-                when (val binding = context.localGenericOwnerPhysicalAuthority) {
-                    is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
-                    is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
-                        error("Internal .NET backend error: ${binding.reason}")
-                    DotNetGenericOwnerPhysicalBindingResult.Unavailable -> null
-                }
-            } else {
-                null
             }
         val genericOwnerPhysicalValueLocalPlacementAuthority =
             if (configuration.dotNetGenericOwnerRehearsal) {
