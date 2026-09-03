@@ -278,9 +278,11 @@ policy, not a separate representation rule. Converge it on the same structural
 result-spine traversal only when each path can retain and rebind the complete
 split operation, payload, and flag obligations.
 
-Next prove the real caller-MethodDef `!!R` entry, additional non-materializing
-consumer categories, ordered prefix-container obligations, broader MethodSpec and
-argument/result shapes, null/bottom/unknown split joins, and explicit
+The first current caller-MethodDef `!!R` entry/local gate is closed for one
+BOUND final typed-entry grammar. It does not authorize a callee MethodSpec
+route. Next prove that separate operation use, then additional non-materializing
+consumer categories, ordered prefix-container obligations, broader MethodSpec
+and argument/result shapes, null/bottom/unknown split joins, and explicit
 representation-changing conversions. Only after those value rules stabilize
 should the consumer widen to captures, properties, class nodes, MethodImpls, or
 new Runtime/Stdlib declarations.

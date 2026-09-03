@@ -110,6 +110,10 @@ private data class DotNetGenericOwnerPhysicalEntryPrototypeParameters(
             IrValueSymbol,
             DotNetGenericOwnerSymbolicCarrierReference,
             >,
+    val methodParameterCarriers: Map<
+            IrValueSymbol,
+            DotNetGenericOwnerPhysicalCarrier,
+            >,
 )
 
 /**
@@ -245,6 +249,12 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
         private val storageByValue = linkedMapOf<IrValueSymbol, DotNetGenericOwnerPhysicalStorageFact>()
         private val setValueCountBySymbol = java.util.IdentityHashMap<IrValueSymbol, Int>()
         private val records = mutableListOf<DotNetGenericOwnerPhysicalValueShadowRecord>()
+        private val currentMethodIdentity =
+            if (phase == DotNetGenericOwnerPhysicalValueShadowPhase.POST_FINAL_ROUTING) {
+                authority?.physicalAuthority?.currentMethodOrNull(physical.symbol)
+            } else {
+                null
+            }
 
         fun analyze(): List<DotNetGenericOwnerPhysicalValueShadowRecord> {
             body.acceptVoid(object : IrVisitorVoid() {
@@ -272,6 +282,7 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                         parameter.kind == IrParameterKind.Regular -> {
                             val storage = plannedEntryStorageOrNull(
                                 prototypeParameters?.currentTypes?.get(parameter.symbol),
+                                prototypeParameters?.methodParameterCarriers?.get(parameter.symbol),
                                 ownerAuthority,
                             )
                             if (storage != null) {
@@ -333,7 +344,11 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
         ) {
             statements.forEach { statement ->
                 when (statement) {
-                    is IrVariable -> if (statement.type.isPhysicalValueShadowCandidateType(owner)) {
+                    is IrVariable -> if (statement.type.isPhysicalValueShadowCandidateType(
+                        owner,
+                        physical,
+                        currentMethodIdentity != null,
+                    )) {
                         processVariable(statement, storage)
                     } else {
                         statement.initializer?.let { initializer ->
@@ -374,7 +389,11 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
             variable: IrVariable,
             storage: MutableMap<IrValueSymbol, DotNetGenericOwnerPhysicalStorageFact>,
         ): Boolean {
-            if (!variable.type.isPhysicalValueShadowCandidateType(owner)) return false
+            if (!variable.type.isPhysicalValueShadowCandidateType(
+                owner,
+                physical,
+                currentMethodIdentity != null,
+            )) return false
             val diagnostic = ShadowDiagnosticIdentity(owner, source, physical, role, phase, variable)
             val ownerAuthority = authority
             if (ownerAuthority == null) {
@@ -480,6 +499,29 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                     DotNetGenericOwnerStorageCarrier.Fixed(
                         ownerAuthority.ownerParameterCarriers[index],
                     )
+                }
+                variable.type.exactCurrentMethodParameterIndexOrNull(physical) != null &&
+                        currentMethodIdentity != null -> {
+                    val index = checkNotNull(
+                        variable.type.exactCurrentMethodParameterIndexOrNull(physical),
+                    )
+                    val parameter = when (val binding = ownerAuthority.declarations
+                        .methodParameterOrError(currentMethodIdentity, index)
+                    ) {
+                        is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                        is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                            error("Internal .NET backend error: ${binding.reason}")
+                        DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return null
+                    }
+                    val carrier = when (val binding = ownerAuthority.declarations
+                        .carrierOrError(parameter)
+                    ) {
+                        is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                        is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                            error("Internal .NET backend error: ${binding.reason}")
+                        DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return null
+                    }
+                    DotNetGenericOwnerStorageCarrier.Fixed(carrier)
                 }
                 variable.type.isDeferredGenericShadowType() -> DotNetGenericOwnerStorageCarrier.Deferred
                 else -> DotNetGenericOwnerStorageCarrier.Unknown
@@ -1004,17 +1046,76 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                 (physicalParameters[index].symbol to currentLeaf)
                     .takeIf { currentLeaf == typedLeaf }
             }.toMap(IdentityHashMap<IrValueSymbol, DotNetGenericOwnerSymbolicCarrierReference>())
+            val currentMethod = currentMethodIdentity
+            val methodParameterCarriers = if (currentMethod == null) {
+                emptyMap()
+            } else {
+                val boundAuthority = authority ?: return null
+                val methodDescription = boundAuthority.declarations
+                    .methodDescriptionOrNull(currentMethod) ?: return null
+                if (physical.typeParameters.size != 1 || prototype.function.typeParameters.size != 1 ||
+                    typedPrototype.function.typeParameters.size != 1 ||
+                    !physical.typeParameters.single().isUnconstrainedInvariantMethodParameter() ||
+                    !prototype.function.typeParameters.single().isUnconstrainedInvariantMethodParameter() ||
+                    !typedPrototype.function.typeParameters.single().isUnconstrainedInvariantMethodParameter() ||
+                    methodDescription.signature.genericArity != 1 ||
+                    methodDescription.genericParameters.singleOrNull()?.isUnconstrained != true ||
+                    currentMethod.function !== physical.symbol
+                ) return null
+                val boundParameter = when (val binding = boundAuthority.declarations
+                    .methodParameterOrError(currentMethod, 0)
+                ) {
+                    is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                    is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                        error("Internal .NET backend error: ${binding.reason}")
+                    DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return null
+                }
+                val carrier = when (val binding = boundAuthority.declarations.carrierOrError(boundParameter)) {
+                    is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                    is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                        error("Internal .NET backend error: ${binding.reason}")
+                    DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return null
+                }
+                regularIndices.mapIndexedNotNull { regularIndex, index ->
+                    val plannedIndex = plannedParameters[index].type
+                        .exactCurrentMethodParameterIndexOrNull(prototype.function)
+                    val typedIndex = typedParameters[index].type
+                        .exactCurrentMethodParameterIndexOrNull(typedPrototype.function)
+                    val physicalIndex = physicalParameters[index].type
+                        .exactCurrentMethodParameterIndexOrNull(physical)
+                    val slot = methodDescription.signature.parameterSlots.getOrNull(regularIndex)
+                    (physicalParameters[index].symbol to carrier).takeIf {
+                        plannedIndex == 0 && typedIndex == 0 && physicalIndex == 0 &&
+                                slot?.domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
+                                slot.carrier == boundParameter
+                    }
+                }.toMap(IdentityHashMap<IrValueSymbol, DotNetGenericOwnerPhysicalCarrier>())
+            }
             return DotNetGenericOwnerPhysicalEntryPrototypeParameters(
                 currentTypes,
                 fixedLeafCarriers,
+                methodParameterCarriers,
             )
         }
 
         private fun plannedEntryStorageOrNull(
             plannedType: IrType?,
+            methodParameterCarrier: DotNetGenericOwnerPhysicalCarrier?,
             ownerAuthority: OwnerAuthority,
         ): DotNetGenericOwnerPhysicalStorageFact? {
             plannedType ?: return null
+            if (methodParameterCarrier != null) {
+                return DotNetGenericOwnerPhysicalStorageFact(
+                    DotNetGenericOwnerPhysicalStorageLayout.Direct(
+                        DotNetGenericOwnerStorageCarrier.Fixed(methodParameterCarrier),
+                    ),
+                    DotNetGenericOwnerPhysicalValueProvenance(
+                        DotNetGenericOwnerGuaranteedViews.Unknown,
+                    ),
+                    // An unconstrained CLR !!R may be a nullable reference substitution.
+                    DotNetGenericOwnerPhysicalNullState.MAYBE_NULL,
+                )
+            }
             if (plannedType.isObjectShadowType()) {
                 return objectEntryStorage(plannedType, ownerAuthority)
             }
@@ -1407,9 +1508,12 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
 
         fun org.jetbrains.kotlin.ir.types.IrType.isPhysicalValueShadowCandidateType(
             owner: IrClass,
+            method: IrSimpleFunction,
+            hasCurrentMethodAuthority: Boolean,
         ): Boolean = isObjectShadowType() || isDeferredGenericShadowType() ||
                 exactCurrentOwnerParameterIndexOrNull(owner) != null ||
-                nullableCurrentOwnerParameterIndexOrNull(owner) != null
+                nullableCurrentOwnerParameterIndexOrNull(owner) != null ||
+                hasCurrentMethodAuthority && exactCurrentMethodParameterIndexOrNull(method) != null
 
         fun IrType.exactCurrentOwnerParameterIndexOrNull(owner: IrClass): Int? {
             val simple = this as? IrSimpleType ?: return null
@@ -1428,6 +1532,20 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                 candidate.symbol === parameter
             }.takeIf { index -> index >= 0 }
         }
+
+        fun IrType.exactCurrentMethodParameterIndexOrNull(method: IrSimpleFunction): Int? {
+            val simple = this as? IrSimpleType ?: return null
+            if (simple.isMarkedNullable() || simple.arguments.isNotEmpty()) return null
+            val parameter = simple.classifier as? IrTypeParameterSymbol ?: return null
+            return method.typeParameters.indexOfFirst { candidate ->
+                candidate.symbol === parameter
+            }.takeIf { index -> index >= 0 }
+        }
+
+        fun org.jetbrains.kotlin.ir.declarations.IrTypeParameter
+                .isUnconstrainedInvariantMethodParameter(): Boolean =
+            variance == Variance.INVARIANT && !isReified &&
+                    superTypes.all { bound -> bound.isAny() || bound.isNullableAny() }
 
         fun org.jetbrains.kotlin.ir.types.IrType.hasUnsupportedProjection(): Boolean {
             val simple = this as? IrSimpleType ?: return false

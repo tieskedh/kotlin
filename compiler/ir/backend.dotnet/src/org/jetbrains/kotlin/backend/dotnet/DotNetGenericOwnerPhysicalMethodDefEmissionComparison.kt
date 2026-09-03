@@ -12,10 +12,11 @@ enum class DotNetGenericOwnerPhysicalMethodDefEmissionComparisonStatus {
     CONFLICT,
 }
 
-/** The two physical entries in the currently bounded producer family. */
+/** Physical endpoint kind selected by one BOUND MethodDef comparison. */
 enum class DotNetGenericOwnerPhysicalMethodDefEmissionEntryKind {
     NATURAL_INTERFACE,
     SEMANTIC_CAPABILITY_INTERFACE_SLOT,
+    CURRENT_TYPED_ENTRY,
 }
 
 /** Complete visibility vocabulary observed in a CLI MethodDef header. */
@@ -240,8 +241,11 @@ data class DotNetGenericOwnerPhysicalMethodDefEmissionFamilyComparisonSnapshot(
     init {
         require(ownerName.isNotEmpty() && logicalMemberName.isNotEmpty() &&
                 endpoints.map { it.entryKind }.toSet() ==
-                DotNetGenericOwnerPhysicalMethodDefEmissionEntryKind.entries.toSet() &&
-                endpoints.size == DotNetGenericOwnerPhysicalMethodDefEmissionEntryKind.entries.size) {
+                setOf(
+                    DotNetGenericOwnerPhysicalMethodDefEmissionEntryKind.NATURAL_INTERFACE,
+                    DotNetGenericOwnerPhysicalMethodDefEmissionEntryKind
+                        .SEMANTIC_CAPABILITY_INTERFACE_SLOT,
+                ) && endpoints.size == 2) {
             "a MethodDef-emission family comparison requires both distinct physical entries"
         }
         val expectedStatus = when {
@@ -253,6 +257,22 @@ data class DotNetGenericOwnerPhysicalMethodDefEmissionFamilyComparisonSnapshot(
         }
         require(status == expectedStatus) {
             "a MethodDef-emission family status must be the fail-closed join of its endpoints"
+        }
+    }
+}
+
+/** One independently BOUND current MethodDef checked against its final emitted header. */
+internal data class DotNetGenericOwnerPhysicalCurrentMethodDefEmissionComparison(
+    val scope: DotNetIlEmissionScope,
+    val ownerName: String,
+    val logicalMemberName: String,
+    val endpoint: DotNetGenericOwnerPhysicalMethodDefEmissionEndpointComparisonSnapshot,
+) {
+    init {
+        require(ownerName.isNotEmpty() && logicalMemberName.isNotEmpty() &&
+                endpoint.entryKind ==
+                DotNetGenericOwnerPhysicalMethodDefEmissionEntryKind.CURRENT_TYPED_ENTRY) {
+            "a current MethodDef comparison requires one named typed-entry endpoint"
         }
     }
 }

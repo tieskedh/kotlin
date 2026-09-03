@@ -1369,7 +1369,10 @@ private fun validateGenericOwnerPhysicalOperationRouteShadow(
     }
     check(snapshots.none { candidate ->
         candidate.ownerName.endsWith("InlineMethodProducerRoute") &&
-                candidate.physicalFunctionName == "routeCallerMethodArgument" &&
+                candidate.physicalFunctionName in setOf(
+                    "routeCallerMethodArgument",
+                    "privateCallerMethodArgument",
+                ) &&
                 candidate.logicalMemberName == "produce"
     }) {
         "A caller-MethodDef binder must not be mistaken for current-owner !T authority: " +
@@ -2621,6 +2624,9 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
                         "'InlineMethodSpecSplitLocalRoute`1'" !in ilText &&
                         "InlineMethodSpecSplitLocalRoute\$lookup\$methodSpecSourceNaturalAlias\$1`1" !in ilText &&
                         "methodSpecResultAlias@isNull" !in ilText &&
+                        "'InlineMethodProducer`1'" !in ilText &&
+                        "IInlineMethodProducerKotlinSemantic" !in ilText &&
+                        "'InlineMethodProducerRoute`1'" !in ilText &&
                         "'InlineSplitLocalProducer`1'" !in ilText &&
                         "InlineSplitLocalProducerKotlinSemantic" !in ilText &&
                         "'InlineSplitLocalRoute`1'" !in ilText &&
@@ -2779,6 +2785,185 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
         ) {
             "The direct constructed entry was not copied from its live " +
                     "InlineLookup<!T,!T> argument slot without adaptation: method=$exactEntryMethod"
+        }
+        val callerMethodParameterAlias = comparisons.singleOrNull { comparison ->
+            comparison.prediction.ownerName.endsWith("InlineMethodProducerRoute") &&
+                    comparison.prediction.sourceFunctionName == "routeCallerMethodArgument" &&
+                    comparison.prediction.physicalFunctionName == "routeCallerMethodArgument" &&
+                    comparison.prediction.functionRole ==
+                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER &&
+                    comparison.prediction.variableName == "callerMarkerAlias"
+        }
+        check(callerMethodParameterAlias?.let { comparison ->
+            val prediction = comparison.prediction
+            val carrier = prediction.initializerProducedCarrier
+            prediction.status == DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED &&
+                    prediction.unsupportedReason == null &&
+                    prediction.initializerProducedLayout ==
+                    DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT &&
+                    prediction.storageLayout == DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT &&
+                    carrier.kind ==
+                    DotNetGenericOwnerPhysicalValueShadowCarrierKind.METHOD_TYPE_PARAMETER &&
+                    carrier.ownerParameterIndices.isEmpty() &&
+                    carrier.methodParameterIndices == listOf(0) &&
+                    carrier.parameterBinderOwnerName?.endsWith("InlineMethodProducerRoute") == true &&
+                    carrier.parameterBinderTypeDefView == null &&
+                    carrier.parameterBinderMethodName == "routeCallerMethodArgument" &&
+                    carrier.parameterBinderMethodRole ==
+                    DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY &&
+                    prediction.storageCarrier == carrier &&
+                    prediction.guaranteeState ==
+                    DotNetGenericOwnerPhysicalValueShadowGuaranteeState.UNKNOWN &&
+                    prediction.guaranteedViews.isEmpty() &&
+                    prediction.selectedViewLineage.isEmpty() &&
+                    prediction.initializerNullState ==
+                    DotNetGenericOwnerPhysicalValueShadowNullState.MAYBE_NULL &&
+                    prediction.contentsNullState ==
+                    DotNetGenericOwnerPhysicalValueShadowNullState.MAYBE_NULL &&
+                    comparison.continuity ==
+                    DotNetGenericOwnerPhysicalValuePlacementContinuity.NOT_OBSERVED &&
+                    comparison.actualPhysicalMethodOwnerName
+                        ?.endsWith("InlineMethodProducerRoute") == true &&
+                    comparison.actualStorageLayout ==
+                    DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT &&
+                    comparison.actualAuxiliarySlotIndex == null &&
+                    comparison.actualSelectionKind ==
+                    DotNetGenericOwnerPhysicalValueLocalSelectionKind
+                        .PHYSICAL_VALUE_RETAINED_PRODUCER &&
+                    comparison.actualStorageCarrier == carrier &&
+                    comparison.relation == DotNetGenericOwnerPhysicalValuePlacementRelation.MATCH &&
+                    comparison.diagnostic == null
+        } == true) {
+            "The immutable caller-MethodDef alias must retain the exact !!0 binder: " +
+                    "alias=$callerMethodParameterAlias, all=$comparisons"
+        }
+        val callerMethodEntry = constructedEntryMethodWindows.singleOrNull { method ->
+            val header = method.substringBefore('{')
+            Regex("""'routeCallerMethodArgument'\s*<""").containsMatchIn(header) &&
+                    "'callerMarkerAlias'" in method
+        }
+        val callerMarkerSlot = callerMethodEntry?.let { method ->
+            Regex("""\[(\d+)]\s+!!0\s+'callerMarkerAlias'""")
+                .find(method)?.groupValues?.get(1)?.toInt()
+        }
+        val callerMarkerStore = callerMarkerSlot?.let { slot ->
+            if (slot in 0..3) "stloc.$slot" else "stloc $slot"
+        }
+        val callerMarkerLoad = callerMarkerSlot?.let { slot ->
+            if (slot in 0..3) "ldloc.$slot" else "ldloc $slot"
+        }
+        val callerMethodInstructions = callerMethodEntry?.lineSequence()
+            ?.map(String::trim)
+            ?.filter { line -> line.isNotEmpty() && !line.startsWith("//") }
+            ?.toList()
+        check(callerMethodEntry != null && callerMarkerSlot != null &&
+                callerMarkerStore != null && callerMarkerLoad != null &&
+                Regex("""class\s+'InlineMethodProducer`1'<!0>\s+'source'""")
+                    .containsMatchIn(callerMethodEntry.substringBefore('{')) &&
+                Regex("""!!0\s+'marker'""")
+                    .containsMatchIn(callerMethodEntry.substringBefore('{')) &&
+                callerMethodInstructions?.windowed(2)?.any { instructions ->
+                    instructions == listOf("ldarg.2", callerMarkerStore)
+                } == true &&
+                callerMethodInstructions.count { instruction -> instruction == callerMarkerStore } == 1 &&
+                callerMethodInstructions.any { instruction -> instruction == callerMarkerLoad } &&
+                !Regex("""\[\d+]\s+!0\s+'callerMarkerAlias'""")
+                    .containsMatchIn(callerMethodEntry) &&
+                "'produce'<!0>" !in callerMethodEntry &&
+                !Regex("""(?:unbox\.any|castclass)\s+!!0""").containsMatchIn(callerMethodEntry)
+        ) {
+            "The caller MethodDef entry/local did not retain its verifier-visible !!0 binder: " +
+                    "method=$callerMethodEntry"
+        }
+        val privateCallerMethodParameterAlias = comparisons.singleOrNull { comparison ->
+            comparison.prediction.ownerName.endsWith("InlineMethodProducerRoute") &&
+                    comparison.prediction.sourceFunctionName == "privateCallerMethodArgument" &&
+                    comparison.prediction.physicalFunctionName == "privateCallerMethodArgument" &&
+                    comparison.prediction.functionRole ==
+                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER &&
+                    comparison.prediction.variableName == "privateCallerMarkerAlias"
+        }
+        check(privateCallerMethodParameterAlias?.let { comparison ->
+            val prediction = comparison.prediction
+            val carrier = prediction.initializerProducedCarrier
+            prediction.status == DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED &&
+                    prediction.unsupportedReason == null &&
+                    prediction.initializerProducedLayout ==
+                    DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT &&
+                    prediction.storageLayout == DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT &&
+                    carrier.kind ==
+                    DotNetGenericOwnerPhysicalValueShadowCarrierKind.METHOD_TYPE_PARAMETER &&
+                    carrier.ownerParameterIndices.isEmpty() &&
+                    carrier.methodParameterIndices == listOf(0) &&
+                    carrier.parameterBinderOwnerName?.endsWith("InlineMethodProducerRoute") == true &&
+                    carrier.parameterBinderTypeDefView == null &&
+                    carrier.parameterBinderMethodName == "privateCallerMethodArgument" &&
+                    carrier.parameterBinderMethodRole ==
+                    DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY &&
+                    prediction.storageCarrier == carrier &&
+                    prediction.guaranteeState ==
+                    DotNetGenericOwnerPhysicalValueShadowGuaranteeState.UNKNOWN &&
+                    prediction.guaranteedViews.isEmpty() &&
+                    prediction.selectedViewLineage.isEmpty() &&
+                    prediction.initializerNullState ==
+                    DotNetGenericOwnerPhysicalValueShadowNullState.MAYBE_NULL &&
+                    prediction.contentsNullState ==
+                    DotNetGenericOwnerPhysicalValueShadowNullState.MAYBE_NULL &&
+                    comparison.continuity ==
+                    DotNetGenericOwnerPhysicalValuePlacementContinuity.NOT_OBSERVED &&
+                    comparison.actualPhysicalMethodOwnerName
+                        ?.endsWith("InlineMethodProducerRoute") == true &&
+                    comparison.actualStorageLayout ==
+                    DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT &&
+                    comparison.actualAuxiliarySlotIndex == null &&
+                    comparison.actualSelectionKind ==
+                    DotNetGenericOwnerPhysicalValueLocalSelectionKind
+                        .PHYSICAL_VALUE_RETAINED_PRODUCER &&
+                    comparison.actualStorageCarrier == carrier &&
+                    comparison.relation == DotNetGenericOwnerPhysicalValuePlacementRelation.MATCH &&
+                    comparison.diagnostic == null
+        } == true) {
+            "A private typed entry must receive its !!0 authority from the BOUND current " +
+                    "MethodDef catalogue: alias=$privateCallerMethodParameterAlias"
+        }
+        val privateCallerMethodEntry = constructedEntryMethodWindows.singleOrNull { method ->
+            val header = method.substringBefore('{')
+            Regex("""'privateCallerMethodArgument'\s*<""").containsMatchIn(header) &&
+                    "'privateCallerMarkerAlias'" in method
+        }
+        val privateCallerMarkerSlot = privateCallerMethodEntry?.let { method ->
+            Regex("""\[(\d+)]\s+!!0\s+'privateCallerMarkerAlias'""")
+                .find(method)?.groupValues?.get(1)?.toInt()
+        }
+        val privateCallerMarkerStore = privateCallerMarkerSlot?.let { slot ->
+            if (slot in 0..3) "stloc.$slot" else "stloc $slot"
+        }
+        val privateCallerMethodInstructions = privateCallerMethodEntry?.lineSequence()
+            ?.map(String::trim)
+            ?.filter { line -> line.isNotEmpty() && !line.startsWith("//") }
+            ?.toList()
+        check(privateCallerMethodEntry != null && privateCallerMarkerSlot != null &&
+                privateCallerMarkerStore != null &&
+                privateCallerMethodEntry.substringBefore('{').let { header ->
+                    ".method private " in header &&
+                            Regex("""class\s+'InlineMethodProducer`1'<!0>\s+'source'""")
+                                .containsMatchIn(header) &&
+                            Regex("""!!0\s+'marker'""").containsMatchIn(header)
+                } &&
+                privateCallerMethodInstructions?.windowed(2)?.any { instructions ->
+                    instructions == listOf("ldarg.2", privateCallerMarkerStore)
+                } == true &&
+                privateCallerMethodInstructions.count { instruction ->
+                    instruction == privateCallerMarkerStore
+                } == 1 &&
+                !Regex("""\[\d+]\s+!0\s+'privateCallerMarkerAlias'""")
+                    .containsMatchIn(privateCallerMethodEntry) &&
+                "'produce'<!0>" !in privateCallerMethodEntry &&
+                !Regex("""(?:unbox\.any|castclass)\s+!!0""")
+                    .containsMatchIn(privateCallerMethodEntry)
+        ) {
+            "The private current MethodDef entry/local did not retain !!0: " +
+                    "method=$privateCallerMethodEntry"
         }
         val constructedCallResultAlias = comparisons.singleOrNull { comparison ->
             comparison.prediction.ownerName.endsWith("InlineConstructedCallRoute") &&

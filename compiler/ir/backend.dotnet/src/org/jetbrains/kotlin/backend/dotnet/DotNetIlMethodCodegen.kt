@@ -82,6 +82,8 @@ import org.jetbrains.kotlin.ir.util.render
 internal data class DotNetIlRawLocalPlacementObservation(
     val function: IrFunctionSymbol,
     val physicalOwner: DotNetIlClassInfo,
+    val genericOwnerPhysicalMethodIdentity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local?,
+    val methodGenericArity: Int,
     val variable: IrVariableSymbol,
     val slotIndex: Int,
     val layout: DotNetGenericOwnerPhysicalValueLayoutKind,
@@ -91,6 +93,9 @@ internal data class DotNetIlRawLocalPlacementObservation(
 ) {
     init {
         require(slotIndex >= 0) { "an observed IL local requires a non-negative slot index" }
+        require(methodGenericArity >= 0) {
+            "an observed IL local requires a non-negative MethodDef generic arity"
+        }
         require(
             when (layout) {
                 DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT -> auxiliarySlotIndex == null
@@ -2148,6 +2153,9 @@ internal class DotNetIlMethodCodegen(
                 DotNetIlRawLocalPlacementObservation(
                     function = function.symbol,
                     physicalOwner = functionInfo.owner,
+                    genericOwnerPhysicalMethodIdentity =
+                        functionInfo.genericOwnerPhysicalMethodIdentity,
+                    methodGenericArity = functionInfo.signature.methodGenericParameterCount,
                     variable = variable.symbol,
                     slotIndex = local.payload.index,
                     layout = DotNetGenericOwnerPhysicalValueLayoutKind.SPLIT_NULLABLE,
@@ -2179,6 +2187,8 @@ internal class DotNetIlMethodCodegen(
                     selection.bindEmitterCarrierOrNull(
                         typeMapper,
                         functionInfo.owner,
+                        functionInfo.genericOwnerPhysicalMethodIdentity,
+                        functionInfo.signature.methodGenericParameterCount,
                         liveInitializer = initializer,
                         initializerCarrier = if (initializer is IrWhen) {
                             null
@@ -2274,6 +2284,9 @@ internal class DotNetIlMethodCodegen(
             observations += DotNetIlRawLocalPlacementObservation(
                 function = function.symbol,
                 physicalOwner = functionInfo.owner,
+                genericOwnerPhysicalMethodIdentity =
+                    functionInfo.genericOwnerPhysicalMethodIdentity,
+                methodGenericArity = functionInfo.signature.methodGenericParameterCount,
                 variable = variable.symbol,
                 slotIndex = slot.index,
                 layout = DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT,

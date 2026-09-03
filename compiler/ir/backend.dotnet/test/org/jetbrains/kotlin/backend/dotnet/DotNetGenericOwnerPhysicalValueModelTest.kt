@@ -1585,6 +1585,259 @@ class DotNetGenericOwnerPhysicalValueModelTest {
     }
 
     @Test
+    fun `retained method parameter requires the exact current MethodDef binder`() {
+        val owner = testOwner("CallerOwner")
+        owner.parent = IrExternalPackageFragmentImpl(
+            IrExternalPackageFragmentSymbolImpl(),
+            FqName("sample"),
+            IrErrorModuleFragment,
+        )
+        val currentFunction = IrFactoryImpl.buildFun {
+            name = Name.identifier("current")
+        }.also { function -> function.parent = owner }
+        val siblingFunction = IrFactoryImpl.buildFun {
+            name = Name.identifier("sibling")
+        }.also { function -> function.parent = owner }
+        val ownerIdentity = localOwnerIdentity(owner.symbol as IrClassSymbolImpl)
+        val currentMethod = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+            currentFunction.symbol,
+            DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+        )
+        val siblingMethod = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+            siblingFunction.symbol,
+            DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+        )
+        val wrongRoleMethod = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+            currentFunction.symbol,
+            DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+        )
+        val declarations = boundDeclarationIndex(
+            listOf(typeDescription(
+                ownerIdentity,
+                1,
+                DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+            )),
+            listOf(
+                methodDescription(currentMethod, ownerIdentity, 1),
+                methodDescription(siblingMethod, ownerIdentity, 1),
+            ),
+        )
+        val methodCarrier = boundCarrier(
+            declarations,
+            boundMethodParameter(declarations, currentMethod, 0),
+        )
+        val retained = DotNetGenericOwnerPhysicalValueRetainedProducedCarrier(
+            methodCarrier,
+            DotNetGenericOwnerPhysicalValueEmitterValidation.DIRECT_STORAGE_READ_CARRIER,
+        )
+        val physicalOwner = DotNetIlClassInfo(
+            "CallerOwner`1",
+            typeParameterVariances = listOf(Variance.INVARIANT),
+        )
+        val typeMapper = DotNetIlTypeMapper(emptyMap())
+        val expected = DotNetIlValueType.TypeParameter(0, isMethodParameter = true)
+
+        fun bind(
+            identity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local?,
+            arity: Int,
+            liveSource: DotNetIlValueType = expected,
+        ) = retained.bindEmitterCarrierOrNull(
+            typeMapper = typeMapper,
+            physicalMethodOwner = physicalOwner,
+            physicalMethodIdentity = identity,
+            physicalMethodGenericArity = arity,
+            liveInitializer = null,
+            initializerCarrier = null,
+            initializerDirectStorageReadCarrier = liveSource,
+            initializerDirectCallResultCarrier = null,
+            initializerUsesControlFlowBranches = false,
+        )
+
+        assertEquals(expected, bind(currentMethod, 1))
+        assertNull(bind(siblingMethod, 1), "an equal !!0 index from a sibling MethodDef is unrelated")
+        assertNull(
+            bind(wrongRoleMethod, 1),
+            "an equal !!0 index from another physical role is unrelated",
+        )
+        assertNull(bind(currentMethod, 0), "the live MethodDef arity must still own !!0")
+        assertNull(bind(null, 1), "a method-parameter local requires an exact current MethodDef")
+        assertNull(
+            bind(
+                currentMethod,
+                1,
+                DotNetIlValueType.TypeParameter(0, isMethodParameter = false),
+            ),
+            "a live !0 storage read cannot satisfy a retained !!0 carrier",
+        )
+
+        val snapshot = DotNetGenericOwnerObservedLocalCarrier.MethodParameter(
+            currentMethod,
+            0,
+        ).toSnapshot()
+        assertEquals(DotNetGenericOwnerPhysicalValueShadowCarrierKind.METHOD_TYPE_PARAMETER, snapshot.kind)
+        assertEquals(emptyList(), snapshot.ownerParameterIndices)
+        assertEquals(listOf(0), snapshot.methodParameterIndices)
+        assertTrue(snapshot.parameterBinderOwnerName?.endsWith("CallerOwner") == true)
+        assertEquals("current", snapshot.parameterBinderMethodName)
+        assertEquals(
+            DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+            snapshot.parameterBinderMethodRole,
+        )
+    }
+
+    @Test
+    fun `current MethodDef authority requires the complete caller binder grammar`() {
+        val owner = testOwner("CurrentMethodOwner")
+        owner.parent = IrExternalPackageFragmentImpl(
+            IrExternalPackageFragmentSymbolImpl(),
+            FqName("sample"),
+            IrErrorModuleFragment,
+        )
+        val function = IrFactoryImpl.buildFun {
+            name = Name.identifier("route")
+        }.also { declaration -> declaration.parent = owner }
+        val siblingFunction = IrFactoryImpl.buildFun {
+            name = Name.identifier("siblingRoute")
+        }.also { declaration -> declaration.parent = owner }
+        val ownerIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(owner.symbol, view = null)
+        val methodIdentity = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+            function.symbol,
+            DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+        )
+        val ownerInput = DotNetLocalGenericOwnerPhysicalTypeInput(
+            ownerIdentity,
+            "CurrentMethodOwner",
+            dotNetInvariantUnconstrainedPhysicalGenericParameters(1),
+            DotNetLocalGenericOwnerPhysicalTypeRole.GENERIC_CLASS,
+        )
+
+        fun bind(includeCallerParameter: Boolean):
+                DotNetGenericOwnerPhysicalBindingResult<DotNetLocalGenericOwnerPhysicalAuthority> {
+            val early = assertIs<
+                    DotNetGenericOwnerPhysicalBindingResult.Bound<
+                            DotNetLocalGenericOwnerPhysicalAuthority,
+                            >,
+                    >(DotNetLocalGenericOwnerPhysicalAuthority.bindEarly(listOf(ownerInput))).value
+            val ownerParameter = DotNetGenericOwnerSymbolicCarrierReference.Parameter
+                .unboundTypeParameterReference(ownerIdentity, 0)
+            val methodParameter = DotNetGenericOwnerSymbolicCarrierReference.Parameter
+                .methodParameterReference(methodIdentity, 0)
+            val method = DotNetGenericOwnerPhysicalMethodDefReference(
+                identity = methodIdentity,
+                declaringType = ownerIdentity,
+                visibility = DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE,
+                dispatch = DotNetGenericOwnerPhysicalMemberDispatch.FINAL,
+                signature = DotNetGenericOwnerPhysicalMethodSignatureReference(
+                    isInstance = true,
+                    genericArity = 1,
+                    resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct(
+                        callableSlot(
+                            DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT,
+                            ownerParameter,
+                        ),
+                    ),
+                    parameterSlots = if (includeCallerParameter) {
+                        listOf(callableSlot(
+                            DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                            methodParameter,
+                        ))
+                    } else {
+                        emptyList()
+                    },
+                ),
+                genericParameters = dotNetInvariantUnconstrainedPhysicalGenericParameters(1),
+            )
+            return early.advanceBound(emptyList()) {
+                DotNetGenericOwnerPhysicalBindingResult.Bound(
+                    DotNetLocalGenericOwnerPhysicalBoundInput(
+                        methodDefinitions = listOf(method),
+                        currentMethods = listOf(
+                            DotNetLocalGenericOwnerPhysicalCurrentMethodInput(
+                                function.symbol,
+                                methodIdentity,
+                            ),
+                        ),
+                        callableFamilies = emptyList(),
+                        directSupertypeEdgeSets = emptyList(),
+                    ),
+                )
+            }
+        }
+
+        val valid = assertIs<
+                DotNetGenericOwnerPhysicalBindingResult.Bound<
+                        DotNetLocalGenericOwnerPhysicalAuthority,
+                        >,
+                >(bind(includeCallerParameter = true)).value
+        assertEquals(methodIdentity, valid.currentMethodOrNull(function.symbol))
+        val observedOwner = DotNetGenericOwnerObservedLocalTypeDef(
+            DotNetGenericOwnerObservedPhysicalTypeDefKey(0),
+            ownerIdentity,
+            genericArity = 1,
+            category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+        )
+        val observedOwnerParameter = DotNetGenericOwnerObservedMethodCarrier.OwnerParameter(
+            observedOwner,
+            0,
+        )
+        val siblingFunctionObservation = DotNetGenericOwnerPhysicalMethodDefHeaderObservation(
+            physicalFunction = siblingFunction.symbol,
+            physicalMethodIdentity = methodIdentity,
+            physicalMethodOwner = DotNetGenericOwnerObservedMethodDefOwner.Local(observedOwner),
+            physicalMethodName = "route",
+            visibility = DotNetIlRawMethodDefVisibility.PRIVATE,
+            dispatch = DotNetIlRawMethodDefDispatch(
+                isInstance = true,
+                isVirtual = false,
+                isNewSlot = false,
+                isAbstract = false,
+                isFinal = false,
+            ),
+            isHideBySig = true,
+            isSpecialName = false,
+            isRuntimeSpecialName = false,
+            genericArity = 1,
+            genericParameters = listOf(
+                DotNetGenericOwnerPhysicalMethodDefGenericParameterObservation(
+                    "R",
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                    constraints = emptyList(),
+                ),
+            ),
+            signature = DotNetGenericOwnerObservedMethodSignature(
+                receiverCarrier = DotNetGenericOwnerObservedMethodCarrier.LocalConstruction(
+                    observedOwner,
+                    listOf(observedOwnerParameter),
+                ),
+                returnCarrier = observedOwnerParameter,
+                parameterCarriers = listOf(
+                    DotNetGenericOwnerObservedMethodCarrier.MethodParameter(
+                        observedOwner,
+                        siblingFunction.symbol,
+                        methodIdentity,
+                        0,
+                    ),
+                ),
+                hasSplitNullableResult = false,
+            ),
+        )
+        val siblingFunctionComparison = valid.compareFinalCurrentMethodDefHeaders(
+            DotNetIlEmissionScope.USER,
+            listOf(siblingFunctionObservation),
+        ).single()
+        assertEquals(
+            DotNetGenericOwnerPhysicalMethodDefEmissionComparisonStatus.CONFLICT,
+            siblingFunctionComparison.endpoint.status,
+            "a matching role/header cannot authenticate a sibling physical IR function",
+        )
+        assertNotNull(siblingFunctionComparison.endpoint.diagnostic)
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
+            bind(includeCallerParameter = false),
+            "an arity-only MethodDef must not become caller-binder authority",
+        )
+    }
+
+    @Test
     fun `unrecorded declarations are unavailable and never inferred`() {
         val index = boundDeclarationIndex(emptyList(), emptyList())
         val owner = localOwnerIdentity(IrClassSymbolImpl())

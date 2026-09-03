@@ -28,6 +28,7 @@ enum class DotNetGenericOwnerPhysicalValueShadowStatus {
 enum class DotNetGenericOwnerPhysicalValueShadowCarrierKind {
     OBJECT,
     OWNER_TYPE_PARAMETER,
+    METHOD_TYPE_PARAMETER,
     LOCAL_OWNER_CONSTRUCTION,
     SEMANTIC_CAPABILITY,
     UNKNOWN,
@@ -81,31 +82,52 @@ data class DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot(
     val kind: DotNetGenericOwnerPhysicalValueShadowCarrierKind,
     val localOwnerName: String? = null,
     val ownerParameterIndices: List<Int> = emptyList(),
+    val methodParameterIndices: List<Int> = emptyList(),
     val localTypeDefView: DotNetGenericOwnerPhysicalValueShadowTypeDefView? = null,
     val parameterBinderOwnerName: String? = null,
     val parameterBinderTypeDefView: DotNetGenericOwnerPhysicalValueShadowTypeDefView? = null,
+    val parameterBinderMethodName: String? = null,
+    val parameterBinderMethodRole: DotNetGenericOwnerMemberFamilyRole? = null,
 ) {
     init {
         require(ownerParameterIndices.all { index -> index >= 0 }) {
             "a physical-value shadow carrier cannot reference a negative owner-parameter index"
         }
+        require(methodParameterIndices.all { index -> index >= 0 }) {
+            "a physical-value shadow carrier cannot reference a negative method-parameter index"
+        }
         require(
             when (kind) {
                 DotNetGenericOwnerPhysicalValueShadowCarrierKind.OWNER_TYPE_PARAMETER ->
                     localOwnerName == null && ownerParameterIndices.size == 1 &&
-                            localTypeDefView == null && !parameterBinderOwnerName.isNullOrEmpty()
+                            methodParameterIndices.isEmpty() && localTypeDefView == null &&
+                            !parameterBinderOwnerName.isNullOrEmpty() &&
+                            parameterBinderMethodName == null && parameterBinderMethodRole == null
+                DotNetGenericOwnerPhysicalValueShadowCarrierKind.METHOD_TYPE_PARAMETER ->
+                    localOwnerName == null && ownerParameterIndices.isEmpty() &&
+                            methodParameterIndices.size == 1 && localTypeDefView == null &&
+                            !parameterBinderOwnerName.isNullOrEmpty() &&
+                            parameterBinderTypeDefView == null &&
+                            !parameterBinderMethodName.isNullOrEmpty() &&
+                            parameterBinderMethodRole != null
                 DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION ->
                     !localOwnerName.isNullOrEmpty() && ownerParameterIndices.isNotEmpty() &&
-                            !parameterBinderOwnerName.isNullOrEmpty()
+                            methodParameterIndices.isEmpty() &&
+                            !parameterBinderOwnerName.isNullOrEmpty() &&
+                            parameterBinderMethodName == null && parameterBinderMethodRole == null
                 DotNetGenericOwnerPhysicalValueShadowCarrierKind.SEMANTIC_CAPABILITY ->
                     !localOwnerName.isNullOrEmpty() && ownerParameterIndices.isEmpty() &&
+                            methodParameterIndices.isEmpty() &&
                             localTypeDefView == null && parameterBinderOwnerName == null &&
-                            parameterBinderTypeDefView == null
+                            parameterBinderTypeDefView == null && parameterBinderMethodName == null &&
+                            parameterBinderMethodRole == null
                 DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT,
                 DotNetGenericOwnerPhysicalValueShadowCarrierKind.UNKNOWN,
                 -> localOwnerName == null && ownerParameterIndices.isEmpty() &&
+                        methodParameterIndices.isEmpty() &&
                         localTypeDefView == null && parameterBinderOwnerName == null &&
-                        parameterBinderTypeDefView == null
+                        parameterBinderTypeDefView == null && parameterBinderMethodName == null &&
+                        parameterBinderMethodRole == null
             }
         ) {
             "a physical-value shadow carrier has incoherent owner, parameter, or view data"
@@ -124,6 +146,7 @@ data class DotNetGenericOwnerPhysicalValueShadowFamilySnapshot(
             DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION -> true
             DotNetGenericOwnerPhysicalValueShadowCarrierKind.SEMANTIC_CAPABILITY ->
                 localTypeDefView == null
+            DotNetGenericOwnerPhysicalValueShadowCarrierKind.METHOD_TYPE_PARAMETER,
             DotNetGenericOwnerPhysicalValueShadowCarrierKind.OWNER_TYPE_PARAMETER,
             DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT,
             DotNetGenericOwnerPhysicalValueShadowCarrierKind.UNKNOWN,
