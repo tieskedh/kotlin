@@ -268,9 +268,9 @@ result spine rather than the whole IR child tree. Every reachable result call
 retains its complete final operation and must rebind the same live MethodDef and
 result carrier; condition calls do not supply result authority. `IrComposite`
 is model-only in this checkpoint, while emitted/executed proof covers the
-`IrBlock`/`IrWhen` shape produced by FIR2IR. Prefix-bearing containers stay
-outside this first grammar because their local slots do not exist at the outer
-placement boundary. The exact scope is recorded in the
+`IrBlock`/`IrWhen` shape produced by FIR2IR. General prefix-bearing containers
+stay outside this first grammar because their local slots do not exist at the
+outer placement boundary. The exact scope is recorded in the
 [dated archive](../archive/generic-owner-path-complete-direct-result-calls-2026-09-03.md).
 
 The older flat exhaustive split-nullable walker is a temporary narrower leaf
@@ -288,15 +288,25 @@ operation or placement authority; semantic-equivalence and retained-foreign
 witnesses retain their independent seals. Exact evidence is in the
 [dated archive](../archive/generic-owner-physical-methodspec-call-edge-seal-2026-09-03.md).
 
-Continue with another structural non-materializing consumer before widening
-MethodSpec admission. The next recorded gate is an ordered prefix-bearing
-direct-result container: its prefix statements and result spine require an
-emission-order obligation and may not reconstruct a physical carrier from a
-logical Kotlin type. Then continue with broader consumer categories, MethodSpec
-and argument/result shapes, null/bottom/unknown split joins, and explicit
-representation-changing conversions. Only after those value rules stabilize
-should the consumer widen to captures, properties, class nodes, MethodImpls, or
-new Runtime/Stdlib declarations.
+The first ordered prefix-bearing direct-result container is now closed for the
+exact caller-MethodDef operation above. Two immutable bare-read prefix locals
+retain independent `I<!T>` and `!!R` placement; only the `!T` outer remains
+pending until the two carriers pass correlation. Emission creates both slots once and
+in order, emits the bare call once, and consumes the actual shared MethodSpec
+call-edge seal. Permission is exact-root-only and elides only the balanced
+implicit `T -> Any? -> T` carrier roundtrip. Missing, wrong, extra, shared,
+effectful, mutable, wrapped, branch-local, or differently consumed prefixes
+deny the outer and its direct/split dependents without revoking independent
+prefix facts. Exact scope and four-lane/inverse evidence are in the
+[dated archive](../archive/generic-owner-ordered-prefix-methodspec-result-2026-09-03.md).
+
+Continue with broader consumer categories, MethodSpec and ordinary-
+argument/result shapes, null/bottom/unknown joins, and explicit representation-
+changing conversions. Prefer the next source-built-stdlib blocker only when it
+exposes one of those general structural gaps; do not add a declaration, package,
+collection, Map, member-name, IR-origin, or stdlib exception. Only after those
+value rules stabilize should the consumer widen to captures, properties, class
+nodes, MethodImpls, or new Runtime/Stdlib declarations.
 
 Broader state remains a separate producer-wide proof. A comparison surface may
 disappear only after downstream owner closure is an epoch invariant and its

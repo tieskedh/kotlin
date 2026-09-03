@@ -114,6 +114,12 @@ internal class DotNetIlExpressionCodegen(
     private val currentMethodGenericArity: Int = 0,
     private val retainsProducedLocalCarrier: (IrVariable) -> Boolean = { false },
     private val forwardingCallObserver: ((IrCall, DotNetIlRawForwardingCallEdge) -> Unit)? = null,
+    private val genericOwnerSealedCallObserver:
+            ((
+                IrCall,
+                DotNetGenericOwnerPhysicalOperationRoute,
+                DotNetGenericOwnerPhysicalOperationSealedCallEdge,
+            ) -> Unit)? = null,
 ) {
     internal val coreLibraryProfile: DotNetCoreLibraryProfile
         get() = typeMapper.coreLibrary
@@ -493,7 +499,8 @@ internal class DotNetIlExpressionCodegen(
             resolved.info.owner != expected.receiverType.classInfo ||
             !resolved.info.signature.hasThis ||
             resolved.info.signature.methodGenericParameterCount != 0 ||
-            resolved.info.signature.parameterTypes != listOf(expected.declaredReceiverType) ||
+            resolved.info.signature.parameterTypes !=
+                listOf(expected.declaredReceiverType) ||
             resolved.info.signature.returnType !=
                 DotNetIlReturnType.Value(expected.declaredResultType) ||
             resolved.receiverType
@@ -2694,7 +2701,8 @@ internal class DotNetIlExpressionCodegen(
                     currentMethodGenericArity = currentMethodGenericArity,
                     classInfo = { identity -> genericOwnerEmitterClassInfoOrNull(identity) },
                 )) {
-                    is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
+                    is DotNetGenericOwnerPhysicalBindingResult.Bound ->
+                        genericOwnerSealedCallObserver?.invoke(call, route, seal.value)
                     is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
                         error("Internal .NET backend error: ${seal.reason}")
                     DotNetGenericOwnerPhysicalBindingResult.Unavailable ->

@@ -532,8 +532,11 @@ late emission must rebind that exact operation/MethodDef as well as its result
 carrier. An unrelated MethodDef with the same return carrier cannot satisfy the
 plan.
 
-A container prefix is outside this admission, because a local introduced there
-has no live CLR slot at the enclosing pre-emission placement boundary. The
+The general result-path admission still excludes container prefixes, because a
+local introduced there has no live CLR slot at the enclosing pre-emission
+placement boundary. The exact ordered caller-MethodDef exception below instead
+binds every prefix to its own independently selected placement and carries a
+scoped emission-order obligation; it does not weaken this general rule. The
 model proves `IrBlock`, `IrComposite`, and exhaustive `IrWhen`; the current
 emitted/executed final-IR proof contains `IrBlock`/`IrWhen`. `IrComposite` is
 therefore model-only evidence in this checkpoint, not an assertion that this
@@ -635,10 +638,11 @@ Direct call-result placement may use only the exact result-path grammar above.
 It binds root/result-spine identity rather than whole-tree identity, and every
 leaf owns an independent final natural-operation witness whose exact retained
 MethodDef and result carrier are rebound before local placement. Calls in
-conditions, receivers, or arguments are not result evidence. Prefix-bearing
-containers, mixed call/read/null/bottom paths, returnable blocks, and
-non-exhaustive control flow remain unavailable. A denied result path also
-invalidates transitive aliases derived from its predicted carrier; legacy
+conditions, receivers, or arguments are not result evidence. General prefix-
+bearing containers, mixed call/read/null/bottom paths, returnable blocks, and
+non-exhaustive control flow remain unavailable; only the exact tenth-form
+ordered exception below composes independent prefix placement. A denied result
+path also invalidates transitive aliases derived from its predicted carrier; legacy
 compiler-temporary/nested-construction recognizers cannot recreate it.
 
 The existing split-nullable control-flow collector is temporarily narrower: it
@@ -774,13 +778,41 @@ caller, and TypeDef binder identities are compared independently even when all
 three indices are zero. Widened or semantic receivers, split results, owner-
 dependent inputs, mixed or multiple MethodSpec vectors, nested, nullable,
 constrained, foreign, and separate-consumer forms remain unavailable. This
-operation authority grants no result/local placement. The shared late call-edge
+operation authority alone grants no result/local placement. The shared late call-edge
 seal now rebinds its exact live MethodDef, declaring TypeDef and open signature,
 required receiver and rendered owner token, complete MethodSpec, instantiated
 parameter/result layout, and direct live operand carriers before coercion. It
 uses distinct selected-callee and current-caller binder scopes and therefore
 cannot exchange equal-index `!0` and `!!0` facts. Semantic-equivalence and
 retained-foreign witnesses keep their independent final-emission seals.
+
+The tenth bounded form consumes exactly that ninth operation as one ordered,
+non-materializing direct-result container. The initializer root has exactly two
+immutable prefix variables initialized by bare storage reads, followed by the
+single operation call inside the exact implicit `T -> Any? -> T` result
+roundtrip. The call reads the first prefix as its bare receiver and the second
+as its sole ordinary input. Both cast operators and operands, the result-path
+identities, the captured receiver/input source symbols, and the exact live call
+identity are retained. This permission exists only at the outer local's root;
+recursive containers and branches do not inherit caller-MethodDef result
+admission.
+
+Each prefix must independently qualify for ordinary placement authority before
+the outer may publish. The receiver token must be exactly the operation's `I<!T>` construction with
+reference null encoding; the input token must be the operation's exact current-
+caller `!!R` with substitution-dependent null encoding. Only the `!T` outer
+result is pending until both tokens correlate. A missing/wrong/shared prefix or
+operation denies that outer and all direct or split placements derived from it,
+without revoking an independently valid prefix. Late emission creates both
+prefix locals once and in order, emits the bare call once, and requires the
+actual shared MethodSpec call-edge seal for the same route before storing the
+outer result. The balanced implicit object roundtrip is the only elided work.
+
+Extra, mutable, wrapped, effectful, branch-local, repeated, or differently
+consumed prefixes; wrong or unbalanced casts; `IMPLICIT_NOTNULL`; split/void
+results; semantic, widened, foreign, or `super` routes; different MethodSpecs;
+and any carrier mismatch remain unavailable. This form introduces no general
+prefix grammar, conversion, boxing permission, proxy, wrapper, state, or ABI.
 
 #### Joins
 
@@ -1006,6 +1038,7 @@ the shared model runs in shadow mode. Their architectural disposition is:
 | Stage 6 producer-wide FieldDef authority | detached families, private helpers, state, and output pairing reach one monotone fixpoint; final per-field requirements select state before BOUND identity/writer freezing and actual-only sealing | **Fundamental authority rule with a temporary proof grammar.** Retain fixpoint closure, field-set and writer-lineage preservation, final-requirement admission, and actual-only sealing; generalize the admitted field/carrier grammar structurally. |
 | current caller-MethodDef `!!R` entry/local | a parameter read is produced by its exact BOUND current MethodDef entry environment, not by its logical type or an owner binder | **Derivable entry-environment rule with a temporary first grammar.** Retain BOUND identity, POST-only production, equal-carrier placement, live `ldarg`/`ldloc` rebinding, and final same-function header sealing; generalize binder count, constraints, carriers, and consumers independently. |
 | current caller-MethodDef `!!R` callee MethodSpec | a MethodSpec argument is an operation use of an independently authenticated caller carrier; equal caller/callee/TypeDef indices do not merge binder identity | **Derivable operation-binding rule with a temporary first grammar; authoritative consumer landed.** The shared late call-edge seal now derives the owner- and caller-bound positive behavior and hostile binder-swap failures from independent callee/caller scopes. Retain the bounded adapter only until the operation query itself admits a more general structural MethodSpec grammar. |
+| ordered caller-MethodDef direct-result prefixes | independently placed prefix definitions may feed one already-authoritative operation only through an exact emission-order obligation; prefix facts do not derive from the pending outer and remain valid if it is denied | **Derivable composition rule with a temporary first grammar; authoritative consumer landed.** The current two-prefix/balanced-roundtrip recognizer proves root scoping, carrier correlation, dependent denial, live source identity, and shared call-edge consumption. Replace the shape recognizer only when a general effect/sequence model derives the same obligations; do not fold prefixes into carrier authority. |
 
 None of the bounded positive proofs is presently classified as unsound within
 its asserted restrictions. Three tempting generalizations are unsound and are
@@ -1663,8 +1696,11 @@ binder identities remain distinct. Semantic/widened receivers, `super`, split,
 mixed, nested, constrained, and multiple-binder forms remain unavailable. A
 shared call-edge seal now rebinds the complete live operation before this token
 may authorize a later bounded consumer. The current seal is local,
-exact-natural, and non-empty-MethodSpec only; it creates no new route or
-placement permission.
+exact-natural, and non-empty-MethodSpec only; it creates no new route. One
+exact-root ordered two-prefix/balanced-roundtrip consumer may now retain the
+direct `!T` result only after independently placed `I<!T>` and caller `!!R`
+prefixes correlate, and emission must consume that same seal. General prefix,
+container, branch, conversion, and MethodSpec result placement remains closed.
 
 ## Consequences
 

@@ -16,17 +16,20 @@ import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrParameterKind
+import org.jetbrains.kotlin.ir.declarations.IrVariable
 import org.jetbrains.kotlin.ir.declarations.impl.IrExternalPackageFragmentImpl
 import org.jetbrains.kotlin.ir.declarations.impl.IrFactoryImpl
 import org.jetbrains.kotlin.ir.expressions.IrBlock
 import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperator
+import org.jetbrains.kotlin.ir.expressions.IrTypeOperatorCall
 import org.jetbrains.kotlin.ir.expressions.impl.IrBlockImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrBranchImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrCallImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrCompositeImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrConstImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrGetValueImpl
+import org.jetbrains.kotlin.ir.expressions.impl.IrReturnImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrTypeOperatorCallImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrWhenImpl
 import org.jetbrains.kotlin.ir.symbols.impl.IrExternalPackageFragmentSymbolImpl
@@ -3753,6 +3756,736 @@ class DotNetGenericOwnerPhysicalValueModelTest {
     }
 
     @Test
+    fun `ordered prefixes expose only a balanced object carrier roundtrip`() {
+        val samplePackage = IrExternalPackageFragmentImpl(
+            IrExternalPackageFragmentSymbolImpl(),
+            FqName("sample"),
+            IrErrorModuleFragment,
+        )
+        val kotlinPackage = IrExternalPackageFragmentImpl(
+            IrExternalPackageFragmentSymbolImpl(),
+            FqName("kotlin"),
+            IrErrorModuleFragment,
+        )
+        val anyOwner = IrFactoryImpl.buildClass {
+            name = Name.identifier("Any")
+            kind = ClassKind.CLASS
+        }.also { declaration ->
+            declaration.parent = kotlinPackage
+            kotlinPackage.declarations += declaration
+        }
+        val producer = IrFactoryImpl.buildClass {
+            name = Name.identifier("Producer")
+            kind = ClassKind.CLASS
+        }.also { declaration ->
+            declaration.parent = samplePackage
+            declaration.addTypeParameter { name = Name.identifier("T") }
+            samplePackage.declarations += declaration
+        }
+        val resultType = producer.typeParameters.single().defaultType
+        val producerType = IrSimpleTypeImpl(
+            producer.symbol,
+            SimpleTypeNullability.NOT_SPECIFIED,
+            listOf(makeTypeProjection(resultType, Variance.INVARIANT)),
+            annotations = emptyList(),
+        )
+        val anyNullableType = IrSimpleTypeImpl(
+            anyOwner.symbol,
+            SimpleTypeNullability.MARKED_NULLABLE,
+            arguments = emptyList(),
+            annotations = emptyList(),
+        )
+        val callee = IrFactoryImpl.buildFun {
+            name = Name.identifier("produce")
+            returnType = resultType
+        }.also { declaration ->
+            declaration.parent = producer
+            val parameter = declaration.addTypeParameter {
+                name = Name.identifier("R")
+            }
+            declaration.addValueParameter {
+                name = SpecialNames.THIS
+                type = producerType
+            }.kind = IrParameterKind.DispatchReceiver
+            declaration.addValueParameter("marker", parameter.defaultType)
+            producer.declarations += declaration
+        }
+        val caller = IrFactoryImpl.buildFun {
+            name = Name.identifier("route")
+            returnType = resultType
+        }.also { declaration ->
+            declaration.parent = producer
+            declaration.addTypeParameter { name = Name.identifier("R") }
+            producer.declarations += declaration
+        }
+        val source = caller.addValueParameter("source", producerType)
+        val marker = caller.addValueParameter(
+            "marker",
+            caller.typeParameters.single().defaultType,
+        )
+
+        fun roundtrip(
+            operator: IrTypeOperator = IrTypeOperator.IMPLICIT_CAST,
+            outerTypeOperand: IrType = resultType,
+            innerTypeOperand: IrType = anyNullableType,
+            wrapReceiverRead: Boolean = false,
+        ): Pair<IrBlock, IrCall> {
+            val sourceAlias = buildVariable(
+                caller,
+                0,
+                0,
+                IrDeclarationOrigin.DEFINED,
+                Name.identifier("sourceAlias"),
+                producerType,
+            ).also { variable ->
+                variable.initializer = IrGetValueImpl(0, 0, source.symbol)
+            }
+            val markerAlias = buildVariable(
+                caller,
+                0,
+                0,
+                IrDeclarationOrigin.DEFINED,
+                Name.identifier("markerAlias"),
+                caller.typeParameters.single().defaultType,
+            ).also { variable ->
+                variable.initializer = IrGetValueImpl(0, 0, marker.symbol)
+            }
+            val call = IrCallImpl(0, 0, resultType, callee.symbol).also { expression ->
+                expression.typeArguments[0] = caller.typeParameters.single().defaultType
+                val receiverRead = IrGetValueImpl(0, 0, sourceAlias.symbol)
+                expression.dispatchReceiver = if (wrapReceiverRead) {
+                    IrTypeOperatorCallImpl(
+                        0,
+                        0,
+                        producerType,
+                        IrTypeOperator.IMPLICIT_CAST,
+                        producerType,
+                        receiverRead,
+                    )
+                } else {
+                    receiverRead
+                }
+                expression.arguments[1] = IrGetValueImpl(0, 0, markerAlias.symbol)
+            }
+            val inner = IrTypeOperatorCallImpl(
+                0,
+                0,
+                anyNullableType,
+                IrTypeOperator.IMPLICIT_CAST,
+                innerTypeOperand,
+                call,
+            )
+            val carrierBlock = IrBlockImpl(0, 0, anyNullableType).apply {
+                statements += sourceAlias
+                statements += markerAlias
+                statements += inner
+            }
+            return IrBlockImpl(0, 0, resultType).apply {
+                statements += IrTypeOperatorCallImpl(
+                    0,
+                    0,
+                    resultType,
+                    operator,
+                    outerTypeOperand,
+                    carrierBlock,
+                )
+            } to call
+        }
+
+        val roundtrip = roundtrip()
+        val balanced = roundtrip.first
+        val resultCall = roundtrip.second
+        val plan = assertNotNull(balanced.dotNetPhysicalDirectResultInitializerPlanOrNull())
+        assertTrue(plan.hasSequentialReceiverAndInputPrefixPair)
+        assertTrue(plan.physicalResultAfterSequentialPrefixes === resultCall)
+
+        val originalReceiver = assertNotNull(resultCall.dispatchReceiver)
+        resultCall.dispatchReceiver = IrGetValueImpl(
+            0,
+            0,
+            plan.sequentialPrefixVariablesInEvaluationOrder[1].symbol,
+        )
+        assertFalse(
+            plan.matchesLiveInitializer(balanced),
+            "an in-place receiver-source rewrite cannot inherit the retained ordered plan",
+        )
+        resultCall.dispatchReceiver = originalReceiver
+        val originalInput = assertNotNull(resultCall.arguments[1])
+        resultCall.arguments[1] = IrGetValueImpl(
+            0,
+            0,
+            plan.sequentialPrefixVariablesInEvaluationOrder[0].symbol,
+        )
+        assertFalse(
+            plan.matchesLiveInitializer(balanced),
+            "an in-place input-source rewrite cannot inherit the retained ordered plan",
+        )
+        resultCall.arguments[1] = originalInput
+        assertTrue(
+            plan.matchesLiveInitializer(balanced),
+            "restoring the exact live prefix sources restores the retained plan",
+        )
+
+        assertNull(
+            roundtrip(IrTypeOperator.IMPLICIT_NOTNULL).first
+                .dotNetPhysicalDirectResultInitializerPlanOrNull(),
+            "a null-checking wrapper cannot become a physically elided carrier roundtrip",
+        )
+        val wrappedReceiverPlan = assertNotNull(
+            roundtrip(wrapReceiverRead = true).first
+                .dotNetPhysicalDirectResultInitializerPlanOrNull(),
+        )
+        assertFalse(
+            wrappedReceiverPlan.hasSequentialReceiverAndInputPrefixPair,
+            "the tail call must consume both prefix slots as bare verifier-visible reads",
+        )
+        assertNull(
+            roundtrip(outerTypeOperand = anyNullableType).first
+                .dotNetPhysicalDirectResultInitializerPlanOrNull()
+                ?.physicalResultAfterSequentialPrefixes,
+            "the outer cast operand must name the exact call/result carrier",
+        )
+        assertNull(
+            roundtrip(innerTypeOperand = resultType).first
+                .dotNetPhysicalDirectResultInitializerPlanOrNull()
+                ?.physicalResultAfterSequentialPrefixes,
+            "the inner cast operand must name Kotlin's nullable object carrier",
+        )
+        val duplicatePrefixRoundtrip = roundtrip()
+        val duplicatePrefixOuter = assertIs<IrTypeOperatorCall>(
+            duplicatePrefixRoundtrip.first.statements.single(),
+        )
+        val duplicatePrefixCarrier = assertIs<IrBlock>(duplicatePrefixOuter.argument)
+        val duplicatePrefix = assertIs<IrVariable>(duplicatePrefixCarrier.statements[0])
+        duplicatePrefixCarrier.statements[1] = duplicatePrefix
+        duplicatePrefixRoundtrip.second.arguments[1] =
+            IrGetValueImpl(0, 0, duplicatePrefix.symbol)
+        assertNull(
+            duplicatePrefixRoundtrip.first.dotNetPhysicalDirectResultInitializerPlanOrNull(),
+            "one prefix definition identity cannot occupy two ordered positions",
+        )
+
+        val interfaceIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+            producer.symbol,
+            DotNetGenericInterfaceView.DECLARED,
+        )
+        val callerOwnerIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+            producer.symbol,
+            view = null,
+        )
+        val calleeIdentity = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+            callee.symbol,
+            DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+        )
+        val callerIdentity = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+            caller.symbol,
+            DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+        )
+        val openResult = DotNetGenericOwnerSymbolicCarrierReference.Parameter
+            .unboundTypeParameterReference(interfaceIdentity, 0)
+        val declaredInput = DotNetGenericOwnerSymbolicCarrierReference.Parameter
+            .methodParameterReference(calleeIdentity, 0)
+        val callerOwnerResult = DotNetGenericOwnerSymbolicCarrierReference.Parameter
+            .unboundTypeParameterReference(callerOwnerIdentity, 0)
+        val callerInput = DotNetGenericOwnerSymbolicCarrierReference.Parameter
+            .methodParameterReference(callerIdentity, 0)
+        val calleeDescription = DotNetGenericOwnerPhysicalMethodDefReference(
+            identity = calleeIdentity,
+            declaringType = interfaceIdentity,
+            visibility = DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC,
+            dispatch = DotNetGenericOwnerPhysicalMemberDispatch.ABSTRACT,
+            signature = DotNetGenericOwnerPhysicalMethodSignatureReference(
+                isInstance = true,
+                genericArity = 1,
+                resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct(
+                    callableSlot(
+                        DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT,
+                        openResult,
+                    ),
+                ),
+                parameterSlots = listOf(callableSlot(
+                    DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                    declaredInput,
+                )),
+            ),
+            genericParameters = dotNetInvariantUnconstrainedPhysicalGenericParameters(1),
+        )
+        val callerDescription = DotNetGenericOwnerPhysicalMethodDefReference(
+            identity = callerIdentity,
+            declaringType = callerOwnerIdentity,
+            visibility = DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE,
+            dispatch = DotNetGenericOwnerPhysicalMemberDispatch.FINAL,
+            signature = DotNetGenericOwnerPhysicalMethodSignatureReference(
+                isInstance = true,
+                genericArity = 1,
+                resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct(
+                    callableSlot(
+                        DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT,
+                        callerOwnerResult,
+                    ),
+                ),
+                parameterSlots = listOf(callableSlot(
+                    DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                    callerInput,
+                )),
+            ),
+            genericParameters = dotNetInvariantUnconstrainedPhysicalGenericParameters(1),
+        )
+        val authority = boundDeclarationIndex(
+            listOf(
+                typeDescription(
+                    interfaceIdentity,
+                    1,
+                    DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
+                ),
+                typeDescription(
+                    callerOwnerIdentity,
+                    1,
+                    DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+                ),
+            ),
+            listOf(
+                calleeDescription,
+                callerDescription,
+            ),
+        )
+        val receiverConstruction = boundConstruction(
+            authority,
+            interfaceIdentity,
+            listOf(callerOwnerResult),
+        )
+        val receiverCarrier = boundCarrier(authority, receiverConstruction)
+        val markerCarrier = boundCarrier(authority, callerInput)
+        val resultCarrier = boundCarrier(authority, callerOwnerResult)
+        val operation = DotNetGenericOwnerPhysicalOperationRoute(
+            method = calleeDescription,
+            requiredReceiverView = DotNetGenericOwnerPhysicalView(receiverConstruction),
+            methodArguments = listOf(callerInput),
+            instantiatedSignature = DotNetGenericOwnerPhysicalMethodSignatureReference(
+                isInstance = true,
+                genericArity = 1,
+                resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct(
+                    callableSlot(
+                        DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT,
+                        callerOwnerResult,
+                    ),
+                ),
+                parameterSlots = listOf(callableSlot(
+                    DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                    callerInput,
+                )),
+            ),
+            producedResult = directValue(resultCarrier),
+        )
+        val retainedInitializer = RetainedDirectResultInitializer(
+            plan,
+            resultCarrier,
+            listOf(RetainedDirectResultCallSite(
+                resultCall,
+                operation,
+                DotNetGenericOwnerPhysicalDirectResultCallKind.CURRENT_CALLER_METHOD_PARAMETER,
+            )),
+        )
+        val prefixVariables = plan.sequentialPrefixVariablesInEvaluationOrder
+        val receiverPlacement = DotNetGenericOwnerPhysicalValueRetainedProducedCarrier(
+            receiverCarrier,
+            DotNetGenericOwnerPhysicalValueEmitterValidation.DIRECT_STORAGE_READ_CARRIER,
+        )
+        val markerPlacement = DotNetGenericOwnerPhysicalValueRetainedProducedCarrier(
+            markerCarrier,
+            DotNetGenericOwnerPhysicalValueEmitterValidation.DIRECT_STORAGE_READ_CARRIER,
+        )
+        val wrongOwnerPlacement = DotNetGenericOwnerPhysicalValueRetainedProducedCarrier(
+            resultCarrier,
+            DotNetGenericOwnerPhysicalValueEmitterValidation.DIRECT_STORAGE_READ_CARRIER,
+        )
+        fun bindPrefixes(
+            first: DotNetGenericOwnerPhysicalValueRetainedProducedCarrier? = receiverPlacement,
+            second: DotNetGenericOwnerPhysicalValueRetainedProducedCarrier? = markerPlacement,
+        ) = retainedInitializer.bindSequentialPrefixesOrNull { variable ->
+            when (variable) {
+                prefixVariables[0] -> first
+                prefixVariables[1] -> second
+                else -> null
+            }
+        }
+        assertNotNull(bindPrefixes())
+        assertNull(bindPrefixes(first = null), "the receiver prefix requires its own placement")
+        assertNull(bindPrefixes(second = null), "the marker prefix requires its own placement")
+        assertNull(
+            bindPrefixes(first = wrongOwnerPlacement),
+            "an owner result parameter cannot stand in for the required receiver construction",
+        )
+        assertNull(
+            bindPrefixes(second = wrongOwnerPlacement),
+            "an owner result parameter cannot stand in for the caller MethodDef parameter",
+        )
+
+        val genericClassInput = DotNetLocalGenericOwnerPhysicalTypeInput(
+            callerOwnerIdentity,
+            "Producer",
+            dotNetInvariantUnconstrainedPhysicalGenericParameters(1),
+            DotNetLocalGenericOwnerPhysicalTypeRole.GENERIC_CLASS,
+        )
+        val naturalInterfaceInput = DotNetLocalGenericOwnerPhysicalTypeInput(
+            interfaceIdentity,
+            "Producer",
+            dotNetInvariantUnconstrainedPhysicalGenericParameters(1),
+            DotNetLocalGenericOwnerPhysicalTypeRole.NATURAL_INTERFACE,
+        )
+        val earlyLocalAuthority = assertIs<
+                DotNetGenericOwnerPhysicalBindingResult.Bound<
+                        DotNetLocalGenericOwnerPhysicalAuthority,
+                        >,
+                >(DotNetLocalGenericOwnerPhysicalAuthority.bindEarly(
+            listOf(genericClassInput),
+        )).value
+        val localAuthority = assertIs<
+                DotNetGenericOwnerPhysicalBindingResult.Bound<
+                        DotNetLocalGenericOwnerPhysicalAuthority,
+                        >,
+                >(earlyLocalAuthority.advanceBound(listOf(naturalInterfaceInput)) {
+            DotNetGenericOwnerPhysicalBindingResult.Bound(
+                DotNetLocalGenericOwnerPhysicalBoundInput(
+                    methodDefinitions = listOf(calleeDescription, callerDescription),
+                    currentMethods = listOf(DotNetLocalGenericOwnerPhysicalCurrentMethodInput(
+                        caller.symbol,
+                        callerIdentity,
+                    )),
+                    callableFamilies = emptyList(),
+                    directSupertypeEdgeSets = emptyList(),
+                ),
+            )
+        }).value
+
+        fun directStorage(
+            produced: DotNetGenericOwnerProducedValueFact,
+        ) = DotNetGenericOwnerPhysicalStorageFact(
+            DotNetGenericOwnerPhysicalStorageLayout.Direct(
+                DotNetGenericOwnerStorageCarrier.Fixed(
+                    assertIs<DotNetGenericOwnerProducedValueLayout.Direct>(
+                        produced.layout,
+                    ).carrier,
+                ),
+            ),
+            produced.provenance,
+            produced.nullState,
+        )
+
+        fun shadowRecord(
+            variable: IrVariable,
+            produced: DotNetGenericOwnerProducedValueFact,
+            storage: DotNetGenericOwnerPhysicalStorageFact = directStorage(produced),
+        ) = DotNetGenericOwnerPhysicalValueShadowRecord(
+            caller.symbol,
+            variable.symbol,
+            DotNetGenericOwnerPhysicalValueShadowSnapshot(
+                ownerName = "Producer",
+                sourceFunctionName = "route",
+                physicalFunctionName = "route",
+                functionRole = DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER,
+                phase = DotNetGenericOwnerPhysicalValueShadowPhase.POST_FINAL_ROUTING,
+                variableName = variable.name.asString(),
+                status = DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED,
+                initializerProducedLayout = when (produced.layout) {
+                    is DotNetGenericOwnerProducedValueLayout.SplitNullable ->
+                        DotNetGenericOwnerPhysicalValueLayoutKind.SPLIT_NULLABLE
+                    else -> DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT
+                },
+                initializerProducedCarrier = DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot(
+                    DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT,
+                ),
+                storageLayout = when (storage.storageLayout) {
+                    is DotNetGenericOwnerPhysicalStorageLayout.SplitNullable ->
+                        DotNetGenericOwnerPhysicalValueLayoutKind.SPLIT_NULLABLE
+                    else -> DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT
+                },
+                storageCarrier = DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot(
+                    DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT,
+                ),
+                guaranteeState = DotNetGenericOwnerPhysicalValueShadowGuaranteeState.UNKNOWN,
+                guaranteedViews = emptyList(),
+                selectedViewLineage = emptyList(),
+                initializerNullState = DotNetGenericOwnerPhysicalValueShadowNullState.NON_NULL,
+                contentsNullState = DotNetGenericOwnerPhysicalValueShadowNullState.NON_NULL,
+                unsupportedReason = null,
+            ),
+            produced,
+            storage,
+        )
+
+        fun resultVariable(
+            name: String,
+            initializer: IrBlock,
+        ) = buildVariable(
+            caller,
+            0,
+            0,
+            IrDeclarationOrigin.DEFINED,
+            Name.identifier(name),
+            resultType,
+        ).also { variable -> variable.initializer = initializer }
+
+        fun aliasVariable(
+            name: String,
+            sourceVariable: IrVariable,
+        ) = buildVariable(
+            caller,
+            0,
+            0,
+            IrDeclarationOrigin.DEFINED,
+            Name.identifier(name),
+            resultType,
+        ).also { variable ->
+            variable.initializer = IrGetValueImpl(0, 0, sourceVariable.symbol)
+        }
+
+        val outer = resultVariable("orderedOuter", balanced)
+        val outerAlias = aliasVariable("orderedOuterAlias", outer)
+        val receiverProduced = directValue(receiverCarrier)
+        val markerProduced = directValue(markerCarrier)
+        val resultProduced = assertNotNull(operation.producedResult)
+        val completeRecords = listOf(
+            shadowRecord(prefixVariables[0], receiverProduced),
+            shadowRecord(prefixVariables[1], markerProduced),
+            shadowRecord(outer, resultProduced),
+            shadowRecord(outerAlias, resultProduced),
+        )
+
+        fun placement(
+            records: List<DotNetGenericOwnerPhysicalValueShadowRecord>,
+            operations: Map<IrCall, DotNetGenericOwnerPhysicalOperationRoute> =
+                mapOf(resultCall to operation),
+        ) = assertIs<
+                DotNetGenericOwnerPhysicalBindingResult.Bound<
+                        DotNetGenericOwnerPhysicalValueLocalPlacementAuthority,
+                        >,
+                >(DotNetGenericOwnerPhysicalValueLocalPlacementAuthority.bind(
+            records,
+            operations,
+            localPhysicalAuthority = localAuthority,
+        )).value
+
+        fun DotNetGenericOwnerPhysicalValueLocalPlacementAuthority.has(
+            variable: IrVariable,
+        ): Boolean = retainedProducedCarrierOrNull(caller.symbol, variable.symbol) != null
+
+        val completePlacement = placement(completeRecords)
+        assertTrue(completePlacement.has(prefixVariables[0]))
+        assertTrue(completePlacement.has(prefixVariables[1]))
+        assertTrue(completePlacement.has(outer))
+        assertTrue(completePlacement.has(outerAlias))
+
+        val noOperationPlacement = placement(completeRecords, operations = emptyMap())
+        assertTrue(noOperationPlacement.has(prefixVariables[0]))
+        assertTrue(noOperationPlacement.has(prefixVariables[1]))
+        assertFalse(noOperationPlacement.has(outer))
+        assertFalse(noOperationPlacement.has(outerAlias))
+
+        val missingReceiverPlacement = placement(completeRecords.drop(1))
+        assertTrue(missingReceiverPlacement.has(prefixVariables[1]))
+        assertFalse(missingReceiverPlacement.has(outer))
+        assertFalse(missingReceiverPlacement.has(outerAlias))
+
+        val missingMarkerPlacement = placement(
+            completeRecords.filterNot { record -> record.variable === prefixVariables[1].symbol },
+        )
+        assertTrue(missingMarkerPlacement.has(prefixVariables[0]))
+        assertFalse(missingMarkerPlacement.has(outer))
+        assertFalse(missingMarkerPlacement.has(outerAlias))
+
+        val wrongReceiverRecords = completeRecords.toMutableList().also { records ->
+            records[0] = shadowRecord(prefixVariables[0], resultProduced)
+        }
+        val wrongReceiverPlacement = placement(wrongReceiverRecords)
+        assertTrue(wrongReceiverPlacement.has(prefixVariables[0]))
+        assertTrue(wrongReceiverPlacement.has(prefixVariables[1]))
+        assertFalse(wrongReceiverPlacement.has(outer))
+        assertFalse(wrongReceiverPlacement.has(outerAlias))
+
+        val wrongMarkerRecords = completeRecords.toMutableList().also { records ->
+            records[1] = shadowRecord(prefixVariables[1], receiverProduced)
+        }
+        val wrongMarkerPlacement = placement(wrongMarkerRecords)
+        assertTrue(wrongMarkerPlacement.has(prefixVariables[0]))
+        assertTrue(wrongMarkerPlacement.has(prefixVariables[1]))
+        assertFalse(wrongMarkerPlacement.has(outer))
+        assertFalse(wrongMarkerPlacement.has(outerAlias))
+
+        val firstSharedRoundtrip = roundtrip()
+        val firstSharedPlan = assertNotNull(
+            firstSharedRoundtrip.first.dotNetPhysicalDirectResultInitializerPlanOrNull(),
+        )
+        val secondSharedRoundtrip = roundtrip()
+        val secondSharedOuterCast = assertIs<IrTypeOperatorCall>(
+            secondSharedRoundtrip.first.statements.single(),
+        )
+        val secondSharedCarrier = assertIs<IrBlock>(secondSharedOuterCast.argument)
+        val sharedReceiver = firstSharedPlan.sequentialPrefixVariablesInEvaluationOrder[0]
+        secondSharedCarrier.statements[0] = sharedReceiver
+        secondSharedRoundtrip.second.dispatchReceiver =
+            IrGetValueImpl(0, 0, sharedReceiver.symbol)
+        val secondSharedPlan = assertNotNull(
+            secondSharedRoundtrip.first.dotNetPhysicalDirectResultInitializerPlanOrNull(),
+        )
+        assertTrue(firstSharedPlan.hasSequentialReceiverAndInputPrefixPair)
+        assertTrue(secondSharedPlan.hasSequentialReceiverAndInputPrefixPair)
+        val firstSharedOuter = resultVariable("firstSharedOuter", firstSharedRoundtrip.first)
+        val secondSharedOuter = resultVariable("secondSharedOuter", secondSharedRoundtrip.first)
+        val firstSharedMarker = firstSharedPlan.sequentialPrefixVariablesInEvaluationOrder[1]
+        val secondSharedMarker = secondSharedPlan.sequentialPrefixVariablesInEvaluationOrder[1]
+        val sharedPlacement = placement(
+            listOf(
+                shadowRecord(sharedReceiver, receiverProduced),
+                shadowRecord(firstSharedMarker, markerProduced),
+                shadowRecord(secondSharedMarker, markerProduced),
+                shadowRecord(firstSharedOuter, resultProduced),
+                shadowRecord(secondSharedOuter, resultProduced),
+            ),
+            mapOf(
+                firstSharedRoundtrip.second to operation,
+                secondSharedRoundtrip.second to operation,
+            ),
+        )
+        assertTrue(sharedPlacement.has(sharedReceiver))
+        assertTrue(sharedPlacement.has(firstSharedMarker))
+        assertTrue(sharedPlacement.has(secondSharedMarker))
+        assertFalse(sharedPlacement.has(firstSharedOuter))
+        assertFalse(sharedPlacement.has(secondSharedOuter))
+
+        val openSplitLayout = DotNetGenericOwnerPhysicalCallableResultLayoutReference.SplitNullable(
+            callableSlot(
+                DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT,
+                openResult,
+            ),
+        )
+        val instantiatedSplitLayout = DotNetGenericOwnerPhysicalCallableResultLayoutReference.SplitNullable(
+            callableSlot(
+                DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT,
+                callerOwnerResult,
+            ),
+        )
+        val splitProduced = DotNetGenericOwnerProducedValueFact(
+            DotNetGenericOwnerProducedValueLayout.SplitNullable(resultCarrier),
+            unknownProvenance(),
+            DotNetGenericOwnerPhysicalNullState.MAYBE_NULL,
+        )
+        val splitStorage = DotNetGenericOwnerPhysicalStorageFact(
+            DotNetGenericOwnerPhysicalStorageLayout.SplitNullable(
+                DotNetGenericOwnerStorageCarrier.Fixed(resultCarrier),
+            ),
+            splitProduced.provenance,
+            splitProduced.nullState,
+        )
+        val splitMethod = DotNetGenericOwnerPhysicalMethodDefReference(
+            operation.method.identity,
+            operation.method.declaringType,
+            operation.method.visibility,
+            operation.method.dispatch,
+            DotNetGenericOwnerPhysicalMethodSignatureReference(
+                operation.method.signature.isInstance,
+                operation.method.signature.genericArity,
+                openSplitLayout,
+                operation.method.signature.parameterSlots,
+            ),
+            operation.method.genericParameters,
+        )
+        val splitOperation = operation.copy(
+            method = splitMethod,
+            methodArguments = listOf(callerOwnerResult),
+            instantiatedSignature = DotNetGenericOwnerPhysicalMethodSignatureReference(
+                operation.instantiatedSignature.isInstance,
+                operation.instantiatedSignature.genericArity,
+                instantiatedSplitLayout,
+                listOf(callableSlot(
+                    DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                    callerOwnerResult,
+                )),
+            ),
+            producedResult = splitProduced,
+        )
+        fun dependentSplit(
+            name: String,
+            dependency: IrVariable,
+        ): Pair<IrVariable, IrCall> {
+            val call = IrCallImpl(0, 0, resultType, callee.symbol).also { expression ->
+                expression.typeArguments[0] = resultType
+                expression.dispatchReceiver = IrGetValueImpl(0, 0, source.symbol)
+                expression.arguments[1] = IrGetValueImpl(0, 0, dependency.symbol)
+            }
+            return buildVariable(
+                caller,
+                0,
+                0,
+                IrDeclarationOrigin.DEFINED,
+                Name.identifier(name),
+                resultType,
+            ).also { variable -> variable.initializer = call } to call
+        }
+        fun returnOnly(variable: IrVariable) {
+            caller.body = IrFactoryImpl.createBlockBody(0, 0).apply {
+                statements += IrReturnImpl(
+                    0,
+                    0,
+                    resultType,
+                    caller.symbol,
+                    IrGetValueImpl(0, 0, variable.symbol),
+                )
+            }
+        }
+
+        val validSplit = dependentSplit("validSplitDependent", outer)
+        returnOnly(validSplit.first)
+        val placementWithValidSplit = placement(
+            completeRecords + shadowRecord(validSplit.first, splitProduced, splitStorage),
+            mapOf(
+                resultCall to operation,
+                validSplit.second to splitOperation,
+            ),
+        )
+        assertNotNull(
+            placementWithValidSplit.retainedSplitNullableOrNull(
+                caller.symbol,
+                validSplit.first.symbol,
+            ),
+            "a split dependent is retained while its ordered source commits",
+        )
+
+        val deniedSplit = dependentSplit("deniedSplitDependent", firstSharedOuter)
+        returnOnly(deniedSplit.first)
+        val sharedPlacementWithSplit = placement(
+            listOf(
+                shadowRecord(sharedReceiver, receiverProduced),
+                shadowRecord(firstSharedMarker, markerProduced),
+                shadowRecord(secondSharedMarker, markerProduced),
+                shadowRecord(firstSharedOuter, resultProduced),
+                shadowRecord(secondSharedOuter, resultProduced),
+                shadowRecord(deniedSplit.first, splitProduced, splitStorage),
+            ),
+            mapOf(
+                firstSharedRoundtrip.second to operation,
+                secondSharedRoundtrip.second to operation,
+                deniedSplit.second to splitOperation,
+            ),
+        )
+        assertNull(
+            sharedPlacementWithSplit.retainedSplitNullableOrNull(
+                caller.symbol,
+                deniedSplit.first.symbol,
+            ),
+            "late ordered-source denial must revoke an already-retained split dependent",
+        )
+
+        val carrierBlock = assertIs<IrTypeOperatorCall>(balanced.statements.single())
+            .argument as IrBlock
+        val incompletePlan = assertNotNull(
+            carrierBlock.dotNetPhysicalDirectResultInitializerPlanOrNull(),
+        )
+        assertFalse(incompletePlan.hasSequentialReceiverAndInputPrefixPair)
+        assertNull(incompletePlan.physicalResultAfterSequentialPrefixes)
+    }
+
+    @Test
     fun `local placement authority admits only equal local owner-bound carriers`() {
         val packageFragment = IrExternalPackageFragmentImpl(
             IrExternalPackageFragmentSymbolImpl(),
@@ -4253,6 +4986,88 @@ class DotNetGenericOwnerPhysicalValueModelTest {
                 statements += prefixedBlockCall
             }
         }.symbol as IrVariableSymbolImpl
+        val prefixedBlockPlan = assertNotNull(
+            prefixedBlockCallVariable.owner.initializer
+                ?.dotNetPhysicalDirectResultInitializerPlanOrNull(),
+        )
+        val prefixedBlockCallAliasVariable = buildVariable(
+            function,
+            0,
+            0,
+            IrDeclarationOrigin.DEFINED,
+            Name.identifier("prefixedBlockCallAlias"),
+            constructedCallType,
+        ).also { variable ->
+            variable.initializer = IrGetValueImpl(0, 0, prefixedBlockCallVariable)
+        }.symbol as IrVariableSymbolImpl
+        val mutablePrefixLocal = buildVariable(
+            function,
+            0,
+            0,
+            IrDeclarationOrigin.DEFINED,
+            Name.identifier("mutablePrefixLocal"),
+            owner.typeParameters.single().defaultType,
+        ).also { variable ->
+            variable.isVar = true
+            variable.initializer = IrGetValueImpl(0, 0, constructedSource.symbol)
+        }
+        fun wrappedPrefixLocal(operator: IrTypeOperator) = buildVariable(
+            function,
+            0,
+            0,
+            IrDeclarationOrigin.DEFINED,
+            Name.identifier("wrappedPrefixLocal"),
+            owner.typeParameters.single().defaultType,
+        ).also { variable ->
+            val type = owner.typeParameters.single().defaultType
+            variable.initializer = IrTypeOperatorCallImpl(
+                0,
+                0,
+                type,
+                operator,
+                type,
+                IrGetValueImpl(0, 0, constructedSource.symbol),
+            )
+        }
+        assertNull(
+            IrBlockImpl(0, 0, constructedCallType).apply {
+                statements += mutablePrefixLocal
+                statements += parameterlessConstructedCall()
+            }.dotNetPhysicalDirectResultInitializerPlanOrNull(),
+            "mutable prefix storage cannot become ordered exact-carrier authority",
+        )
+        listOf(IrTypeOperator.IMPLICIT_CAST, IrTypeOperator.IMPLICIT_NOTNULL).forEach { operator ->
+            assertNull(
+                IrBlockImpl(0, 0, constructedCallType).apply {
+                    statements += wrappedPrefixLocal(operator)
+                    statements += parameterlessConstructedCall()
+                }.dotNetPhysicalDirectResultInitializerPlanOrNull(),
+                "a prefix definition must be a bare storage read, not $operator",
+            )
+        }
+        assertNull(
+            IrBlockImpl(0, 0, constructedCallType).apply {
+                statements += conditionCall
+                statements += parameterlessConstructedCall()
+            }.dotNetPhysicalDirectResultInitializerPlanOrNull(),
+            "an arbitrary effect prefix is outside the ordered local-definition grammar",
+        )
+        assertNull(
+            IrWhenImpl(0, 0, constructedCallType).apply {
+                branches += IrBranchImpl(
+                    IrGetValueImpl(0, 0, conditionCallVariable),
+                    IrBlockImpl(0, 0, constructedCallType).apply {
+                        statements += prefixLocal
+                        statements += parameterlessConstructedCall()
+                    },
+                )
+                branches += IrBranchImpl(
+                    IrConstImpl.boolean(0, 0, booleanType, true),
+                    parameterlessConstructedCall(),
+                )
+            }.dotNetPhysicalDirectResultInitializerPlanOrNull(),
+            "branch-local prefixes need a separate control-flow emission obligation",
+        )
         val nonExhaustiveCall = parameterlessConstructedCall()
         val nonExhaustiveWhenVariable = buildVariable(
             function,
@@ -4340,6 +5155,11 @@ class DotNetGenericOwnerPhysicalValueModelTest {
         )
         val records = listOf(
             record(conditionCallVariable, null, null),
+            record(
+                prefixLocal.symbol as IrVariableSymbolImpl,
+                parameterProduced,
+                parameterStorage,
+            ),
             record(localVariable, localProduced, localStorage),
             record(callVariable, retainedCallProduced, callStorage),
             record(callAliasVariable, retainedCallProduced, callStorage),
@@ -4351,6 +5171,7 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             record(whenCallVariable, retainedCallProduced, callStorage),
             record(whenCallAliasVariable, retainedCallProduced, callStorage),
             record(prefixedBlockCallVariable, retainedCallProduced, callStorage),
+            record(prefixedBlockCallAliasVariable, retainedCallProduced, callStorage),
             record(nonExhaustiveWhenVariable, retainedCallProduced, callStorage),
             record(refinedCallVariable, refinedProduced, refinedStorage),
             record(unwrappedRefinementVariable, refinedProduced, refinedStorage),
@@ -4519,7 +5340,14 @@ class DotNetGenericOwnerPhysicalValueModelTest {
         )
         assertNull(
             authority.retainedProducedCarrierOrNull(function.symbol, prefixedBlockCallVariable),
-            "a prefix local needs emission-ordered live-slot obligations before it is transparent",
+            "a parameterless tail is only prefix mechanics and cannot enter the caller-MethodSpec gate",
+        )
+        assertNull(
+            authority.retainedProducedCarrierOrNull(
+                function.symbol,
+                prefixedBlockCallAliasVariable,
+            ),
+            "an alias cannot recover authority from a denied prefix-bearing result",
         )
         assertNull(
             authority.retainedProducedCarrierOrNull(function.symbol, nonExhaustiveWhenVariable),
@@ -4666,6 +5494,25 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             "a structurally equal replacement call cannot inherit the retained path plan",
         )
         liveBlock.statements[0] = blockCall
+        val livePrefixedBlock = assertIs<IrBlock>(
+            prefixedBlockCallVariable.owner.initializer,
+        )
+        val siblingPrefixLocal = buildVariable(
+            function,
+            0,
+            0,
+            IrDeclarationOrigin.DEFINED,
+            Name.identifier("prefixLocal"),
+            owner.typeParameters.single().defaultType,
+        ).also { variable ->
+            variable.initializer = IrGetValueImpl(0, 0, constructedSource.symbol)
+        }
+        livePrefixedBlock.statements[0] = siblingPrefixLocal
+        assertFalse(
+            prefixedBlockPlan.matchesLiveInitializer(livePrefixedBlock),
+            "a structurally equal prefix definition cannot inherit the ordered obligation",
+        )
+        livePrefixedBlock.statements[0] = prefixLocal
         assertEquals(
             expectedConstruction,
             retainedWhenConstruction.bindEmitterCarrierOrNull(

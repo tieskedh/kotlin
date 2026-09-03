@@ -6,22 +6,16 @@
 package org.jetbrains.kotlin.backend.dotnet.lower
 
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalBindingResult
-import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalCallableResultLayoutReference
-import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalDeclarationIndex
-import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalGenericBinderReference
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMethodDefReference
-import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalNamedTypeCategory
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationRoute
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOperationRouteRequest
-import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalSlotDomain
-import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeDefIdentity
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalView
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerProducedValueFact
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerSymbolicCarrierReference
-import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceView
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalAuthority
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalCallableEntryKind
 import org.jetbrains.kotlin.backend.dotnet.selectDotNetGenericOwnerPhysicalOperationRoute
+import org.jetbrains.kotlin.backend.dotnet.isDirectCallerMethodParameterProducer
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
@@ -153,38 +147,4 @@ private fun bindDotNetLocalGenericOwnerMethodArgumentsOrError(
                 !selectedMethod.isDirectCallerMethodParameterProducer(authority.boundDeclarations))
     ) return DotNetGenericOwnerPhysicalBindingResult.Unavailable
     return DotNetGenericOwnerPhysicalBindingResult.Bound(arguments)
-}
-
-/** Exact open callee grammar for the first current-MethodDef MethodSpec consumer. */
-private fun DotNetGenericOwnerPhysicalMethodDefReference
-        .isDirectCallerMethodParameterProducer(
-            declarations: DotNetGenericOwnerPhysicalDeclarationIndex?,
-        ): Boolean {
-    declarations ?: return false
-    val ownerIdentity = declaringType as? DotNetGenericOwnerPhysicalTypeDefIdentity.Local
-        ?: return false
-    if (ownerIdentity.view != DotNetGenericInterfaceView.DECLARED) return false
-    val owner = declarations.typeDescriptionOrNull(ownerIdentity) ?: return false
-    if (owner.category != DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE ||
-        owner.genericParameters.singleOrNull()?.isUnconstrained != true
-    ) return false
-    if (!signature.isInstance || signature.genericArity != 1 ||
-        genericParameters.singleOrNull()?.isUnconstrained != true
-    ) return false
-    val input = signature.parameterSlots.singleOrNull() ?: return false
-    if (input.domain != DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT) return false
-    val inputParameter = input.carrier as?
-            DotNetGenericOwnerSymbolicCarrierReference.Parameter ?: return false
-    val inputBinder = inputParameter.binder as?
-            DotNetGenericOwnerPhysicalGenericBinderReference.Method ?: return false
-    if (inputBinder.definition != identity || inputParameter.index != 0) return false
-
-    val result = signature.resultLayout as?
-            DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct ?: return false
-    if (result.slot.domain != DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT) return false
-    val resultParameter = result.slot.carrier as?
-            DotNetGenericOwnerSymbolicCarrierReference.Parameter ?: return false
-    val resultBinder = resultParameter.binder as?
-            DotNetGenericOwnerPhysicalGenericBinderReference.Type ?: return false
-    return resultBinder.definition == declaringType && resultParameter.index == 0
 }
