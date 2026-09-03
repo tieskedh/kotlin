@@ -278,15 +278,25 @@ policy, not a separate representation rule. Converge it on the same structural
 result-spine traversal only when each path can retain and rebind the complete
 split operation, payload, and flag obligations.
 
-The first current caller-MethodDef `!!R` entry/local and its separate exact
-natural callee-MethodSpec use are closed. Before that operation authority feeds
-another placement/result consumer, close one shared late call-edge seal for both
-owner-bound and caller-bound MethodSpecs. Then continue with additional non-
-materializing consumer categories, ordered prefix-container obligations,
-broader MethodSpec and argument/result shapes, null/bottom/unknown split joins,
-and explicit representation-changing conversions. Only after those value rules
-stabilize should the consumer widen to captures, properties, class nodes,
-MethodImpls, or new Runtime/Stdlib declarations.
+The first current caller-MethodDef `!!R` entry/local, its separate exact natural
+callee-MethodSpec use, and the shared late emitter call-edge seal are closed.
+The seal covers both owner-bound `!T` and caller-bound `!!R` MethodSpecs, binds
+open callee and instantiated caller scopes independently, and validates the
+selected MethodDef, receiver, rendered owner token, complete MethodSpec,
+ordinary inputs, and direct/split result before coercion. It grants no new
+operation or placement authority; semantic-equivalence and retained-foreign
+witnesses retain their independent seals. Exact evidence is in the
+[dated archive](../archive/generic-owner-physical-methodspec-call-edge-seal-2026-09-03.md).
+
+Continue with another structural non-materializing consumer before widening
+MethodSpec admission. The next recorded gate is an ordered prefix-bearing
+direct-result container: its prefix statements and result spine require an
+emission-order obligation and may not reconstruct a physical carrier from a
+logical Kotlin type. Then continue with broader consumer categories, MethodSpec
+and argument/result shapes, null/bottom/unknown split joins, and explicit
+representation-changing conversions. Only after those value rules stabilize
+should the consumer widen to captures, properties, class nodes, MethodImpls, or
+new Runtime/Stdlib declarations.
 
 Broader state remains a separate producer-wide proof. A comparison surface may
 disappear only after downstream owner closure is an epoch invariant and its
