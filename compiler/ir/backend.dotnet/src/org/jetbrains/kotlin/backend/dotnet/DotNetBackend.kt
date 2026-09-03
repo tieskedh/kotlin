@@ -806,9 +806,10 @@ object DotNetBackend {
         localPhysicalAuthorityForEmissionComparison = context.localGenericOwnerPhysicalAuthority
         if (!configuration.dotNetGenericOwnerRehearsal) {
             check(context.genericOwnerSemanticEquivalenceEmissionObligations.isEmpty() &&
+                    context.genericOwnerAuthoritativePhysicalOperationRoutes.isEmpty() &&
                     context.genericOwnerSemanticEquivalentOperationEmitterWitnesses.isEmpty()
             ) {
-                "the production erased epoch cannot create semantic-equivalence obligations or witnesses"
+                "the production erased epoch cannot create generic-owner operation authority"
             }
         }
         genericOwnerSemanticEquivalenceEmissionObligations =
@@ -937,6 +938,8 @@ object DotNetBackend {
                     localGenericOwnerPhysicalAuthority = localGenericOwnerPhysicalAuthority,
                     genericOwnerPhysicalValueLocalPlacementAuthority =
                         genericOwnerPhysicalValueLocalPlacementAuthority,
+                    genericOwnerAuthoritativePhysicalOperationRoutes =
+                        context.genericOwnerAuthoritativePhysicalOperationRoutes,
                     genericOwnerSemanticEquivalentOperationEmitterWitnesses =
                         context.genericOwnerSemanticEquivalentOperationEmitterWitnesses,
                     reifiedGenericInterfaces = context.reifiedGenericInterfaces,
@@ -1112,6 +1115,8 @@ object DotNetBackend {
                 localGenericOwnerPhysicalAuthority = localGenericOwnerPhysicalAuthority,
                 genericOwnerPhysicalValueLocalPlacementAuthority =
                     genericOwnerPhysicalValueLocalPlacementAuthority,
+                genericOwnerAuthoritativePhysicalOperationRoutes =
+                    context.genericOwnerAuthoritativePhysicalOperationRoutes,
                 genericOwnerSemanticEquivalentOperationEmitterWitnesses =
                     context.genericOwnerSemanticEquivalentOperationEmitterWitnesses,
                 reifiedGenericInterfaces = context.reifiedGenericInterfaces,

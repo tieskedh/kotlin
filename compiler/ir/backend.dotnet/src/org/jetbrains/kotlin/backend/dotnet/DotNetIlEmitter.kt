@@ -198,6 +198,8 @@ internal class DotNetIlEmitter(
     private val localGenericOwnerPhysicalAuthority: DotNetLocalGenericOwnerPhysicalAuthority? = null,
     private val genericOwnerPhysicalValueLocalPlacementAuthority:
             DotNetGenericOwnerPhysicalValueLocalPlacementAuthority? = null,
+    private val genericOwnerAuthoritativePhysicalOperationRoutes:
+            Map<IrCall, DotNetGenericOwnerPhysicalOperationRoute> = emptyMap(),
     private val genericOwnerSemanticEquivalentOperationEmitterWitnesses:
             Map<IrCall, DotNetGenericOwnerSemanticEquivalentOperationEmitterWitness> = emptyMap(),
     private val reifiedGenericInterfaces: Set<IrClass> = emptySet(),
@@ -1497,6 +1499,8 @@ internal class DotNetIlEmitter(
                         genericOwnerCapabilitySlots = genericOwnerCapabilitySlots,
                         genericOwnerPhysicalValueLocalPlacementAuthority =
                             genericOwnerPhysicalValueLocalPlacementAuthority,
+                        genericOwnerAuthoritativePhysicalOperationRoutes =
+                            genericOwnerAuthoritativePhysicalOperationRoutes,
                         genericOwnerSemanticEquivalentOperationEmitterWitnesses =
                             genericOwnerSemanticEquivalentOperationEmitterWitnesses,
                         capturePhysicalLocalPlacements = genericOwnerRehearsal,
@@ -1554,6 +1558,8 @@ internal class DotNetIlEmitter(
                             genericOwnerCapabilitySlots = genericOwnerCapabilitySlots,
                             genericOwnerPhysicalValueLocalPlacementAuthority =
                                 genericOwnerPhysicalValueLocalPlacementAuthority,
+                            genericOwnerAuthoritativePhysicalOperationRoutes =
+                                genericOwnerAuthoritativePhysicalOperationRoutes,
                             genericOwnerSemanticEquivalentOperationEmitterWitnesses =
                                 genericOwnerSemanticEquivalentOperationEmitterWitnesses,
                             capturePhysicalLocalPlacements = genericOwnerRehearsal,
@@ -4183,6 +4189,8 @@ internal class DotNetIlEmitter(
                     genericOwnerForeignOverrideProbeTarget = genericOwnerForeignOverrideProbeTargets[member],
                     genericOwnerPhysicalValueLocalPlacementAuthority =
                         genericOwnerPhysicalValueLocalPlacementAuthority,
+                    genericOwnerAuthoritativePhysicalOperationRoutes =
+                        genericOwnerAuthoritativePhysicalOperationRoutes,
                     genericOwnerSemanticEquivalentOperationEmitterWitnesses =
                         genericOwnerSemanticEquivalentOperationEmitterWitnesses,
                     capturePhysicalLocalPlacements = genericOwnerRehearsal,
@@ -4211,6 +4219,8 @@ internal class DotNetIlEmitter(
                         genericOwnerCapabilitySlots = genericOwnerCapabilitySlots,
                         genericOwnerPhysicalValueLocalPlacementAuthority =
                             genericOwnerPhysicalValueLocalPlacementAuthority,
+                        genericOwnerAuthoritativePhysicalOperationRoutes =
+                            genericOwnerAuthoritativePhysicalOperationRoutes,
                         genericOwnerSemanticEquivalentOperationEmitterWitnesses =
                             genericOwnerSemanticEquivalentOperationEmitterWitnesses,
                         capturePhysicalLocalPlacements = genericOwnerRehearsal,
@@ -4319,6 +4329,8 @@ internal class DotNetIlEmitter(
                             genericOwnerCapabilitySlots = genericOwnerCapabilitySlots,
                             genericOwnerPhysicalValueLocalPlacementAuthority =
                                 genericOwnerPhysicalValueLocalPlacementAuthority,
+                            genericOwnerAuthoritativePhysicalOperationRoutes =
+                                genericOwnerAuthoritativePhysicalOperationRoutes,
                             genericOwnerSemanticEquivalentOperationEmitterWitnesses =
                                 genericOwnerSemanticEquivalentOperationEmitterWitnesses,
                             capturePhysicalLocalPlacements = genericOwnerRehearsal,
@@ -4544,6 +4556,8 @@ internal class DotNetIlEmitter(
                 facadeClassInfoByFile = facadeClassInfoByFile,
                 genericOwnerPhysicalValueLocalPlacementAuthority =
                     genericOwnerPhysicalValueLocalPlacementAuthority,
+                genericOwnerAuthoritativePhysicalOperationRoutes =
+                    genericOwnerAuthoritativePhysicalOperationRoutes,
                 genericOwnerSemanticEquivalentOperationEmitterWitnesses =
                     genericOwnerSemanticEquivalentOperationEmitterWitnesses,
                 capturePhysicalLocalPlacements = genericOwnerRehearsal,

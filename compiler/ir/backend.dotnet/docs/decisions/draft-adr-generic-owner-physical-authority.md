@@ -774,9 +774,13 @@ caller, and TypeDef binder identities are compared independently even when all
 three indices are zero. Widened or semantic receivers, split results, owner-
 dependent inputs, mixed or multiple MethodSpec vectors, nested, nullable,
 constrained, foreign, and separate-consumer forms remain unavailable. This
-operation authority grants no result/local placement; one shared late call-edge
-seal must rebind its complete live MethodDef, receiver, MethodSpec, and argument
-vector before a later consumer may use it.
+operation authority grants no result/local placement. The shared late call-edge
+seal now rebinds its exact live MethodDef, declaring TypeDef and open signature,
+required receiver and rendered owner token, complete MethodSpec, instantiated
+parameter/result layout, and direct live operand carriers before coercion. It
+uses distinct selected-callee and current-caller binder scopes and therefore
+cannot exchange equal-index `!0` and `!!0` facts. Semantic-equivalence and
+retained-foreign witnesses keep their independent final-emission seals.
 
 #### Joins
 
@@ -1001,7 +1005,7 @@ the shared model runs in shadow mode. Their architectural disposition is:
 | `030bb9e1` generated-owner captures | an exact captured definition may enter a field whose producer-wide storage plan selects that exact carrier | **Derivable and removable.** Generated/anonymous status is never evidence; capture definition, constructor transfer, and field plan are. |
 | Stage 6 producer-wide FieldDef authority | detached families, private helpers, state, and output pairing reach one monotone fixpoint; final per-field requirements select state before BOUND identity/writer freezing and actual-only sealing | **Fundamental authority rule with a temporary proof grammar.** Retain fixpoint closure, field-set and writer-lineage preservation, final-requirement admission, and actual-only sealing; generalize the admitted field/carrier grammar structurally. |
 | current caller-MethodDef `!!R` entry/local | a parameter read is produced by its exact BOUND current MethodDef entry environment, not by its logical type or an owner binder | **Derivable entry-environment rule with a temporary first grammar.** Retain BOUND identity, POST-only production, equal-carrier placement, live `ldarg`/`ldloc` rebinding, and final same-function header sealing; generalize binder count, constraints, carriers, and consumers independently. |
-| current caller-MethodDef `!!R` callee MethodSpec | a MethodSpec argument is an operation use of an independently authenticated caller carrier; equal caller/callee/TypeDef indices do not merge binder identity | **Derivable operation-binding rule with a temporary first grammar.** Retain independent binder substitution and exact natural receiver/argument proof; replace the bounded `<R>(R): T` adapter only after the shared operation query and live call-edge seal derive the same positive and hostile behavior. |
+| current caller-MethodDef `!!R` callee MethodSpec | a MethodSpec argument is an operation use of an independently authenticated caller carrier; equal caller/callee/TypeDef indices do not merge binder identity | **Derivable operation-binding rule with a temporary first grammar; authoritative consumer landed.** The shared late call-edge seal now derives the owner- and caller-bound positive behavior and hostile binder-swap failures from independent callee/caller scopes. Retain the bounded adapter only until the operation query itself admits a more general structural MethodSpec grammar. |
 
 None of the bounded positive proofs is presently classified as unsound within
 its asserted restrictions. Three tempting generalizations are unsound and are
@@ -1657,8 +1661,10 @@ whose one-parameter TypeDef, input/result slots, receiver construction, and
 unconstrained binders are all independently BOUND. Caller, callee, and TypeDef
 binder identities remain distinct. Semantic/widened receivers, `super`, split,
 mixed, nested, constrained, and multiple-binder forms remain unavailable. A
-later shared call-edge seal must rebind the complete live operation before this
-token authorizes further placement.
+shared call-edge seal now rebinds the complete live operation before this token
+may authorize a later bounded consumer. The current seal is local,
+exact-natural, and non-empty-MethodSpec only; it creates no new route or
+placement permission.
 
 ## Consequences
 

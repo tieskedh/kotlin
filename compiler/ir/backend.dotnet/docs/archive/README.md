@@ -14,6 +14,11 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-physical-methodspec-call-edge-seal-2026-09-03.md`](generic-owner-physical-methodspec-call-edge-seal-2026-09-03.md)
+  records the shared late emitter seal for owner `!T` and caller `!!R`
+  MethodSpecs, independent callee/caller binder scopes, complete live call-edge
+  validation before coercion, split-nullable composition, bypass guards, and
+  the unchanged production-erased inverse.
 - [`generic-owner-physical-caller-methodspec-operation-2026-09-03.md`](generic-owner-physical-caller-methodspec-operation-2026-09-03.md)
   records the first exact natural callee MethodSpec instantiated by an
   authenticated current caller-MethodDef `!!R`, distinct `!T`/`!!R` binders,

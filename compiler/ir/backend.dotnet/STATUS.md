@@ -41,16 +41,18 @@ physical identities may still be corrected atomically.
 
 ## Latest focused verification
 
-The 2026-09-03 caller-MethodSpec operation is newer than the target-wide gate
-below. Backend and FIR test compilation passed; the three relevant backend
-suites reported 115/115 tests green. Its focused fixture passed through PSI and
-LightTree on .NET 10 and Framework 4.8 in both candidate and production-erased
-inverse modes: four tests per mode, with zero failures, errors, or skips by
-direct XML audit. Exact grammar, hostile controls, physical IL obligations, and
-inverse scope are recorded in the
-[caller-MethodSpec archive](docs/archive/generic-owner-physical-caller-methodspec-operation-2026-09-03.md),
-building on the independently sealed
-[caller-MethodDef entry](docs/archive/generic-owner-physical-caller-methoddef-entry-2026-09-03.md).
+The 2026-09-03 shared MethodSpec call-edge seal is newer than the target-wide
+gate below. The four relevant backend suites reported 119/119 tests green. Its
+focused fixture passed through PSI and LightTree on .NET 10 and Framework 4.8
+in both candidate and production-erased inverse modes: four tests per mode,
+with zero failures, errors, or skips by direct XML audit. The seal rebinds the
+selected local natural MethodDef, open and instantiated signatures, receiver,
+rendered owner token, complete owner- or caller-bound MethodSpec, direct live
+arguments, and direct/split result before coercion. Exact scope and hostile
+controls are recorded in the
+[call-edge-seal archive](docs/archive/generic-owner-physical-methodspec-call-edge-seal-2026-09-03.md),
+building on the
+[caller-MethodSpec operation](docs/archive/generic-owner-physical-caller-methodspec-operation-2026-09-03.md).
 This focused evidence does not claim a new full-target checkpoint; the latest
 fresh aggregate remains the one below.
 
@@ -278,6 +280,16 @@ construction, direct argument value, unconstrained binders, and non-`super`
 call. A widened receiver receives no exact claim, while an unrelated exact alias
 remains typed; split, mixed, semantic, nested, constrained, and multiple-binder
 forms remain unavailable.
+
+Every admitted local exact-natural operation with a non-empty MethodSpec now
+passes one shared final-emitter seal after the ordinary resolver and before
+coercion. It binds the open MethodDef in the selected callee scope and the
+receiver, complete MethodSpec, instantiated signature, and live operands in
+the current caller scope, so equal `!0` and `!!0` indices cannot exchange
+authority. Intrinsic, capability, foreign-dispatch, and discard paths cannot
+bypass it. Semantic-equivalence and retained-foreign operations keep their
+independent seals. This consumes existing operation authority only; it widens
+neither route admission nor local/result placement.
 
 The local placement consumer now covers direct equal-carrier aliases, one
 exhaustive reference-shaped control-flow join, exact bare-owner and constructed-
@@ -550,11 +562,11 @@ errors, or skips.
 
 - External `K` consumption is still intentionally narrow and is not widened by
   the local direct-result, current-caller-entry, or direct caller-MethodSpec
-  proofs. The local exact `<R>(R): T` callee use of caller `!!R` is closed, but
-  its shared live call-edge seal, additional non-materializing uses, broader
-  MethodSpec/argument/result shapes, nullable joins, captures, properties,
-  class nodes, and MethodImpl composition require independent value and
-  operation proofs before they can leave semantic routing.
+  proofs. The local exact `<R>(R): T` callee use of caller `!!R` and its shared
+  live call-edge seal are closed, but additional non-materializing uses,
+  broader MethodSpec/argument/result shapes, nullable joins, captures,
+  properties, class nodes, and MethodImpl composition require independent
+  value and operation proofs before they can leave semantic routing.
 - Direct-result paths with sequential prefixes, returnable blocks, `try`, or
   mixed call/read/null/bottom leaves remain unavailable. The existing flat
   split-nullable arm walker must later converge on the shared structural

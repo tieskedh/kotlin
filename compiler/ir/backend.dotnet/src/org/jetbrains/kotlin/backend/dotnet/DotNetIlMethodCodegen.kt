@@ -831,6 +831,8 @@ internal class DotNetIlMethodCodegen(
     private val genericOwnerForeignOverrideProbeTarget: IrSimpleFunction? = null,
     private val genericOwnerPhysicalValueLocalPlacementAuthority:
             DotNetGenericOwnerPhysicalValueLocalPlacementAuthority? = null,
+    private val genericOwnerAuthoritativePhysicalOperationRoutes:
+            Map<IrCall, DotNetGenericOwnerPhysicalOperationRoute> = emptyMap(),
     private val genericOwnerSemanticEquivalentOperationEmitterWitnesses:
             Map<IrCall, DotNetGenericOwnerSemanticEquivalentOperationEmitterWitness> = emptyMap(),
     private val capturePhysicalLocalPlacements: Boolean = false,
@@ -924,7 +926,10 @@ internal class DotNetIlMethodCodegen(
                 }
             },
             genericOwnerCapabilitySlots,
+            genericOwnerAuthoritativePhysicalOperationRoutes,
             genericOwnerSemanticEquivalentOperationEmitterWitnesses,
+            functionInfo.genericOwnerPhysicalMethodIdentity,
+            functionInfo.signature.methodGenericParameterCount,
             retainsProducedLocalCarrier = { variable ->
                 genericOwnerPhysicalValueLocalPlacementAuthority
                     ?.retainedProducedCarrierOrNull(function.symbol, variable.symbol) != null
@@ -2969,9 +2974,19 @@ internal class DotNetIlMethodCodegen(
             is IrCall -> {
                 val intrinsic = intrinsicMethods.getIntrinsic(expression.symbol)
                 if (intrinsic != null) {
-                    if (intrinsic.tryEmitAsStatement(expression, expressionCodegen)) return
+                    if (intrinsic.tryEmitAsStatement(expression, expressionCodegen)) {
+                        expressionCodegen.rejectAuthoritativeMethodSpecOperationEmitterBypass(
+                            expression,
+                            "intrinsic statement",
+                        )
+                        return
+                    }
                     val valueType = typeMapper.toDotNetIlValueType(expression.type)
                     if (valueType != null && intrinsic.tryEmitAsExpression(expression, expressionCodegen, valueType)) {
+                        expressionCodegen.rejectAuthoritativeMethodSpecOperationEmitterBypass(
+                            expression,
+                            "discarded intrinsic expression",
+                        )
                         if (methodContext.isTerminated) return
                         methodContext.emit("pop", pops = 1)
                         return
