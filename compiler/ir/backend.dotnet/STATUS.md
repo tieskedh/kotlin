@@ -41,15 +41,16 @@ physical identities may still be corrected atomically.
 
 ## Latest focused verification
 
-The 2026-09-03 caller-MethodDef entry/local consumer is newer than the target-
-wide gate below. Backend and FIR test compilation passed; the shared physical-
-value model reported 96/96 tests green and the MethodDef-emission comparison
-model reported 14/14. Its focused fixture passed through PSI and LightTree on
-.NET 10 and Framework 4.8 in both candidate and production-erased inverse
-modes: four tests per mode, with zero failures, errors, or skips by direct XML
-audit. Exact grammar, hostile controls, physical IL obligations, and inverse
-scope are recorded in the
-[caller-MethodDef archive](docs/archive/generic-owner-physical-caller-methoddef-entry-2026-09-03.md).
+The 2026-09-03 caller-MethodSpec operation is newer than the target-wide gate
+below. Backend and FIR test compilation passed; the three relevant backend
+suites reported 115/115 tests green. Its focused fixture passed through PSI and
+LightTree on .NET 10 and Framework 4.8 in both candidate and production-erased
+inverse modes: four tests per mode, with zero failures, errors, or skips by
+direct XML audit. Exact grammar, hostile controls, physical IL obligations, and
+inverse scope are recorded in the
+[caller-MethodSpec archive](docs/archive/generic-owner-physical-caller-methodspec-operation-2026-09-03.md),
+building on the independently sealed
+[caller-MethodDef entry](docs/archive/generic-owner-physical-caller-methoddef-entry-2026-09-03.md).
 This focused evidence does not claim a new full-target checkpoint; the latest
 fresh aggregate remains the one below.
 
@@ -269,7 +270,14 @@ generic arity, and verifier-visible `ldarg`/`ldloc`, while the successful
 emission scope must independently seal the same IR function, owner, role,
 GenericParam row, parameters, and result. Public and private typed entries and
 distinct owner `!T` versus caller `!!R` substitutions are executable evidence.
-This entry/local fact does not authorize the callee operation or its MethodSpec.
+That entry/local fact alone does not authorize a callee operation. A separate
+bounded operation adapter may now use it as the sole MethodSpec argument of one
+exact natural `<R>(R): T` interface call. The adapter independently requires the
+local declared one-parameter natural TypeDef, selected MethodDef, exact receiver
+construction, direct argument value, unconstrained binders, and non-`super`
+call. A widened receiver receives no exact claim, while an unrelated exact alias
+remains typed; split, mixed, semantic, nested, constrained, and multiple-binder
+forms remain unavailable.
 
 The local placement consumer now covers direct equal-carrier aliases, one
 exhaustive reference-shaped control-flow join, exact bare-owner and constructed-
@@ -314,13 +322,15 @@ The older compiler-origin and nested-construction recognizers remain migration
 fallbacks only for call-free transfer shapes the shared model has not yet
 derived.
 
-The operation query now additionally accepts one complete MethodSpec vector
-whose entries are non-null bare parameters of the current physical class. It
-does not confuse a caller MethodDef's `!!n` with class `!n`, infer physical
-arity from IR, or claim broad semantic receivers. Producer and consumer now
-also compose this binder with one strict owner input and a split-nullable owner
-result, including producer records, separate Kotlin assemblies, objective PE,
-and ordinary natural-only C# implementations. Split-pair control-flow
+The operation query accepts one complete MethodSpec vector whose entries are
+bare outer-unmarked parameters of the current physical class. Producer and
+consumer compose that owner binder with one strict owner input and a split-
+nullable owner result, including producer records, separate Kotlin assemblies,
+objective PE, and ordinary natural-only C# implementations. A separate local
+adapter now accepts the sole bare `!!0` of the exact current caller MethodDef
+for the bounded direct natural `<R>(R): T` operation only. Neither form
+confuses caller `!!n` with class `!n`, infers physical arity from IR, or claims
+broad semantic receivers. Split-pair control-flow
 initializer joins are now closed for the flat calls-only form, and repeated
 strict owner inputs now use the same full-vector operation witness without an
 arity recognizer. Fixed Boolean/Int/String/Object entry carriers now use that
@@ -347,14 +357,15 @@ type. A logically widened open-interface call remains guarded semantic dispatch
 by default: exact construction proves verifier legality, not semantic
 equivalence of every dynamic implementation. Constructor
 allocation is currently only a bounded exact receiver root; general constructor-
-produced placement, prefix-bearing container obligations, and authenticated use
-of retained caller `!!R` as a callee MethodSpec argument remain separate. Every non-return,
-mixed, protected, other-target, or sequential consumer still requires its own
-independent transfer policy. MethodSpecs
-other than the exact `<R>(K, R): V?` owner-bound form, including concrete,
-constrained, nullable, nested, foreign, and multiple MethodSpec carriers,
-null/bottom/unknown joins, and explicit representation-changing conversions
-remain later structural proofs rather than local exceptions.
+produced placement and prefix-bearing container obligations remain separate.
+The exact caller-bound `<R>(R): T` operation is closed without authorizing a
+result local; every non-return, mixed, protected, other-target, or sequential
+consumer still requires its own independent transfer policy. MethodSpecs other
+than that direct caller-bound form and the exact `<R>(K, R): V?` owner-bound
+split form—including concrete, constrained, nullable, nested, foreign, mixed,
+and multiple MethodSpec carriers—plus null/bottom/unknown joins and explicit
+representation-changing conversions remain later structural proofs rather than
+local exceptions.
 
 Stage 7 composes `STRICT_OWNER_INPUT(!K)` with an independently recorded
 `SplitNullable(STRICT_OWNER_OUTPUT(!V), out bool)` result. ABI 67 retains the
@@ -538,8 +549,9 @@ errors, or skips.
 ## Current blockers
 
 - External `K` consumption is still intentionally narrow and is not widened by
-  the local direct-result or current-caller-entry proofs. Authenticated callee
-  use of retained caller `!!R`, additional non-materializing uses, broader
+  the local direct-result, current-caller-entry, or direct caller-MethodSpec
+  proofs. The local exact `<R>(R): T` callee use of caller `!!R` is closed, but
+  its shared live call-edge seal, additional non-materializing uses, broader
   MethodSpec/argument/result shapes, nullable joins, captures, properties,
   class nodes, and MethodImpl composition require independent value and
   operation proofs before they can leave semantic routing.
