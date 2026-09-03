@@ -233,6 +233,17 @@ private class InlineMethodProducerRoute<T> {
         return sourceNaturalAlias.produce<R>(callerMarkerAlias)
     }
 
+    fun <R> routeWidenedCallerMethodArgument(
+        source: InlineMethodProducer<T>,
+        marker: R,
+    ): T {
+        val sourceNaturalAlias: InlineMethodProducer<T> = source
+        val sourceWideAlias: InlineMethodProducer<Any?> = sourceNaturalAlias
+        val callerMarkerAlias: R = marker
+        sourceWideAlias.produce<R>(callerMarkerAlias)
+        return sourceNaturalAlias.produce<R>(callerMarkerAlias)
+    }
+
     fun routePrivateCallerMethodArgument(
         source: InlineMethodProducer<T>,
         marker: T,
@@ -656,6 +667,11 @@ fun box(): String {
             InlineIntMarkedStringProducer("value caller MethodDef", 53), 53
         ) != "value caller MethodDef") {
         return "reference owner and value caller MethodDef parameters"
+    }
+    if (InlineMethodProducerRoute<String>().routeWidenedCallerMethodArgument(
+            InlineIntMarkedStringProducer("widened caller MethodDef", 54), 54
+        ) != "widened caller MethodDef") {
+        return "widened receiver and value caller MethodDef parameters"
     }
     if (InlineMethodProducerRoute<String>().routePrivateCallerMethodArgument(
             InlineStringMethodProducer("private caller MethodDef"), "private caller MethodDef"

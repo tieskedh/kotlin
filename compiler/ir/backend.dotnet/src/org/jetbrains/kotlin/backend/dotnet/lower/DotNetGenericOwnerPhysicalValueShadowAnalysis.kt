@@ -680,7 +680,7 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
             val selectedRoute = when (val selection =
                 bindDotNetLocalGenericOwnerPhysicalOperationRouteOrError(
                     call = expression,
-                    physicalOwner = owner,
+                    physicalFunction = physical,
                     source = source,
                     selectedEntry = DotNetLocalGenericOwnerPhysicalCallableEntryKind.NATURAL_INTERFACE,
                     requiredView = requiredView,

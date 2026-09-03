@@ -287,7 +287,7 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
         if (operationStorageByValue[receiver.symbol] == null) return null
         val prediction = bindDotNetLocalGenericOwnerPhysicalOperationRouteOrError(
             call = call,
-            physicalOwner = owner,
+            physicalFunction = function,
             source = source,
             selectedEntry = selection.selectedEntry,
             requiredView = selection.requiredView,

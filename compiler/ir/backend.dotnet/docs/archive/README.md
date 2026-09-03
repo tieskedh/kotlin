@@ -14,6 +14,11 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-physical-caller-methodspec-operation-2026-09-03.md`](generic-owner-physical-caller-methodspec-operation-2026-09-03.md)
+  records the first exact natural callee MethodSpec instantiated by an
+  authenticated current caller-MethodDef `!!R`, distinct `!T`/`!!R` binders,
+  widened-receiver isolation, exact unboxed IL, and unchanged production-erased
+  inverse.
 - [`generic-owner-physical-caller-methoddef-entry-2026-09-03.md`](generic-owner-physical-caller-methoddef-entry-2026-09-03.md)
   records the first exact BOUND current caller-MethodDef `!!R` entry/local,
   POST-only provenance, live `ldarg`/`ldloc` rebinding, same-function final

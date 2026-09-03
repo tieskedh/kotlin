@@ -1324,8 +1324,13 @@ private fun validateGenericOwnerPhysicalOperationRouteShadow(
                 carrier?.kind ==
                         DotNetGenericOwnerPhysicalValueShadowCarrierKind.OWNER_TYPE_PARAMETER &&
                         carrier.ownerParameterIndices == listOf(0) &&
+                        carrier.methodParameterIndices.isEmpty() &&
+                        carrier.localTypeDefView == null &&
                         carrier.parameterBinderOwnerName
-                            ?.endsWith("InlineMethodProducerRoute") == true
+                            ?.endsWith("InlineMethodProducerRoute") == true &&
+                        carrier.parameterBinderTypeDefView == null &&
+                        carrier.parameterBinderMethodName == null &&
+                        carrier.parameterBinderMethodRole == null
             } &&
             exactMethodSpecRoute.resultSlotDomain ==
             DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
@@ -1367,16 +1372,106 @@ private fun validateGenericOwnerPhysicalOperationRouteShadow(
         "A logically widened MethodSpec must not acquire an exact natural route: " +
                 widenedMethodSpecRoute
     }
-    check(snapshots.none { candidate ->
+    val callerMethodSpecRoute = checkNotNull(snapshots.singleOrNull { candidate ->
         candidate.ownerName.endsWith("InlineMethodProducerRoute") &&
-                candidate.physicalFunctionName in setOf(
-                    "routeCallerMethodArgument",
-                    "privateCallerMethodArgument",
-                ) &&
+                candidate.physicalFunctionName == "routeCallerMethodArgument" &&
+                candidate.receiverVariableName == "sourceNaturalAlias" &&
                 candidate.logicalMemberName == "produce"
     }) {
-        "A caller-MethodDef binder must not be mistaken for current-owner !T authority: " +
-                snapshots
+        "The caller MethodDef MethodSpec must publish one exact operation snapshot: $snapshots"
+    }
+    check(callerMethodSpecRoute.status ==
+            DotNetGenericOwnerPhysicalOperationRouteShadowStatus.BOUND &&
+            callerMethodSpecRoute.logicalSelector ==
+            DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.EXACT_NATURAL &&
+            callerMethodSpecRoute.predictedRouteKind ==
+            DotNetGenericOwnerPhysicalOperationRouteKindSnapshot.NATURAL_INTERFACE &&
+            callerMethodSpecRoute.requiredReceiverCarrier.let { carrier ->
+                carrier.kind ==
+                        DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION &&
+                        carrier.localOwnerName?.endsWith("InlineMethodProducer") == true &&
+                        carrier.ownerParameterIndices == listOf(0) &&
+                        carrier.methodParameterIndices.isEmpty() &&
+                        carrier.localTypeDefView ==
+                        DotNetGenericOwnerPhysicalValueShadowTypeDefView.DECLARED &&
+                        carrier.parameterBinderOwnerName
+                            ?.endsWith("InlineMethodProducerRoute") == true &&
+                        carrier.parameterBinderTypeDefView == null &&
+                        carrier.parameterBinderMethodName == null &&
+                        carrier.parameterBinderMethodRole == null
+            } && callerMethodSpecRoute.methodArgumentCarriers.singleOrNull().let { carrier ->
+                carrier?.kind ==
+                        DotNetGenericOwnerPhysicalValueShadowCarrierKind.METHOD_TYPE_PARAMETER &&
+                        carrier.ownerParameterIndices.isEmpty() &&
+                        carrier.methodParameterIndices == listOf(0) &&
+                        carrier.localTypeDefView == null &&
+                        carrier.parameterBinderOwnerName
+                            ?.endsWith("InlineMethodProducerRoute") == true &&
+                        carrier.parameterBinderTypeDefView == null &&
+                        carrier.parameterBinderMethodName == "routeCallerMethodArgument" &&
+                        carrier.parameterBinderMethodRole ==
+                        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY
+            } && callerMethodSpecRoute.resultLayout ==
+            DotNetGenericOwnerPhysicalOperationResultLayoutSnapshot.DIRECT &&
+            callerMethodSpecRoute.resultSlotDomain ==
+            DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
+            callerMethodSpecRoute.resultCarrierKind ==
+            DotNetGenericOwnerPhysicalOperationResultCarrierKindSnapshot.OWNER_PARAMETER &&
+            callerMethodSpecRoute.resultCarrierParameterBinderOwnerName
+                ?.endsWith("InlineMethodProducerRoute") == true &&
+            callerMethodSpecRoute.resultCarrierParameterIndex == 0 &&
+            callerMethodSpecRoute.actualRoute ==
+            DotNetGenericOwnerPhysicalOperationActualRouteSnapshot.DIRECT_NATURAL &&
+            callerMethodSpecRoute.relation ==
+            DotNetGenericOwnerPhysicalOperationRouteShadowRelation.MATCH &&
+            callerMethodSpecRoute.diagnostic == null) {
+        "The exact caller MethodDef MethodSpec must retain !!R independently from !T: " +
+                callerMethodSpecRoute
+    }
+    check(snapshots.none { candidate ->
+        candidate.ownerName.endsWith("InlineMethodProducerRoute") &&
+                candidate.physicalFunctionName == "routeWidenedCallerMethodArgument" &&
+                candidate.receiverVariableName == "sourceWideAlias" &&
+                candidate.logicalMemberName == "produce"
+    }) {
+        "A caller !!R must not turn a widened receiver into an exact natural construction: $snapshots"
+    }
+    val exactCallerRouteAfterWidening = checkNotNull(snapshots.singleOrNull { candidate ->
+        candidate.ownerName.endsWith("InlineMethodProducerRoute") &&
+                candidate.physicalFunctionName == "routeWidenedCallerMethodArgument" &&
+                candidate.receiverVariableName == "sourceNaturalAlias" &&
+                candidate.logicalMemberName == "produce"
+    }) {
+        "Widening one view must not contaminate the independent exact receiver view: $snapshots"
+    }
+    check(exactCallerRouteAfterWidening.status ==
+            DotNetGenericOwnerPhysicalOperationRouteShadowStatus.BOUND &&
+            exactCallerRouteAfterWidening.logicalSelector ==
+            DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.EXACT_NATURAL &&
+            exactCallerRouteAfterWidening.predictedRouteKind ==
+            DotNetGenericOwnerPhysicalOperationRouteKindSnapshot.NATURAL_INTERFACE &&
+            exactCallerRouteAfterWidening.methodArgumentCarriers.singleOrNull().let { carrier ->
+                carrier?.kind ==
+                        DotNetGenericOwnerPhysicalValueShadowCarrierKind.METHOD_TYPE_PARAMETER &&
+                        carrier.ownerParameterIndices.isEmpty() &&
+                        carrier.methodParameterIndices == listOf(0) &&
+                        carrier.parameterBinderMethodName == "routeWidenedCallerMethodArgument" &&
+                        carrier.parameterBinderMethodRole ==
+                        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY
+            } && exactCallerRouteAfterWidening.actualRoute ==
+            DotNetGenericOwnerPhysicalOperationActualRouteSnapshot.DIRECT_NATURAL &&
+            exactCallerRouteAfterWidening.relation ==
+            DotNetGenericOwnerPhysicalOperationRouteShadowRelation.MATCH &&
+            exactCallerRouteAfterWidening.diagnostic == null) {
+        "The exact receiver must retain its caller !!R route after an unrelated widened call: " +
+                exactCallerRouteAfterWidening
+    }
+    check(snapshots.none { candidate ->
+        candidate.ownerName.endsWith("InlineMethodProducerRoute") &&
+                candidate.physicalFunctionName == "privateCallerMethodArgument" &&
+                candidate.logicalMemberName == "produce"
+    }) {
+        "Caller MethodDef authority must not also invent direct receiver-entry authority: $snapshots"
     }
 
     val exactSplitMethodSpecRoute = checkNotNull(snapshots.singleOrNull { candidate ->
@@ -2867,12 +2962,20 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
                 } == true &&
                 callerMethodInstructions.count { instruction -> instruction == callerMarkerStore } == 1 &&
                 callerMethodInstructions.any { instruction -> instruction == callerMarkerLoad } &&
+                Regex(
+                    """callvirt\s+instance\s+!0\s+class\s+""" +
+                            """'InlineMethodProducer`1'<!0>::'produce'<!!0>\(!!0\)""",
+                ).findAll(callerMethodEntry).count() == 1 &&
                 !Regex("""\[\d+]\s+!0\s+'callerMarkerAlias'""")
                     .containsMatchIn(callerMethodEntry) &&
                 "'produce'<!0>" !in callerMethodEntry &&
-                !Regex("""(?:unbox\.any|castclass)\s+!!0""").containsMatchIn(callerMethodEntry)
+                "IInlineMethodProducerKotlinSemantic" !in callerMethodEntry &&
+                "::'InvokeRecordedMember'" !in callerMethodEntry &&
+                "object[]" !in callerMethodEntry &&
+                !Regex("""(?:box|unbox\.any|castclass)\s+!!0""")
+                    .containsMatchIn(callerMethodEntry)
         ) {
-            "The caller MethodDef entry/local did not retain its verifier-visible !!0 binder: " +
+            "The caller MethodDef entry/local/call did not retain its verifier-visible !!0 binder: " +
                     "method=$callerMethodEntry"
         }
         val privateCallerMethodParameterAlias = comparisons.singleOrNull { comparison ->
