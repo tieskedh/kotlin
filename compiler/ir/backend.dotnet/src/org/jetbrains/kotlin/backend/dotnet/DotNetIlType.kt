@@ -798,3 +798,89 @@ internal class DotNetIlClassInfo(
     fun renderFieldReference(fieldType: DotNetIlValueType, fieldName: String, ownerToken: String = ilTypeRef): String =
         "${fieldType.nameInSignature} ${ownerToken}::${fieldName.toIlIdentifier()}"
 }
+
+/** The verifier-visible open construction of one already-selected physical TypeDef. */
+internal fun DotNetIlClassInfo.dotNetOpenSelfType(): DotNetIlValueType =
+    if (typeParameterCount == 0) {
+        DotNetIlValueType.UserClass(this)
+    } else {
+        DotNetIlValueType.GenericInstance(
+            this,
+            (0 until typeParameterCount).map { index ->
+                DotNetIlValueType.TypeParameter(index, isMethodParameter = false)
+            },
+        )
+    }
+
+/**
+ * Complete CLR slot shape of a MethodImpl body or declaration after selecting its physical
+ * TypeDef construction. Receiver owners are deliberately excluded: an implementation MethodDef
+ * and the declaration it implements normally belong to different types. Every other verifier
+ * coordinate remains authoritative, including unused MethodDef GenericParams and the distinction
+ * between an ordinary final `bool&` parameter and the split-nullable result convention.
+ */
+internal data class DotNetIlEffectiveMethodImplSignature(
+    val hasThis: Boolean,
+    val methodGenericParameterCount: Int,
+    val returnType: DotNetIlReturnType,
+    val explicitPhysicalParameterTypes: List<DotNetIlValueType>,
+    val hasSplitNullableResult: Boolean,
+)
+
+/**
+ * Binds this already-authoritative MethodDef through [selectedOwner]. Owner `!n` parameters are
+ * substituted from that construction, while MethodDef `!!n` parameters remain their own open
+ * identity vector. Logical Kotlin substitutions never participate in this comparison.
+ */
+internal fun DotNetIlFunctionInfo.bindEffectiveMethodImplSignatureAt(
+    selectedOwner: DotNetIlValueType,
+): DotNetIlEffectiveMethodImplSignature {
+    val ownerArguments = when (selectedOwner) {
+        is DotNetIlValueType.UserClass -> {
+            check(selectedOwner.classInfo.ilTypeRef == owner.ilTypeRef &&
+                    owner.typeParameterCount == 0) {
+                "Internal .NET backend error: MethodImpl selected non-generic owner " +
+                        "'${selectedOwner.classInfo.ilTypeRef}' for '${owner.ilTypeRef}' with arity " +
+                        owner.typeParameterCount
+            }
+            emptyList()
+        }
+        is DotNetIlValueType.GenericInstance -> {
+            check(selectedOwner.classInfo.ilTypeRef == owner.ilTypeRef &&
+                    owner.typeParameterCount > 0 &&
+                    selectedOwner.arguments.size == owner.typeParameterCount) {
+                "Internal .NET backend error: MethodImpl selected generic owner " +
+                        "'${selectedOwner.nameInSignature}' for '${owner.ilTypeRef}' with arity " +
+                        owner.typeParameterCount
+            }
+            selectedOwner.arguments
+        }
+        else -> error("Internal .NET backend error: MethodImpl selected a non-class owner")
+    }
+    val methodArguments = (0 until signature.methodGenericParameterCount).map { index ->
+        DotNetIlValueType.TypeParameter(index, isMethodParameter = true)
+    }
+    val binding = signature.bindCallSite(
+        declaredOwnerArity = owner.typeParameterCount,
+        ownerArguments = ownerArguments,
+        methodSpecArguments = methodArguments,
+    )
+    check(!signature.hasThis || binding.verifierParameterTypes.isNotEmpty()) {
+        "Internal .NET backend error: an instance MethodImpl signature lacks its receiver"
+    }
+    check(!signature.hasSplitNullableResult || binding.verifierReturnType != DotNetIlReturnType.Void) {
+        "Internal .NET backend error: a split-nullable MethodImpl signature has a void payload"
+    }
+    return DotNetIlEffectiveMethodImplSignature(
+        hasThis = signature.hasThis,
+        methodGenericParameterCount = signature.methodGenericParameterCount,
+        returnType = binding.verifierReturnType,
+        explicitPhysicalParameterTypes = buildList {
+            addAll(binding.verifierParameterTypes.drop(if (signature.hasThis) 1 else 0))
+            if (signature.hasSplitNullableResult) {
+                add(DotNetIlValueType.ByReference(DotNetIlValueType.Boolean))
+            }
+        },
+        hasSplitNullableResult = signature.hasSplitNullableResult,
+    )
+}
