@@ -1343,9 +1343,14 @@ directly declared slots on root natural interfaces with no direct edges or
 generic constraints and only declaration-local carriers. Semantic member role,
 parameter domains, and result layout are independent facts. The admitted
 grammars currently include direct producer results, direct split-nullable
-producer results, and one structural callable with one or more direct occurrences
+producer results, one structural callable with one or more direct occurrences
 of one strict invariant owner input plus a distinct covariant split-nullable
-owner output. Unsupported forms
+owner output, and neutral direct callables with one or more CLR-legal strict
+owner inputs plus a declaration-independent direct non-null leaf result. The
+neutral role adds no semantic or exact-sibling policy: its ordered slot domains
+and result layout are the entire physical contract. A broad candidate input is
+therefore not admitted under this role; it requires an independently proven
+semantic-input policy. Unsupported forms
 are `Unavailable`; they are never reconstructed, widened to `object`, or
 inferred from an implementation seal. This is an admission boundary for the
 first portable record, not a permanent claim that inherited, edge-bearing, or

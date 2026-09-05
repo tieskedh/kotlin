@@ -344,7 +344,7 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
         val first = DotNetLibraryAbiCodec.encode(declarations)
         val second = DotNetLibraryAbiCodec.encode(declarations.toList().asReversed().toMap())
         assertEquals(first, second)
-        assertEquals("68", DotNetLibraryAbiCodec.ABI_VERSION)
+        assertEquals("69", DotNetLibraryAbiCodec.ABI_VERSION)
 
         val decoded = DotNetLibraryAbiCodec.decode(first.toProperties())
         assertEquals(declarations, decoded)
@@ -719,21 +719,23 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
     @Test
     fun rejectsInterfaceOnlyNaturalMethodDefLogicalDomainDivergence() {
         val declarations = interfaceOnlyNaturalMethodDefAbiFixture()
-        val natural = declarations.values
-            .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef>()
+        val published = declarations.values
+            .filterIsInstance<DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily>()
             .single()
-        val publication = natural.publication()
-        val changedInput = publication.copy(naturalMethod = publication.naturalMethod.copy(
-            logicalParameterDomains = listOf(
-                DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
+        val member = published.contract.declaredMembers.single()
+        val changedFamily = published.copy(
+            contract = published.contract.copy(
+                declaredMembers = listOf(member.copy(
+                    role = DotNetPublishedGenericInterfaceMemberRole.DIRECT_CALLABLE,
+                )),
             ),
-        )).toPhysicalDeclaration()
+        )
         val failure = assertFailsWith<IllegalArgumentException> {
             DotNetLibraryAbiCodec.encode(
-                declarations + (changedInput.indexKey() to changedInput),
+                declarations + (changedFamily.indexKey() to changedFamily),
             )
         }
-        assertTrue(failure.message.orEmpty().contains("logical input domains"))
+        assertTrue(failure.message.orEmpty().contains("direct-callable contract"))
     }
 
     @Test
@@ -834,11 +836,6 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
         val naturalPublication = natural.publication()
         val duplicateNatural = naturalPublication.copy(
             logicalMemberKey = duplicateKey,
-            naturalMethod = naturalPublication.naturalMethod.copy(
-                logicalParameterDomains = listOf(
-                    DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
-                ),
-            ),
         ).toPhysicalDeclaration()
         val function = declarations.getValue(originalKey) as DotNetPhysicalDeclaration.Function
         val memberFamily = declarations.getValue("G:$originalKey") as

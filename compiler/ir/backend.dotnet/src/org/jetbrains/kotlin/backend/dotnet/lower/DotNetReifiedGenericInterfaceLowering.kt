@@ -156,7 +156,10 @@ internal val DOTNET_GENERIC_OWNER_FUNCTION_INPUT_ENTRY: IrDeclarationOrigin =
  * owner-relative `R : T` bound, a public contravariant consumer
  * with one abstract owner-parameter input and `Unit` result, an invariant method cell containing
  * exactly one of each, or an invariant property root containing one or more complete mutable
- * owner-parameter properties.
+ * owner-parameter properties. A parentless root may also expose one or more ordinary abstract
+ * callables whose direct non-null owner inputs are all CLR-legal and whose result is one fixed,
+ * declaration-independent non-null leaf; parameter domains and result layout remain independent
+ * physical facts rather than a declaration-specific role.
  * An invariant owner has no legal declaration-site sibling widening: exact and open
  * constructions stay on natural `I<T>`, while star/use-site-projected operations use the
  * semantic boundary. Covariant producer and single read-only-property subinterfaces plus exact
@@ -263,6 +266,8 @@ internal class DotNetReifiedGenericInterfaceLowering(
                         DotNetPublishedGenericInterfaceMemberRole.OWNER_INDEPENDENT_PROPERTY_GETTER
                     member.isOwnerIndependentPrimitiveQuery() ->
                         DotNetPublishedGenericInterfaceMemberRole.OWNER_INDEPENDENT_QUERY
+                    member.isDirectOwnerInputIndependentResultMember(owner) ->
+                        DotNetPublishedGenericInterfaceMemberRole.DIRECT_CALLABLE
                     else -> return null
                 }
                 val logicalMemberKey = context.preLoweringDeclarationKeys[member]
@@ -628,6 +633,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
 
             fun publishRoot(owner: IrClass) {
                 val completeNaturalPlan = owner.completeNaturalAuthorityPlanOrNull()
+                    ?: owner.completeNaturalDirectCallableAuthorityPlanOrNull()
                     ?: owner.completeNaturalConstructedResultAuthorityPlanOrNull()
                 val file = checkNotNull(owner.fileOrNull) {
                     "Internal .NET backend error: reified generic interface '${owner.name}' has no file"
@@ -2533,6 +2539,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
         if (!hasFirstReifiedInterfaceOwnerShape()) return false
         if (parent !is IrFile || dotNetDirectInterfaceTypes().isNotEmpty()) return false
         if (completeNaturalAuthorityPlanOrNull() != null) return true
+        if (completeNaturalDirectCallableAuthorityPlanOrNull() != null) return true
         val parameter = typeParameters.single()
         val members = declaredInterfaceMembers()
         // A parentless marker has no MethodDef, state, or default-body representation to prove.
@@ -2626,6 +2633,43 @@ internal class DotNetReifiedGenericInterfaceLowering(
             selected.requiredPolarity != DotNetGenericInterfaceCompleteSurfacePolarity.BOTH ||
             selected.selectedPhysicalVariance !=
             DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT
+        ) {
+            return null
+        }
+        return plan
+    }
+
+    /**
+     * Admits a root through the complete-surface plan when every declaration-local slot is an
+     * ordinary CLR callable: one or more direct owner inputs, optional fixed leaf inputs, and a
+     * declaration-independent direct result. Parameter domains and result layout remain the
+     * authority; [DotNetPublishedGenericInterfaceMemberRole.DIRECT_CALLABLE] contributes no
+     * second combined representation rule.
+     */
+    private fun IrClass.completeNaturalDirectCallableAuthorityPlanOrNull():
+            DotNetGenericInterfaceCompleteNaturalAuthorityPlan? {
+        val plan = context.genericInterfaceCompleteSurfaceVarianceAuthorityPlans[symbol]
+            ?: return null
+        if (!hasFirstReifiedInterfaceOwnerShape() || parent !is IrFile ||
+            dotNetDirectInterfaceTypes().isNotEmpty() ||
+            plan.inventory.directPropertyAccessors.isNotEmpty() ||
+            plan.inventory.directParentTypes != superTypes
+        ) {
+            return null
+        }
+        val members = declaredInterfaceMembers()
+        if (members.isEmpty() ||
+            plan.inventory.directCallableMembers != members.map { member -> member.symbol } ||
+            members.map { member -> member.name }.distinct().size != members.size ||
+            members.any { member -> !member.isDirectOwnerInputIndependentResultMember(this) }
+        ) {
+            return null
+        }
+        val selected = plan.surfaceDecision.parameters.singleOrNull() ?: return null
+        if (plan.surfaceInput.logicalMaximumVariances != listOf(
+                typeParameters.single().variance.toDotNetGenericOwnerPhysicalTypeParameterVariance(),
+            ) || selected.index != 0 ||
+            selected.requiredPolarity != DotNetGenericInterfaceCompleteSurfacePolarity.IN
         ) {
             return null
         }
@@ -3209,6 +3253,49 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 typeParameters.isEmpty() &&
                 parameters.singleOrNull()?.kind == IrParameterKind.DispatchReceiver &&
                 !returnType.isMarkedNullable() && returnType.isPrimitiveType()
+    }
+
+    /**
+     * One declaration-local natural callable whose owner dependence occurs only as direct,
+     * non-null input slots. Fixed leaves do not change the owner construction and the result has
+     * one declaration-independent CLR carrier. This is intentionally structural: fun-interface
+     * status, declaration names, packages, and stdlib ownership are irrelevant.
+     */
+    private fun IrSimpleFunction.isDirectOwnerInputIndependentResultMember(owner: IrClass): Boolean {
+        if (visibility != DescriptorVisibilities.PUBLIC || modality != Modality.ABSTRACT ||
+            body != null || this in context.interfaceDefaultImplementations ||
+            correspondingPropertySymbol != null || isSuspend || typeParameters.isNotEmpty() ||
+            parameters.firstOrNull()?.kind != IrParameterKind.DispatchReceiver ||
+            parameters.count { parameter -> parameter.kind == IrParameterKind.DispatchReceiver } != 1 ||
+            parameters.any { parameter ->
+                parameter.kind != IrParameterKind.DispatchReceiver &&
+                        parameter.kind != IrParameterKind.Regular
+            } ||
+            returnType.isMarkedNullable() ||
+            returnType.genericOwnerDeclarationIndependentLeafPrototypeOrNull() == null
+        ) {
+            return false
+        }
+        val inputs = parameters.filter { parameter -> parameter.kind == IrParameterKind.Regular }
+        if (inputs.isEmpty() || inputs.any { input ->
+                input.defaultValue != null || input.varargElementType != null
+            }
+        ) {
+            return false
+        }
+        var hasOwnerInput = false
+        for (input in inputs) {
+            val simple = input.type as? IrSimpleType
+            val parameter = (simple?.classifier as? IrTypeParameterSymbol)?.owner
+            if (parameter?.parent === owner && !simple.isMarkedNullable() &&
+                input.type.isLegalAtOwnerVariance(owner, TypePolarity.IN)
+            ) {
+                hasOwnerInput = true
+            } else if (input.type.genericOwnerDeclarationIndependentLeafPrototypeOrNull() == null) {
+                return false
+            }
+        }
+        return hasOwnerInput
     }
 
     /**

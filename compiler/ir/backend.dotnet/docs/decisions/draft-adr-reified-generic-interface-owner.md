@@ -227,9 +227,15 @@ natural slot, including TypeDef, MethodDef, logical domains, and result layout,
 but is neither required for an interface-only producer nor a source of
 declaration authority. The initial portable grammar covers directly declared,
 constraint-free, root/edge-free producer and split-nullable producer slots whose
-carriers remain declaration-local. Missing natural `N` authority for inherited,
-constrained, edge-bearing, or wider interface forms does not permit logical
-reconstruction or name/arity fallback.
+carriers remain declaration-local. It also covers a neutral direct-callable
+slice with one or more CLR-legal strict owner inputs and a direct non-null
+declaration-independent leaf result. That role contributes no second semantic
+rule: ordered parameter domains and the result layout remain the authority.
+`BROAD_CANDIDATE_INPUT` is not silently treated as strict by this neutral role;
+it remains a separate semantic-route proof.
+Missing natural `N` authority for inherited, constrained, edge-bearing, or
+wider interface forms does not permit logical reconstruction or name/arity
+fallback.
 
 A separately inheritable Kotlin implementation class may additionally publish
 the bounded standalone `M` seal defined by the physical-authority ADR. `M`
