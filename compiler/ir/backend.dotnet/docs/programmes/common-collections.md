@@ -1,7 +1,7 @@
 # Common collections programme
 
-- Status: **Paused — admitted production frontier ends at the Map min/max
-  adapters; the next generic-owner-dependent closure awaits the owner go/no-go**
+- Status: **Active rehearsal census — the admitted production frontier remains
+  at the Map min/max adapters**
 - Current production interface authority:
   [`../decisions/generic-interface-erased-identity.md`](../decisions/generic-interface-erased-identity.md)
 - Generic-owner rehearsal:
@@ -49,28 +49,27 @@ The exact generated/source inventory is executable compiler input, not a list
 maintained in this Markdown file. Completed tranche evidence is indexed under
 [`../archive/README.md`](../archive/README.md).
 
-## Generic-owner pause
+## Generic-owner rehearsal census
 
-Do not select another erased-owner stdlib leaf merely to bypass the current
-architecture work. The source-built Runtime/Stdlib rehearsal has exposed the
-physical-authority and carrier-provenance questions now owned by the generic-
-owner draft. The next collection closure is recomputed only after that
-architecture checkpoint chooses GO, CONSTRAIN, or NO-GO and records which
-generic interface/class families are truthful.
+Do not select another erased-owner production leaf merely to bypass the
+generic-owner work. Instead, recompute the next complete Common/generated
+dependency closure now in rehearsal mode. Each real failure supplies evidence
+for the physical-authority and carrier-provenance model; the complete census is
+an input to the later GO, CONSTRAIN, or NO-GO decision, not work postponed until
+after that decision.
 
-The pause does not make the current erased owner permanent. It is the binding
-production baseline until an atomic cutover. Conversely, test-only natural,
-exact, or semantic interface families do not authorize production collection
-migration one interface at a time.
+The current erased owner remains the binding production baseline until an
+atomic cutover. Test-only natural or semantic families do not authorize
+production collection migration one interface at a time.
 
-After the checkpoint:
+For each rehearsal closure:
 
 1. recompute the next complete Common/generated dependency closure from source;
-2. classify every generic owner under the selected production representation;
+2. classify every generic owner under the candidate and erased inverse;
 3. add any missing shared prerequisite before the leaf that consumes it;
-4. produce Runtime/Stdlib, installed, portable, and separate-consumer products;
+4. produce rehearsal Runtime/Stdlib, portable, and separate-consumer products;
 5. run the semantic/metadata/C# matrix on Framework 4.8 and .NET 10; and
-6. update this frontier without appending a tranche diary.
+6. archive completed evidence without appending a tranche diary here.
 
 Optional BCL adapters and C# conveniences are not “the next collection leaf.”
 They may be developed independently under an interop/export ADR after the
