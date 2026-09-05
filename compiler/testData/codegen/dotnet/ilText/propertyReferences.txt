@@ -234,7 +234,7 @@
       call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string, class [Kotlin.Runtime]'Kotlin.Collections.List', object[], class [Kotlin.Runtime]'Kotlin.Function2')
       ret
     }
-    .method public hidebysig newslot virtual final instance object 'Invoke'(object 'p0', object 'p1', object 'p2') cil managed
+    .method public hidebysig newslot virtual final instance object 'Invoke'(object 'p0', object 'p1', object 'value') cil managed
     {
       .maxstack 3
       ldarg.1
@@ -409,7 +409,7 @@
       call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string, class [Kotlin.Runtime]'Kotlin.Collections.List', object[], class [Kotlin.Runtime]'Kotlin.Function2')
       ret
     }
-    .method public hidebysig newslot virtual final instance object 'Invoke'(object 'p0', object 'p1', object 'p2') cil managed
+    .method public hidebysig newslot virtual final instance object 'Invoke'(object 'p0', object 'p1', object 'value') cil managed
     {
       .maxstack 3
       ldarg.1
@@ -1956,7 +1956,7 @@ IL_whenNext_1:
     call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string, class [Kotlin.Runtime]'Kotlin.Collections.List', object[], class [Kotlin.Runtime]'Kotlin.Function2')
     ret
   }
-  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'p0') cil managed
+  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'value') cil managed
   {
     .maxstack 1
     ldarg.1
@@ -2108,7 +2108,7 @@ IL_whenNext_1:
     call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string, class [Kotlin.Runtime]'Kotlin.Collections.List', object[], class [Kotlin.Runtime]'Kotlin.Function2')
     ret
   }
-  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'p0', object 'p1') cil managed
+  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'p0', object 'value') cil managed
   {
     .maxstack 2
     ldarg.1
@@ -2197,7 +2197,7 @@ IL_whenNext_1:
     stfld class 'Cell' 'propertyReferencesKt$main$bound$2'::'f$0'
     ret
   }
-  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'p0') cil managed
+  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'value') cil managed
   {
     .maxstack 2
     .locals init (
