@@ -117,9 +117,11 @@ also keep production erased and prove the same focused inverse before promotion.
 - ReadyToRun, trimming, NativeAOT, reflection/tooling, representative
   applications and measurements, and exact migration rollback still block any
   production cutover.
-- The 461-commit upstream rebase remains a separate high-risk operation. Do it
-  only at a clean feature checkpoint with an explicit replay and verification
-  plan; do not mix it into the next semantic slice.
+- The earlier 461-commit upstream rebase completed on 2026-08-24. The freshly
+  fetched upstream range from the reviewed `2868cfb88a` base to pinned
+  `88a184ab89` contains 291 new commits and remains unreviewed. Rehearse that
+  synchronization only from this clean feature checkpoint, with an explicit
+  replay and verification plan; do not mix it into the next semantic slice.
 
 ## Navigation
 
