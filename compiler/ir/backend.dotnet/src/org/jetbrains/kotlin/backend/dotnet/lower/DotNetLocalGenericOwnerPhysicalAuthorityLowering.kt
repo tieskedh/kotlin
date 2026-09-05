@@ -97,6 +97,7 @@ import org.jetbrains.kotlin.ir.types.defaultType
 import org.jetbrains.kotlin.ir.types.isAny
 import org.jetbrains.kotlin.ir.types.isMarkedNullable
 import org.jetbrains.kotlin.ir.types.isNullableAny
+import org.jetbrains.kotlin.ir.types.isUnit
 import org.jetbrains.kotlin.ir.util.isPublishedApi
 import org.jetbrains.kotlin.ir.util.isOriginallyLocalDeclaration
 import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
@@ -1106,6 +1107,19 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
         ) : CallableParameterBinding
     }
 
+    /** Parameter policy and result layout are orthogonal; this binds only the result carrier. */
+    private sealed interface CallableResultBinding {
+        data object Void : CallableResultBinding
+
+        data class Value(
+            val naturalCarrier: DotNetGenericOwnerSymbolicCarrierReference,
+            val semanticCarrier: DotNetGenericOwnerSymbolicCarrierReference,
+            val domain: DotNetGenericOwnerPhysicalSlotDomain,
+            val directOwnerParameterIndex: Int?,
+            val isMarkedNullable: Boolean,
+        ) : CallableResultBinding
+    }
+
     private data class CompleteDirectProducerImplementationSelection(
         val methodDefinitions: List<DotNetGenericOwnerPhysicalMethodDefReference>,
         val edgeSets: List<DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet>,
@@ -1205,7 +1219,8 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
                 val domain = pair.second
                 when (binding) {
                     is CallableParameterBinding.Owner ->
-                        domain == DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT
+                        domain == DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT ||
+                                domain == DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT
                     is CallableParameterBinding.Method ->
                         domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT
                     is CallableParameterBinding.FixedLeaf ->
@@ -1228,49 +1243,105 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
             inputsByIdentity[semanticOwnerIdentity]?.role !=
             DotNetLocalGenericOwnerPhysicalTypeRole.SEMANTIC_CAPABILITY
         ) return null
-        val resultBinding = when (val binding =
-            bindDotNetLocalGenericOwnerPhysicalCallableResultOrError(
-                source.returnType,
-                owner,
-                naturalOwnerIdentity,
-                declarations,
-                inputsByIdentity,
-            )) {
-            is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
-            is DotNetGenericOwnerPhysicalBindingResult.Conflict,
-            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
-            -> return null
+        if (!context.genericInterfaceNaturalMethodResultDomains.containsKey(source)) return null
+        val resultDomain = context.genericInterfaceNaturalMethodResultDomains[source]
+        val resultBinding = when {
+            source.returnType.isUnit() -> {
+                if (resultDomain != null || !semanticSlot.returnType.isUnit() ||
+                    memberContract.resultLayout != DotNetPublishedGenericInterfaceMemberResultLayout.VOID
+                ) return null
+                CallableResultBinding.Void
+            }
+            resultDomain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT -> {
+                if (memberContract.resultLayout !=
+                    DotNetPublishedGenericInterfaceMemberResultLayout.DIRECT
+                ) return null
+                val naturalPrototype = source.returnType
+                    .genericOwnerDeclarationIndependentLeafPrototypeOrNull() ?: return null
+                val semanticPrototype = semanticSlot.returnType
+                    .genericOwnerDeclarationIndependentLeafPrototypeOrNull() ?: return null
+                if (source.returnType.isMarkedNullable() || naturalPrototype != semanticPrototype) return null
+                val carrier = naturalPrototype.declarationIndependentLeafCarrierOrNull() ?: return null
+                CallableResultBinding.Value(
+                    naturalCarrier = carrier,
+                    semanticCarrier = carrier,
+                    domain = resultDomain,
+                    directOwnerParameterIndex = null,
+                    isMarkedNullable = false,
+                )
+            }
+            resultDomain == DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT -> {
+                val binding = when (val candidate =
+                    bindDotNetLocalGenericOwnerPhysicalCallableResultOrError(
+                        source.returnType,
+                        owner,
+                        naturalOwnerIdentity,
+                        declarations,
+                        inputsByIdentity,
+                    )) {
+                    is DotNetGenericOwnerPhysicalBindingResult.Bound -> candidate.value
+                    is DotNetGenericOwnerPhysicalBindingResult.Conflict,
+                    DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+                    -> return null
+                }
+                if (!semanticSlot.returnType.isNullableAny()) return null
+                CallableResultBinding.Value(
+                    naturalCarrier = binding.carrier,
+                    semanticCarrier = DotNetGenericOwnerSymbolicCarrierReference.objectCarrier(),
+                    domain = resultDomain,
+                    directOwnerParameterIndex = binding.directOwnerParameterIndex,
+                    isMarkedNullable = binding.isMarkedNullable,
+                )
+            }
+            else -> return null
         }
-        if (context.genericInterfaceNaturalMethodResultDomains[source] !=
-            DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT
-        ) return null
         val isCompleteDirectProducerCandidate = when (memberContract.role) {
+            DotNetPublishedGenericInterfaceMemberRole.DIRECT_CALLABLE -> {
+                val result = resultBinding as? CallableResultBinding.Value ?: return null
+                if (methodGenericArity != 0 ||
+                    memberContract.resultLayout != DotNetPublishedGenericInterfaceMemberResultLayout.DIRECT ||
+                    result.domain != DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT ||
+                    result.directOwnerParameterIndex != null || result.isMarkedNullable ||
+                    parameterBindings.none { binding -> binding is CallableParameterBinding.Owner } ||
+                    parameterBindings.zip(parameterDomains).any { pair ->
+                        pair.first is CallableParameterBinding.Owner &&
+                                pair.second !=
+                                DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT
+                    }
+                ) return null
+                false
+            }
             DotNetPublishedGenericInterfaceMemberRole.PRODUCER -> {
+                val result = resultBinding as? CallableResultBinding.Value ?: return null
                 if (parameterBindings.any { binding ->
                         binding is CallableParameterBinding.Owner
                     }
                 ) return null
-                if (resultBinding.directOwnerParameterIndex == null) return null
+                if (result.directOwnerParameterIndex == null ||
+                    result.domain != DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT
+                ) return null
                 when (memberContract.resultLayout) {
                     DotNetPublishedGenericInterfaceMemberResultLayout.DIRECT -> {
-                        if (resultBinding.isMarkedNullable) return null
+                        if (result.isMarkedNullable) return null
                         true
                     }
                     DotNetPublishedGenericInterfaceMemberResultLayout.SPLIT_NULLABLE -> {
-                        if (!resultBinding.isMarkedNullable) return null
+                        if (!result.isMarkedNullable) return null
                         false
                     }
                     DotNetPublishedGenericInterfaceMemberResultLayout.VOID -> return null
                 }
             }
             DotNetPublishedGenericInterfaceMemberRole.CONSTRUCTED_INTERFACE_PRODUCER -> {
+                val result = resultBinding as? CallableResultBinding.Value ?: return null
                 if (methodGenericArity != 0 || parameterBindings.isNotEmpty() ||
                     memberContract.resultLayout !=
                     DotNetPublishedGenericInterfaceMemberResultLayout.DIRECT ||
-                    resultBinding.isMarkedNullable ||
-                    resultBinding.directOwnerParameterIndex != null
+                    result.isMarkedNullable ||
+                    result.directOwnerParameterIndex != null ||
+                    result.domain != DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT
                 ) return null
-                val construction = resultBinding.carrier as?
+                val construction = result.naturalCarrier as?
                         DotNetGenericOwnerSymbolicCarrierReference.Constructed ?: return null
                 if (construction.arguments.isEmpty() ||
                     construction.arguments.any { argument ->
@@ -1286,11 +1357,13 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
                 false
             }
             DotNetPublishedGenericInterfaceMemberRole.INPUT_OUTPUT -> {
+                val result = resultBinding as? CallableResultBinding.Value ?: return null
                 if (memberContract.resultLayout !=
                     DotNetPublishedGenericInterfaceMemberResultLayout.SPLIT_NULLABLE ||
-                    !resultBinding.isMarkedNullable || owner.typeParameters.size != 2
+                    !result.isMarkedNullable || owner.typeParameters.size != 2 ||
+                    result.domain != DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT
                 ) return null
-                val resultParameterIndex = resultBinding.directOwnerParameterIndex ?: return null
+                val resultParameterIndex = result.directOwnerParameterIndex ?: return null
                 val resultParameter = owner.typeParameters[resultParameterIndex]
                 val ownerInputs = parameterBindings
                     .filterIsInstance<CallableParameterBinding.Owner>()
@@ -1317,7 +1390,7 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
             semanticParameters.size != parameterBindings.size ||
             semanticParameters.any { parameter ->
                 parameter.defaultValue != null || parameter.varargElementType != null
-            } || !semanticSlot.returnType.isNullableAny() ||
+            } ||
             semanticSlot.visibility != DescriptorVisibilities.PUBLIC ||
             semanticSlot.modality != Modality.ABSTRACT ||
             semanticSlot.body != null
@@ -1343,7 +1416,6 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
                 DotNetGenericOwnerPhysicalBindingResult.Unavailable,
                 -> null
             }
-        val naturalResultCarrier = resultBinding.carrier
         val naturalInputCarriers = parameterBindings
             .filterIsInstance<CallableParameterBinding.Owner>()
             .associate { binding ->
@@ -1363,7 +1435,6 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
             identity: DotNetGenericOwnerPhysicalMethodDefIdentity,
             declaringType: DotNetGenericOwnerPhysicalTypeDefIdentity,
             semantic: Boolean,
-            resultCarrier: DotNetGenericOwnerSymbolicCarrierReference,
         ): DotNetGenericOwnerPhysicalMethodDefReference {
             val parameterSlots = parameterBindings.zip(parameterDomains).map { pair ->
                 val binding = pair.first
@@ -1388,20 +1459,26 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
                 }
                 DotNetGenericOwnerPhysicalCallableValueSlotReference(domain, carrier)
             }
-            val outputSlot = DotNetGenericOwnerPhysicalCallableValueSlotReference(
-                DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT,
-                resultCarrier,
-            )
-            val resultLayout = if (semantic) {
-                DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct(outputSlot)
-            } else {
-                when (memberContract.resultLayout) {
-                    DotNetPublishedGenericInterfaceMemberResultLayout.DIRECT ->
+            val resultLayout = when (val result = resultBinding) {
+                CallableResultBinding.Void ->
+                    DotNetGenericOwnerPhysicalCallableResultLayoutReference.Void
+                is CallableResultBinding.Value -> {
+                    val outputSlot = DotNetGenericOwnerPhysicalCallableValueSlotReference(
+                        result.domain,
+                        if (semantic) result.semanticCarrier else result.naturalCarrier,
+                    )
+                    if (semantic) {
                         DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct(outputSlot)
-                    DotNetPublishedGenericInterfaceMemberResultLayout.SPLIT_NULLABLE ->
-                        DotNetGenericOwnerPhysicalCallableResultLayoutReference.SplitNullable(outputSlot)
-                    DotNetPublishedGenericInterfaceMemberResultLayout.VOID ->
-                        error("Internal .NET backend error: a value callable acquired a void layout")
+                    } else {
+                        when (memberContract.resultLayout) {
+                            DotNetPublishedGenericInterfaceMemberResultLayout.DIRECT ->
+                                DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct(outputSlot)
+                            DotNetPublishedGenericInterfaceMemberResultLayout.SPLIT_NULLABLE ->
+                                DotNetGenericOwnerPhysicalCallableResultLayoutReference.SplitNullable(outputSlot)
+                            DotNetPublishedGenericInterfaceMemberResultLayout.VOID ->
+                                error("Internal .NET backend error: a value callable acquired a void layout")
+                        }
+                    }
                 }
             }
             return DotNetGenericOwnerPhysicalMethodDefReference(
@@ -1429,13 +1506,11 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
                     naturalMethodIdentity,
                     naturalOwnerIdentity,
                     semantic = false,
-                    resultCarrier = naturalResultCarrier,
                 ),
                 method(
                     semanticMethodIdentity,
                     semanticOwnerIdentity,
                     semantic = true,
-                    resultCarrier = DotNetGenericOwnerSymbolicCarrierReference.objectCarrier(),
                 ),
             ),
             callableFamily = DotNetLocalGenericOwnerPhysicalCallableFamilyInput(

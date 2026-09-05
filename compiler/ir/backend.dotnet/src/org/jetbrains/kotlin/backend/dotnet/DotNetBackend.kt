@@ -483,10 +483,7 @@ object DotNetBackend {
                                     "exact pre-lowering owner declaration",
                         )
                     family.contract.declaredMembers.mapNotNull { member ->
-                        if (member.role != DotNetPublishedGenericInterfaceMemberRole.PRODUCER &&
-                            member.resultLayout !=
-                            DotNetPublishedGenericInterfaceMemberResultLayout.SPLIT_NULLABLE
-                        ) return@mapNotNull null
+                        if (!member.admitsNaturalMethodDefSeal) return@mapNotNull null
                         val sourceCandidates = declarationsByLogicalKey[member.logicalMemberKey].orEmpty()
                         val source = sourceCandidates.singleOrNull() as? IrSimpleFunction
                             ?: error(

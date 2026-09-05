@@ -40,7 +40,7 @@ internal data class DotNetProducerGenericOwnerNaturalMethodDefPublication(
             "a natural MethodDef publication requires its MethodDef to belong to its sealed TypeDef"
         }
         require(hasBoundedDotNetProducerGenericOwnerNaturalMethodDefGrammar(naturalType, naturalMethod)) {
-            "a natural MethodDef publication requires the bounded public root-interface producer grammar"
+            "a natural MethodDef publication requires the bounded public root-interface callable grammar"
         }
         require(naturalMethod.logicalParameterDomains.size ==
                 naturalMethod.row.structural.header.ordinaryParameterCarriers.size) {
@@ -95,13 +95,51 @@ internal fun hasBoundedDotNetProducerGenericOwnerNaturalMethodDefGrammar(
     ) {
         return false
     }
-    val resultCarrier = when (val result = header.result) {
-        DotNetGenericOwnerPhysicalMethodDefEmissionResultShape.Void -> null
-        is DotNetGenericOwnerPhysicalMethodDefEmissionResultShape.Direct -> result.carrier
-        is DotNetGenericOwnerPhysicalMethodDefEmissionResultShape.SplitNullable -> result.payload
+    fun DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.isBoundOwnerParameter(): Boolean =
+        this is DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.OwnerParameter &&
+                binder == type.identityKey && index in 0 until type.genericArity
+
+    fun DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.isBoundMethodParameter(): Boolean =
+        this is DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.MethodParameter &&
+                binder == method.structural.identityKey && index in 0 until header.genericArity
+
+    fun DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.isIndependentLeaf(): Boolean =
+        this is DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.Leaf &&
+                kind != DotNetGenericOwnerPhysicalTypeKind.VOID
+
+    if (!header.ordinaryParameterCarriers.zip(naturalMethod.logicalParameterDomains).all { pair ->
+            val carrier = pair.first
+            when (pair.second) {
+                DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT ->
+                    carrier.isIndependentLeaf() || carrier.isBoundMethodParameter()
+                DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
+                DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT,
+                -> carrier.isBoundOwnerParameter()
+                DotNetGenericOwnerPhysicalSlotDomain.OWNER_EXACT_RECEIVER,
+                DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT,
+                -> false
+            }
+        }
+    ) {
+        return false
     }
-    return resultCarrier is DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.OwnerParameter &&
-            resultCarrier.binder == type.identityKey && resultCarrier.index in 0 until type.genericArity
+    return when (val result = header.result) {
+        // No declaration role currently admits an interface-only natural Void MethodDef seal.
+        DotNetGenericOwnerPhysicalMethodDefEmissionResultShape.Void -> false
+        is DotNetGenericOwnerPhysicalMethodDefEmissionResultShape.Direct -> when (
+            naturalMethod.logicalResultDomain
+        ) {
+            DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT ->
+                result.carrier.isIndependentLeaf()
+            DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT ->
+                result.carrier.isBoundOwnerParameter()
+            else -> false
+        }
+        is DotNetGenericOwnerPhysicalMethodDefEmissionResultShape.SplitNullable ->
+            naturalMethod.logicalResultDomain ==
+                    DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
+                    result.payload.isBoundOwnerParameter()
+    }
 }
 
 internal sealed interface DotNetProducerGenericOwnerNaturalMethodDefDecodeResult {

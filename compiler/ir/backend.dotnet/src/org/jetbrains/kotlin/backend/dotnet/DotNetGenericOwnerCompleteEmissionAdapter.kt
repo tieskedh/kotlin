@@ -337,9 +337,7 @@ internal fun inspectDotNetProducerGenericOwnerNaturalMethodDefPublication(
     current: DotNetGenericOwnerCompleteEmissionScopeObservations,
     otherScopes: List<DotNetGenericOwnerCompleteEmissionScopeObservations>,
 ): DotNetGenericOwnerPhysicalBindingResult<DotNetProducerGenericOwnerNaturalMethodDefPublication> {
-    if (member.role != DotNetPublishedGenericInterfaceMemberRole.PRODUCER &&
-        member.resultLayout != DotNetPublishedGenericInterfaceMemberResultLayout.SPLIT_NULLABLE
-    ) {
+    if (!member.admitsNaturalMethodDefSeal) {
         return DotNetGenericOwnerPhysicalBindingResult.Unavailable
     }
     if (member.logicalMemberKey != logicalMemberKey || family.contract.logicalOwnerKey != logicalOwnerKey ||
@@ -530,11 +528,15 @@ internal fun inspectDotNetProducerGenericOwnerNaturalMethodDefPublication(
             "the natural MethodDef's logical parameter domains disagree with its final physical header",
         )
     }
-    val splitNullable = header.result is
-            DotNetGenericOwnerPhysicalMethodDefEmissionResultShape.SplitNullable
-    if (splitNullable !=
-        (member.resultLayout == DotNetPublishedGenericInterfaceMemberResultLayout.SPLIT_NULLABLE)
-    ) {
+    val physicalResultLayout = when (header.result) {
+        DotNetGenericOwnerPhysicalMethodDefEmissionResultShape.Void ->
+            DotNetPublishedGenericInterfaceMemberResultLayout.VOID
+        is DotNetGenericOwnerPhysicalMethodDefEmissionResultShape.Direct ->
+            DotNetPublishedGenericInterfaceMemberResultLayout.DIRECT
+        is DotNetGenericOwnerPhysicalMethodDefEmissionResultShape.SplitNullable ->
+            DotNetPublishedGenericInterfaceMemberResultLayout.SPLIT_NULLABLE
+    }
+    if (physicalResultLayout != member.resultLayout) {
         return DotNetGenericOwnerPhysicalBindingResult.Conflict(
             "the H member contract disagrees with the final natural MethodDef result layout",
         )

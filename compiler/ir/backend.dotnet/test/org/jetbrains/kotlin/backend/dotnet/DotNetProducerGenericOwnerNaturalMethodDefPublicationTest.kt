@@ -18,6 +18,7 @@ import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.types.Variance
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
@@ -39,6 +40,79 @@ class DotNetProducerGenericOwnerNaturalMethodDefPublicationTest {
             DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT,
             publication.naturalMethod.logicalResultDomain,
         )
+    }
+
+    @Test
+    fun admitsAndRoundTripsADeclarationIndependentDirectResultWithRepeatedOwnerInputs() {
+        val base = producerSealedFamilyPublicationFixture()
+            .toNaturalMethodDefPublication(PublicationFixture.LOGICAL_OWNER_KEY)
+        val ownerParameter = DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.OwnerParameter(
+            base.naturalType.structural.identityKey,
+            0,
+        )
+        val int32 = DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.Leaf(
+            DotNetGenericOwnerPhysicalTypeKind.INT32,
+        )
+        val directMethod = base.naturalMethod.copy(
+            row = base.naturalMethod.row.copy(
+                structural = base.naturalMethod.row.structural.copy(
+                    header = base.naturalMethod.row.structural.header.copy(
+                        genericArity = 0,
+                        ordinaryParameterCarriers = listOf(ownerParameter, ownerParameter),
+                        result = DotNetGenericOwnerPhysicalMethodDefEmissionResultShape.Direct(int32),
+                    ),
+                    genericParameters = emptyList(),
+                ),
+                physicalName = "compare",
+                physicalGenericParameterNames = emptyList(),
+            ),
+            logicalParameterDomains = listOf(
+                DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
+                DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
+            ),
+            logicalResultDomain = DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+        )
+        val direct = base.copy(
+            logicalMemberKey = "sample/Source.compare|function",
+            naturalMethod = directMethod,
+        )
+
+        assertTrue(hasBoundedDotNetProducerGenericOwnerNaturalMethodDefGrammar(
+            direct.naturalType,
+            direct.naturalMethod,
+        ))
+        assertEquals(direct, direct.toPhysicalDeclaration().publication())
+        val member = DotNetPublishedGenericInterfaceMemberContract(
+            direct.logicalMemberKey,
+            DotNetPublishedGenericInterfaceMemberRole.DIRECT_CALLABLE,
+            DotNetPublishedGenericInterfaceMemberResultLayout.DIRECT,
+        )
+        val signature = direct.toPhysicalDeclaration().physicalMethod.signature
+        val ownerVariances = listOf(DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT)
+        assertTrue(member.acceptsDirectCallableNaturalMethodDefSeal(signature, ownerVariances))
+        assertFalse(member.acceptsDirectCallableNaturalMethodDefSeal(
+            signature.copy(parameterSlots = signature.parameterSlots.mapIndexed { index, slot ->
+                if (index == 0) {
+                    slot.copy(domain = DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT)
+                } else {
+                    slot
+                }
+            }),
+            ownerVariances,
+        ))
+        assertFailsWith<IllegalArgumentException> {
+            direct.copy(naturalMethod = direct.naturalMethod.copy(
+                logicalParameterDomains = listOf(
+                    DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                    DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
+                ),
+            ))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            direct.copy(naturalMethod = direct.naturalMethod.copy(
+                logicalResultDomain = DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT,
+            ))
+        }
     }
 
     @Test
@@ -96,6 +170,19 @@ class DotNetProducerGenericOwnerNaturalMethodDefPublicationTest {
                 ),
             ),
         ))
+    }
+
+    @Test
+    fun rejectsVoidPhysicalObservationForADirectPublishedResultLayout() {
+        val fixture = PublicationFixture()
+        val conflict = assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
+            fixture.inspect(currentMethods = listOf(
+                fixture.methodObservation(fixture.naturalType, forceVoidResult = true),
+            )),
+        )
+
+        assertTrue(conflict.reason.contains("H member contract") &&
+                conflict.reason.contains("result layout"))
     }
 
     @Test
@@ -292,6 +379,7 @@ class DotNetProducerGenericOwnerNaturalMethodDefPublicationTest {
             physicalOwner: DotNetGenericOwnerObservedLocalTypeDef,
             physicalFunction: IrSimpleFunction = source,
             physicalName: String = "read",
+            forceVoidResult: Boolean = false,
         ): DotNetGenericOwnerPhysicalMethodDefHeaderObservation {
             val ownerParameter = DotNetGenericOwnerObservedMethodCarrier.OwnerParameter(
                 physicalOwner,
@@ -323,7 +411,13 @@ class DotNetProducerGenericOwnerNaturalMethodDefPublicationTest {
                         physicalOwner,
                         listOf(ownerParameter),
                     ),
-                    returnCarrier = ownerParameter,
+                    returnCarrier = if (forceVoidResult) {
+                        DotNetGenericOwnerObservedMethodCarrier.Leaf(
+                            DotNetGenericOwnerPhysicalTypeKind.VOID,
+                        )
+                    } else {
+                        ownerParameter
+                    },
                     parameterCarriers = emptyList(),
                     hasSplitNullableResult = false,
                 ),

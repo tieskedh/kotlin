@@ -18,6 +18,7 @@ import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.defaultType
 import org.jetbrains.kotlin.ir.types.isMarkedNullable
+import org.jetbrains.kotlin.ir.types.isUnit
 import org.jetbrains.kotlin.ir.types.isNullableAny
 import org.jetbrains.kotlin.types.Variance
 import java.util.IdentityHashMap
@@ -905,7 +906,12 @@ internal class DotNetLocalGenericOwnerPhysicalCallableFamily private constructor
                                 "an owner-input semantic slot must use the object carrier",
                             )
                         }
-                        expectedDomain = DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT
+                        expectedDomain = natural.signature.parameterSlots[index].domain.takeIf { domain ->
+                            domain == DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT ||
+                                    domain == DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT
+                        } ?: return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                            "an owner-input natural slot has no owner-input policy",
+                        )
                         expectedNaturalCarrier = ownerCarriers[ownerIndex]
                         expectedSemanticCarrier = objectCarrier
                     }
@@ -956,6 +962,49 @@ internal class DotNetLocalGenericOwnerPhysicalCallableFamily private constructor
                         "a bounded local callable parameter disagrees with its MethodDef authority",
                     )
                 }
+            }
+
+            if (logicalMember.returnType.isUnit()) {
+                if (!semanticMember.returnType.isUnit() ||
+                    natural.signature.resultLayout !=
+                    DotNetGenericOwnerPhysicalCallableResultLayoutReference.Void ||
+                    semantic.signature.resultLayout !=
+                    DotNetGenericOwnerPhysicalCallableResultLayoutReference.Void
+                ) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "a void local callable disagrees with its MethodDef authority",
+                    )
+                }
+                return DotNetGenericOwnerPhysicalBindingResult.Bound(
+                    DotNetLocalGenericOwnerPhysicalCallableFamily(naturalIdentity, semanticIdentity),
+                )
+            }
+
+            val independentPrototype = logicalMember.returnType
+                .genericOwnerDeclarationIndependentLeafPrototypeOrNull()
+            if (independentPrototype != null && !logicalMember.returnType.isMarkedNullable()) {
+                val semanticPrototype = semanticMember.returnType
+                    .genericOwnerDeclarationIndependentLeafPrototypeOrNull()
+                val carrier = independentPrototype.declarationIndependentLeafCarrierOrNull()
+                val naturalResult = natural.signature.resultLayout as?
+                        DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct
+                val semanticResult = semantic.signature.resultLayout as?
+                        DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct
+                if (carrier == null || semanticPrototype != independentPrototype ||
+                    naturalResult?.slot?.domain !=
+                    DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT ||
+                    naturalResult.slot.carrier != carrier ||
+                    semanticResult?.slot?.domain !=
+                    DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT ||
+                    semanticResult.slot.carrier != carrier
+                ) {
+                    return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                        "a declaration-independent local callable result disagrees with its MethodDef authority",
+                    )
+                }
+                return DotNetGenericOwnerPhysicalBindingResult.Bound(
+                    DotNetLocalGenericOwnerPhysicalCallableFamily(naturalIdentity, semanticIdentity),
+                )
             }
 
             val resultBinding = when (val binding =

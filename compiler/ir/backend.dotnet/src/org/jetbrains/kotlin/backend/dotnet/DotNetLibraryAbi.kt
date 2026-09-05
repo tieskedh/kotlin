@@ -216,6 +216,11 @@ private fun DotNetGenericOwnerPhysicalTypeParameterVariance.isNoStrongerThan(
 
 /** Logical role of one member declared directly by a published interface family. */
 enum class DotNetPublishedGenericInterfaceMemberRole {
+    /**
+     * An ordinary natural callable whose parameter domains and result layout are the complete
+     * physical policy. The role itself adds no exact-sibling or semantic-operation rule.
+     */
+    DIRECT_CALLABLE,
     PRODUCER,
     CONSTRUCTED_INTERFACE_PRODUCER,
     CONSUMER,
@@ -254,6 +259,60 @@ internal val DotNetPublishedGenericInterfaceMemberRole.semanticObjectParameterIn
 
 internal val DotNetPublishedGenericInterfaceMemberRole.requiresSemanticOperation: Boolean
     get() = requiresSemanticResultCapability || semanticObjectParameterIndices.isNotEmpty()
+
+/** Whether this bounded member form may publish a final declaration-only natural MethodDef seal. */
+internal val DotNetPublishedGenericInterfaceMemberContract.admitsNaturalMethodDefSeal: Boolean
+    get() = role == DotNetPublishedGenericInterfaceMemberRole.DIRECT_CALLABLE ||
+            role == DotNetPublishedGenericInterfaceMemberRole.PRODUCER ||
+            resultLayout == DotNetPublishedGenericInterfaceMemberResultLayout.SPLIT_NULLABLE
+
+/** Complete bounded H/N contract for the first semantic-neutral direct-callable slice. */
+internal fun DotNetPublishedGenericInterfaceMemberContract.acceptsDirectCallableNaturalMethodDefSeal(
+    signature: DotNetGenericOwnerPhysicalMethodSignatureRecord,
+    ownerVariances: List<DotNetGenericOwnerPhysicalTypeParameterVariance>,
+): Boolean {
+    if (role != DotNetPublishedGenericInterfaceMemberRole.DIRECT_CALLABLE ||
+        resultLayout != DotNetPublishedGenericInterfaceMemberResultLayout.DIRECT ||
+        signature.genericArity != 0
+    ) return false
+    var hasStrictOwnerInput = false
+    if (!signature.parameterSlots.all { slot ->
+            when (slot.domain) {
+                DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT ->
+                    slot.type.kind in setOf(
+                        DotNetGenericOwnerPhysicalTypeKind.BOOLEAN,
+                        DotNetGenericOwnerPhysicalTypeKind.INT32,
+                        DotNetGenericOwnerPhysicalTypeKind.STRING,
+                        DotNetGenericOwnerPhysicalTypeKind.OBJECT,
+                    )
+                DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT -> {
+                    val index = slot.type.parameterIndex
+                    val valid = slot.type.kind ==
+                            DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER &&
+                            index != null && index in ownerVariances.indices &&
+                            ownerVariances[index] !=
+                            DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT
+                    hasStrictOwnerInput = hasStrictOwnerInput || valid
+                    valid
+                }
+                DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT,
+                DotNetGenericOwnerPhysicalSlotDomain.OWNER_EXACT_RECEIVER,
+                DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT,
+                -> false
+            }
+        }
+    ) return false
+    val result = signature.resultLayout as?
+            DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Direct ?: return false
+    return hasStrictOwnerInput &&
+            result.slot.domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
+            result.slot.type.kind in setOf(
+                DotNetGenericOwnerPhysicalTypeKind.BOOLEAN,
+                DotNetGenericOwnerPhysicalTypeKind.INT32,
+                DotNetGenericOwnerPhysicalTypeKind.STRING,
+                DotNetGenericOwnerPhysicalTypeKind.OBJECT,
+            )
+}
 
 internal val DotNetPublishedGenericInterfaceFamilyContract.requiresExactInputView: Boolean
     get() = declaredMembers.any { member -> member.role.requiresExactInputView }
@@ -1317,7 +1376,7 @@ data class DotNetFriendAssemblyIdentity(
 
 /** Manifest codec for the provisional declaration-index schema. */
 object DotNetLibraryAbiCodec {
-    const val ABI_VERSION = "68"
+    const val ABI_VERSION = "69"
     const val ABI_VERSION_PROPERTY = "dotnet_abi_version"
     const val LOGICAL_IDENTITY_SCHEME = "kotlin-public-id-signature-legacy-v1"
     const val LOGICAL_IDENTITY_SCHEME_PROPERTY = "dotnet_logical_identity_scheme"
@@ -2906,9 +2965,7 @@ object DotNetLibraryAbiCodec {
                 "published interface family '${interfaceFamily.contract.logicalOwnerKey}' disagrees with its class record"
             }
             interfaceFamily.contract.declaredMembers.forEach { member ->
-                if (member.role != DotNetPublishedGenericInterfaceMemberRole.PRODUCER &&
-                    member.resultLayout != DotNetPublishedGenericInterfaceMemberResultLayout.SPLIT_NULLABLE
-                ) return@forEach
+                if (!member.admitsNaturalMethodDefSeal) return@forEach
                 val naturalKey = "N:${member.logicalMemberKey}"
                 val naturalDeclaration = declarations[naturalKey] ?: return@forEach
                 val natural = naturalDeclaration as? DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef
@@ -2929,10 +2986,15 @@ object DotNetLibraryAbiCodec {
                 ) {
                     "natural MethodDef '$naturalKey' disagrees with its H-selected declaration owner"
                 }
-                val split = physicalMethod.signature.resultLayout is
-                        DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable
-                require(split ==
-                        (member.resultLayout == DotNetPublishedGenericInterfaceMemberResultLayout.SPLIT_NULLABLE)) {
+                val physicalResultLayout = when (physicalMethod.signature.resultLayout) {
+                    DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Void ->
+                        DotNetPublishedGenericInterfaceMemberResultLayout.VOID
+                    is DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Direct ->
+                        DotNetPublishedGenericInterfaceMemberResultLayout.DIRECT
+                    is DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable ->
+                        DotNetPublishedGenericInterfaceMemberResultLayout.SPLIT_NULLABLE
+                }
+                require(physicalResultLayout == member.resultLayout) {
                     "natural MethodDef '$naturalKey' disagrees with its H-selected result layout"
                 }
                 require(physicalMethod.signature.parameterSlots.all { slot -> when (slot.domain) {
@@ -2942,7 +3004,9 @@ object DotNetLibraryAbiCodec {
                     DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT,
                     -> slot.type.kind == DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER &&
                             slot.type.parameterIndex?.let { index ->
-                                index in 0 until interfaceFamily.contract.genericArity
+                                index in 0 until interfaceFamily.contract.genericArity &&
+                                        interfaceFamily.naturalTypeParameterVariances[index] !=
+                                        DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT
                             } == true
                     DotNetGenericOwnerPhysicalSlotDomain.OWNER_EXACT_RECEIVER,
                     DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT,
@@ -2950,18 +3014,30 @@ object DotNetLibraryAbiCodec {
                 } }) {
                     "natural MethodDef '$naturalKey' disagrees with its H-selected logical input domains"
                 }
-                require(physicalMethod.signature.resultLayout.valueSlotOrNull?.domain ==
-                        DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT) {
-                    "natural MethodDef '$naturalKey' disagrees with its H-selected logical result domain"
-                }
-                val resultType = checkNotNull(
-                    physicalMethod.signature.resultLayout.valueSlotOrNull,
-                ).type
-                require(resultType.kind == DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER &&
-                        resultType.parameterIndex?.let { index ->
-                            index in 0 until interfaceFamily.contract.genericArity
-                        } == true) {
-                    "natural MethodDef '$naturalKey' disagrees with its H-selected direct producer result"
+                when (member.role) {
+                    DotNetPublishedGenericInterfaceMemberRole.DIRECT_CALLABLE -> {
+                        require(member.acceptsDirectCallableNaturalMethodDefSeal(
+                            physicalMethod.signature,
+                            interfaceFamily.naturalTypeParameterVariances,
+                        )) {
+                            "natural MethodDef '$naturalKey' disagrees with its H-selected " +
+                                    "direct-callable contract"
+                        }
+                    }
+                    else -> {
+                        val resultSlot = checkNotNull(
+                            physicalMethod.signature.resultLayout.valueSlotOrNull,
+                        )
+                        require(resultSlot.domain == DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
+                                    resultSlot.type.kind ==
+                                    DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER &&
+                                    resultSlot.type.parameterIndex?.let { index ->
+                                        index in 0 until interfaceFamily.contract.genericArity
+                                    } == true
+                        ) {
+                            "natural MethodDef '$naturalKey' disagrees with its H-selected owner result"
+                        }
+                    }
                 }
                 val function = requiredDeclaration(member.logicalMemberKey, "natural-interface function") as?
                         DotNetPhysicalDeclaration.Function ?: throw IllegalArgumentException(

@@ -17265,6 +17265,154 @@ private fun validateGenericOwnerCompleteNaturalInterfaceCSharp(
     executeSnapshotConsumer(target, consumer, directory)
 }
 
+/** Validates one declaration-independent direct result without giving it declaration-specific policy. */
+private fun validateDirectCallableFamilyLibrary(
+    producer: File,
+    declarations: Map<String, DotNetPhysicalDeclaration>,
+    namespaceName: String,
+) {
+    val ownerName = "StrictOrder"
+    val family = checkNotNull(
+        declarations.values
+            .filterIsInstance<DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily>()
+            .singleOrNull { candidate ->
+                candidate.ownerPath.lastOrNull() == "$namespaceName.$ownerName`1"
+            }
+    ) {
+        "The direct-callable producer has no unique StrictOrder`1 H record"
+    }
+    val member = checkNotNull(family.contract.declaredMembers.singleOrNull()) {
+        "StrictOrder`1 did not publish exactly one declaration-local member: $family"
+    }
+    check(family.naturalTypeParameterVariances == listOf(
+        DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+    ) && family.exactOwnerPath == null &&
+            family.contract.kind == DotNetPublishedGenericInterfaceFamilyKind.ROOT &&
+            family.contract.capabilityBindingKind ==
+            DotNetPublishedGenericInterfaceCapabilityBindingKind.OWNED &&
+            member.role == DotNetPublishedGenericInterfaceMemberRole.DIRECT_CALLABLE &&
+            member.resultLayout == DotNetPublishedGenericInterfaceMemberResultLayout.DIRECT
+    ) {
+        "StrictOrder`1 did not preserve its neutral direct-callable policy: $family"
+    }
+
+    val naturalMethod = checkNotNull(
+        declarations.values
+            .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef>()
+            .singleOrNull { method ->
+                method.logicalOwnerKey == family.contract.logicalOwnerKey &&
+                        method.logicalMemberKey == member.logicalMemberKey
+            }
+    ) {
+        "StrictOrder`1 did not publish one producer-recorded natural MethodDef"
+    }.physicalMethod
+    val inputs = naturalMethod.signature.parameterSlots
+    val result = naturalMethod.signature.resultLayout as?
+            DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Direct
+    check(naturalMethod.physicalOwnerPath == family.ownerPath &&
+            naturalMethod.physicalMethodName == "compare" &&
+            naturalMethod.signature.isInstance &&
+            naturalMethod.signature.genericArity == 0 &&
+            inputs.size == 2 && inputs.withIndex().all { indexed ->
+                indexed.value.domain == DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT &&
+                        indexed.value.type.kind ==
+                        DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER &&
+                        indexed.value.type.parameterIndex == 0
+            } && result?.slot?.domain ==
+            DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
+            result.slot.type.kind == DotNetGenericOwnerPhysicalTypeKind.INT32
+    ) {
+        "StrictOrder`1 N record is not int32 compare(!0, !0): $naturalMethod"
+    }
+    validateReifiedGenericInterfaceCSharpManifest(
+        producer,
+        expectedDeclaredOwner = "StrictOrder`1",
+        expectedMemberName = "compare",
+        expectedTypeParameterVariances = listOf(
+            DotNetCSharpTypeParameterVariance.INVARIANT,
+        ),
+        expectedSemanticReturnType = "int32",
+        expectedSemanticParameterTypes = listOf("object", "object"),
+        expectedNaturalReturnType = "int32",
+        expectedNaturalParameterTypes = listOf("!0", "!0"),
+    )
+
+    val metadata = DotNetClrMetadataReader.read(producer)
+    fun namesType(
+        handle: org.jetbrains.kotlin.load.dotnet.DotNetClrMetadataHandle,
+        metadataName: String,
+    ): Boolean = metadata.typeDefinitions.any { type ->
+        type.handle == handle && type.namespaceName == namespaceName &&
+                type.metadataName == metadataName
+    } || metadata.typeReferences.any { type ->
+        type.handle == handle && type.namespaceName == namespaceName &&
+                type.metadataName == metadataName
+    }
+    val owner = checkNotNull(metadata.typeDefinitions.singleOrNull { type ->
+        type.namespaceName == namespaceName && type.metadataName == "$ownerName`1"
+    }) {
+        "The direct-callable PE has no unique StrictOrder`1 TypeDef"
+    }
+    val ownerParameters = metadata.genericParameterDefinitions
+        .filter { parameter -> parameter.owner == owner.handle }
+        .sortedBy { parameter -> parameter.number }
+    val ownerParameter = DotNetClrTypeSignature.GenericParameter(
+        DotNetClrGenericParameterKind.TYPE,
+        0,
+    )
+    val intType = DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.INT32)
+    val method = checkNotNull(metadata.methodDefinitions.singleOrNull { method ->
+        method.declaringType == owner.handle && method.name == "compare"
+    }) {
+        "The direct-callable PE has no unique StrictOrder`1.compare MethodDef"
+    }
+    check(owner.isInterface && ownerParameters.singleOrNull()?.let { parameter ->
+        parameter.number == 0 &&
+                parameter.variance == DotNetClrGenericParameterVariance.INVARIANT
+    } == true && method.visibility == DotNetClrMethodVisibility.PUBLIC &&
+            method.isAbstract && method.isVirtual && method.signature.hasThis &&
+            method.signature.genericParameterCount == 0 &&
+            method.signature.returnType == intType &&
+            method.signature.parameterTypes == listOf(ownerParameter, ownerParameter)
+    ) {
+        "StrictOrder`1 PE is not invariant int32 compare(!0, !0): $ownerParameters / $method"
+    }
+
+    fun isStrictOrderConstruction(signature: DotNetClrTypeSignature): Boolean {
+        val instance = signature as? DotNetClrTypeSignature.GenericInstance ?: return false
+        return !instance.genericType.isValueType &&
+                namesType(instance.genericType.type, "$ownerName`1") &&
+                instance.arguments == listOf(ownerParameter)
+    }
+    val reversed = checkNotNull(metadata.typeDefinitions.singleOrNull { type ->
+        type.namespaceName == namespaceName && type.metadataName == "ReversedStrictOrder`1"
+    }) {
+        "The direct-callable PE has no unique ReversedStrictOrder`1 TypeDef"
+    }
+    val reversedFields = metadata.fieldDefinitions.filter { field ->
+        field.declaringType == reversed.handle
+    }
+    check(reversedFields.singleOrNull()?.let { field ->
+        field.name == "delegate" && field.visibility == DotNetClrFieldVisibility.PRIVATE &&
+                !field.isStatic &&
+                isStrictOrderConstruction(field.signature.fieldType)
+    } == true) {
+        "ReversedStrictOrder`1 did not retain one authoritative StrictOrder<!0> field: " +
+                reversedFields
+    }
+    val directEdges = metadata.interfaceImplementations
+        .filter { implementation -> implementation.implementingType == reversed.handle }
+        .mapNotNull { implementation ->
+            metadata.typeSpecifications.singleOrNull { specification ->
+                specification.handle == implementation.interfaceType
+            }?.signature
+        }
+        .filter(::isStrictOrderConstruction)
+    check(directEdges.size == 1) {
+        "ReversedStrictOrder`1 did not retain one exact StrictOrder<!0> InterfaceImpl: $directEdges"
+    }
+}
+
 /**
  * Proves that callable policies compose instead of becoming a new member role: `Lookup<K, out V>`
  * exposes `!V lookup(!K, out bool isNull)`, while its semantic sibling remains object-domain.
@@ -17369,6 +17517,46 @@ private fun validateGenericOwnerCallableCompositionCSharp(
             ) {
                 "The production-erased MethodLookup PE surface is not " +
                         "object lookup<!!0>(object, !!0): $methodLookupMethods"
+            }
+
+            val orderOwnerName = "StrictOrder"
+            val orderClassRecord = declarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.Class>()
+                .singleOrNull { declaration ->
+                    declaration.ownerPath.lastOrNull()
+                        ?.substringAfterLast('.')
+                        ?.substringBefore('`') == orderOwnerName
+                }
+            check(orderClassRecord?.let { declaration ->
+                declaration.ownerPath == listOf("$namespaceName.$orderOwnerName") &&
+                        declaration.physicalTypeParameterCount == 0 &&
+                        declaration.physicalTypeParameterVariances.isEmpty() &&
+                        declaration.genericOwnerAbi == null
+            } == true) {
+                "The production-erased StrictOrder physical index is not one arity-zero owner: " +
+                        orderClassRecord
+            }
+            val order = metadata.typeDefinitions.singleOrNull { type ->
+                type.namespaceName == namespaceName && type.metadataName == orderOwnerName
+            }
+            val orderMethods = order?.let { type ->
+                metadata.methodDefinitions.filter { method -> method.declaringType == type.handle }
+            }.orEmpty()
+            val intType = DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.INT32)
+            check(order?.isInterface == true &&
+                    metadata.genericParameterDefinitions.none { parameter ->
+                        parameter.owner == order.handle
+                    } && orderMethods.singleOrNull()?.let { method ->
+                        method.visibility == DotNetClrMethodVisibility.PUBLIC &&
+                            method.isAbstract && method.isVirtual &&
+                            method.signature.hasThis &&
+                            method.signature.genericParameterCount == 0 &&
+                            method.signature.returnType == intType &&
+                                method.signature.parameterTypes == listOf(objectType, objectType)
+                    } == true
+            ) {
+                "The production-erased StrictOrder PE surface is not int32 compare(object, object): " +
+                        orderMethods
             }
         }
         return
@@ -17622,6 +17810,7 @@ private fun validateGenericOwnerCallableCompositionCSharp(
             "MethodLookup`2 PE MethodDef is not !1 lookup<!!0>(!0, !!0, [out] bool&): " +
                     "$methodLookupMethod / $methodLookupParameters / $methodDefinitionParameters"
         }
+        validateDirectCallableFamilyLibrary(producer, declarations, namespaceName)
         return
     }
 
@@ -17681,6 +17870,22 @@ private fun validateGenericOwnerCallableCompositionCSharp(
     ) {
         "The widened MethodLookup call did not use its producer-recorded MethodDef:\n" +
                 widenedMethodRead
+    }
+    val exactCompare = requireMethodWindow("downstreamIntCompare")
+    check("StrictOrder`1'<int32>" in exactCompare && "::'compare'(!0, !0)" in exactCompare &&
+            "box int32" !in exactCompare && "unbox.any int32" !in exactCompare &&
+            "::'InvokeRecordedMember'(" !in exactCompare &&
+            "::'InvokeUniqueMember'(" !in exactCompare
+    ) {
+        "The exact value-type StrictOrder call did not stay direct and unboxed:\n$exactCompare"
+    }
+    val genericCompare = requireMethodWindow("downstreamGenericCompare")
+    check("StrictOrder`1'<!!0>" in genericCompare && "::'compare'(!0, !0)" in genericCompare &&
+            "box !!0" !in genericCompare && "unbox.any !!0" !in genericCompare &&
+            "::'InvokeRecordedMember'(" !in genericCompare &&
+            "::'InvokeUniqueMember'(" !in genericCompare
+    ) {
+        "The generic StrictOrder call did not retain its caller MethodDef binder:\n$genericCompare"
     }
 
     val lib = directory.resolve("lib.dll")
@@ -17743,6 +17948,11 @@ private fun validateGenericOwnerCallableCompositionCSharp(
                 }
             }
 
+            public sealed class NaturalIntStrictOrder : StrictOrder<int>
+            {
+                public int compare(int left, int right) => left * 100 + right;
+            }
+
             public static class Program
             {
                 public static int Main()
@@ -17798,6 +18008,21 @@ private fun validateGenericOwnerCallableCompositionCSharp(
                         !methodLookupParameters[2].IsOut)
                         throw new InvalidOperationException("MethodLookup MethodDef is wrong");
 
+                    var orderDefinition = typeof(StrictOrder<>);
+                    var orderGenericParameters = orderDefinition.GetGenericArguments();
+                    var orderMethod = orderDefinition.GetMethod("compare");
+                    var orderParameters = orderMethod == null ? null : orderMethod.GetParameters();
+                    if (!orderDefinition.IsInterface || orderDefinition.GetInterfaces().Length != 0 ||
+                        orderGenericParameters.Length != 1 ||
+                        (orderGenericParameters[0].GenericParameterAttributes &
+                            GenericParameterAttributes.VarianceMask) !=
+                            GenericParameterAttributes.None ||
+                        orderMethod == null || !orderMethod.IsAbstract || !orderMethod.IsVirtual ||
+                        orderMethod.ReturnType != typeof(int) || orderParameters.Length != 2 ||
+                        orderParameters[0].ParameterType != orderGenericParameters[0] ||
+                        orderParameters[1].ParameterType != orderGenericParameters[0])
+                        throw new InvalidOperationException("StrictOrder MethodDef is wrong");
+
                     var ints = new NaturalIntLookup();
                     bool isNull;
                     if (ints.lookup(11, out isNull) != 73 || isNull ||
@@ -17832,6 +18057,28 @@ private fun validateGenericOwnerCallableCompositionCSharp(
                         !mainKt.downstreamSame(widenedStrings, strings))
                         throw new InvalidOperationException(
                             "Kotlin widened C# reference lookup failed");
+
+                    var order = new NaturalIntStrictOrder();
+                    if (order.compare(2, 7) != 207 ||
+                        order.GetType().GetInterfaces().Length != 1 ||
+                        order.GetType().GetInterfaces()[0] != typeof(StrictOrder<int>))
+                        throw new InvalidOperationException(
+                            "ordinary C# StrictOrder authoring requires compiler ABI");
+                    var orderReader = new StrictOrderReader();
+                    if (orderReader.compareInt(order, 3, 8) != 308 ||
+                        mainKt.downstreamIntCompare(order, 4, 9) != 409 ||
+                        mainKt.downstreamGenericCompare<int>(order, 5, 6) != 506 ||
+                        !mainKt.downstreamStrictOrderSame(order, order))
+                        throw new InvalidOperationException("Kotlin calls on C# StrictOrder failed");
+                    var reversedOrder = new ReversedStrictOrder<int>(order);
+                    var delegateField = typeof(ReversedStrictOrder<int>).GetField(
+                        "delegate",
+                        BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+                    if (reversedOrder.compare(2, 7) != 702 || delegateField == null ||
+                        delegateField.FieldType != typeof(StrictOrder<int>) ||
+                        !object.ReferenceEquals(delegateField.GetValue(reversedOrder), order))
+                        throw new InvalidOperationException(
+                            "StrictOrder exact delegate state lost value or identity");
 
                     var methodInts = new NaturalIntMethodLookup();
                     if (methodInts.lookup<int>(17, 23, out isNull) != 89 || isNull ||
@@ -17895,6 +18142,16 @@ private fun validateGenericOwnerCallableCompositionCSharp(
                         kotlinMethodInts.lookup<int>(11, 17, out isNull) != 79 || isNull)
                         throw new InvalidOperationException(
                             "Kotlin MethodLookup implementation fabricated or lost its natural construction");
+                    var kotlinOrder = implementationsKt.intStrictOrder();
+                    var kotlinOrderInterfaces = kotlinOrder.GetType().GetInterfaces();
+                    if (Array.IndexOf(kotlinOrderInterfaces, typeof(StrictOrder<int>)) < 0 ||
+                        Array.Exists(kotlinOrderInterfaces, candidate =>
+                            candidate.IsGenericType &&
+                            candidate.GetGenericTypeDefinition() == typeof(StrictOrder<>) &&
+                            candidate != typeof(StrictOrder<int>)) ||
+                        kotlinOrder.compare(6, 7) != 607)
+                        throw new InvalidOperationException(
+                            "Kotlin StrictOrder implementation fabricated or lost its natural construction");
                     return 0;
                 }
             }

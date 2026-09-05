@@ -20,6 +20,22 @@ public interface MethodLookup<K, out V> {
     public fun <R> lookup(key: K, marker: R): V?
 }
 
+/**
+ * A declaration-independent result does not erase an otherwise exact ordered owner-input vector.
+ * This is the structural shape used by Kotlin's source-built Comparator, without depending on its
+ * declaration, package, or fun-interface status in the backend.
+ */
+public fun interface StrictOrder<T> {
+    public fun compare(left: T, right: T): Int
+}
+
+/** The delegate field must remain `StrictOrder<!T>` rather than contaminating generic state. */
+public class ReversedStrictOrder<T>(
+    public val delegate: StrictOrder<T>,
+) : StrictOrder<T> {
+    override fun compare(left: T, right: T): Int = delegate.compare(right, left)
+}
+
 public class LookupReader {
     public fun readExactInt(source: Lookup<Int, Int>, key: Int): Int? = source.lookup(key)
 
@@ -55,6 +71,14 @@ public class MethodLookupReader {
         key: Int,
         marker: String,
     ): Any? = source.lookup<String>(key, marker)
+}
+
+public class StrictOrderReader {
+    public fun compareInt(source: StrictOrder<Int>, left: Int, right: Int): Int =
+        source.compare(left, right)
+
+    public fun compareString(source: StrictOrder<String>, left: String, right: String): Int =
+        source.compare(left, right)
 }
 
 public fun widenIntLookup(source: Lookup<Int, Int>): Lookup<Int, Any?> = source
@@ -113,6 +137,14 @@ private class StringMethodLookup(
         if (key == expectedKey && marker == expectedMarker) value else null
 }
 
+private class IntStrictOrder : StrictOrder<Int> {
+    override fun compare(left: Int, right: Int): Int = left * 100 + right
+}
+
+private class StringStrictOrder : StrictOrder<String> {
+    override fun compare(left: String, right: String): Int = left.length * 100 + right.length
+}
+
 public fun intLookup(expectedKey: Int, value: Int): Lookup<Int, Int> =
     IntLookup(expectedKey, value)
 
@@ -133,6 +165,10 @@ public fun stringMethodLookup(
     expectedMarker: Any?,
     value: String,
 ): MethodLookup<Int, String> = StringMethodLookup(expectedKey, expectedMarker, value)
+
+public fun intStrictOrder(): StrictOrder<Int> = IntStrictOrder()
+
+public fun stringStrictOrder(): StrictOrder<String> = StringStrictOrder()
 
 // MODULE: main(middle)
 // FILE: main.kt
@@ -174,6 +210,15 @@ public fun downstreamMethodSame(
     expected: Any?,
 ): Boolean = source === expected
 
+public fun downstreamIntCompare(source: StrictOrder<Int>, left: Int, right: Int): Int =
+    source.compare(left, right)
+
+public fun <T> downstreamGenericCompare(source: StrictOrder<T>, left: T, right: T): Int =
+    source.compare(left, right)
+
+public fun downstreamStrictOrderSame(source: StrictOrder<Int>, expected: Any?): Boolean =
+    source === expected
+
 fun box(): String {
     val reader = LookupReader()
 
@@ -205,6 +250,24 @@ fun box(): String {
     if (reader.readNullableInt(nullableInts, 8) != null) return "nullable int miss"
     val storedNull = nullableIntLookup(9, null)
     if (reader.readNullableInt(storedNull, 9) != null) return "nullable int stored null"
+
+    val orderReader = StrictOrderReader()
+    val intOrder = intStrictOrder()
+    if (orderReader.compareInt(intOrder, 2, 7) != 207) return "strict order exact int"
+    if (downstreamIntCompare(intOrder, 3, 8) != 308) return "strict order downstream int"
+    if (downstreamGenericCompare(intOrder, 4, 9) != 409) return "strict order generic int"
+    if (!downstreamStrictOrderSame(intOrder, intOrder)) return "strict order identity"
+    val reversedIntOrder = ReversedStrictOrder(intOrder)
+    if (reversedIntOrder.compare(2, 7) != 702) return "strict order reversed int"
+    if (reversedIntOrder.delegate !== intOrder) return "strict order delegate identity"
+
+    val stringOrder = stringStrictOrder()
+    if (orderReader.compareString(stringOrder, "ab", "wxyz") != 204) {
+        return "strict order exact string"
+    }
+    if (downstreamGenericCompare(stringOrder, "abc", "wxyz") != 304) {
+        return "strict order generic string"
+    }
 
     val methodReader = MethodLookupReader()
     val methodInts = intMethodLookup(11, 17, 79)
