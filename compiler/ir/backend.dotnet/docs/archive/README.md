@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`upstream-sync-2026-09-05.md`](upstream-sync-2026-09-05.md) records the
+  conflict-free 291-commit upstream integration, complete 733-patch
+  preservation and 14-path overlap audit, three bounded post-rebase
+  adaptations, rollback boundary, and the final 2,817-test target gate.
 - [`generic-owner-physical-authority-consolidation-2026-09-05.md`](generic-owner-physical-authority-consolidation-2026-09-05.md)
   records the schema-22 declaration/value/operation/state consolidation, the
   disposition of earlier bounded recognizers, final authority and production-
