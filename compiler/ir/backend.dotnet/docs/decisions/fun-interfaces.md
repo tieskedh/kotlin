@@ -3,7 +3,8 @@
 - Status: **Accepted pre-ABI**
 - Scope: Kotlin-owned `fun interface` declarations, implicit and explicit SAM
   conversion, generic and suspend abstract methods, wrapper equality, separate
-  Kotlin libraries, and the ordinary CLR interface surface
+  Kotlin libraries, the ordinary CLR interface surface, and the bounded
+  generic-owner wrapper rehearsal
 - Does not enable: implicit conversion to or from CLR delegates, foreign CLR
   SAM conversion, delegate export, or C# lambda conversion to a Kotlin
   interface
@@ -36,8 +37,11 @@ not map the interface to `System.Delegate`, `System.Func`, or `System.Action`.
 FIR supplies the authoritative `SAM_CONVERSION` and selected abstract method;
 Common IR supplies the wrapper class, constructor, field, forwarding method,
 null handling, and equality/hash-code protocol. The .NET target supplies only
-the target visibility, raw Kotlin-interface view, suspend-method lookup, and
-physical compiler/runtime binding required by that shared lowering.
+the target visibility, interface view, suspend-method lookup, and physical
+compiler/runtime binding required by that shared lowering. The accepted
+production choice for that interface view is erased. The rehearsal-only hooks
+described below select a truthful generic view without taking wrapper creation
+away from Common.
 
 ## Cross-target architecture
 
@@ -56,12 +60,39 @@ continuation lowering, default dispatch, generic-interface bridges, and final
 code generation. Later target passes therefore see only ordinary classes,
 fields, constructors, virtual interface methods, and calls.
 
-The Common pass asks each target for the wrapper's interface view. .NET uses
-the declaration-erased default type, matching Native and JS/Wasm. Logical type
-arguments and substitutions remain authoritative in IR/KLIB; the existing
-generic-interface lowering supplies the canonical erased slot and any
-independently truthful physical bridge. SAM conversion does not reopen the
-accepted erased identity of Kotlin-owned generic classes or interfaces.
+The Common pass asks each target for the wrapper's interface view. In the
+accepted production ABI, .NET uses the declaration-erased default type,
+matching Native and JS/Wasm. Logical type arguments and substitutions remain
+authoritative in IR/KLIB; the existing generic-interface lowering supplies the
+canonical erased slot and any independently truthful physical bridge. SAM
+conversion does not reopen the accepted erased identity of Kotlin-owned
+generic classes or interfaces.
+
+The production-inert generic-owner rehearsal has one bounded extension to this
+rule. When the same compilation has admitted a Kotlin-owned SAM interface as a
+natural CLR-generic TypeDef, or a separate producer has published that exact
+admission, the Common wrapper may acquire fresh invariant physical binders. A
+wrapper for `Sink<in T>` is then conceptually:
+
+```text
+private sealed sam$Sink<W> : Sink<W>, FunctionAdapter
+```
+
+The wrapper remains the one Common-generated conversion object with one raw
+`FunctionN` field. It is not a proxy or a second logical interface identity.
+Every constructor use closes `W` from the original exact SAM operand, so one
+cached wrapper definition can truthfully serve `Sink<object>`, `Sink<string>`,
+`Sink<int>`, and an open caller MethodDef argument without fabricating a common
+construction. The wrapper parameter is invariant even when the implemented
+interface parameter is variant: it names the wrapper's exact physical
+construction rather than advertising another variance conversion.
+
+This extension is enabled only by the generic-owner rehearsal and currently
+accepts the deliberately bounded one-parameter, unconstrained, direct-callable
+shape. The accepted erased production wrapper is unchanged. Wider bounds,
+multiple parameters, inherited SAM families, projections, or an operand which
+does not provide an exact verifier-nameable construction remain unproved and
+must fail closed rather than fall back to a plausible generic edge.
 
 ## Wrapper equality and runtime capability
 
@@ -73,6 +104,15 @@ capability, then compares the underlying function delegates; `hashCode`
 delegates to the same value. Distinct lambda objects therefore remain
 distinct, while conversions of function values and references retain the
 shared lowering's established equality behavior.
+
+For a rehearsal-generic wrapper, “the same SAM interface” is a classifier
+check, not an exact constructed-interface check. Otherwise legal conversions
+of one function value to `Sink<object>` and `Sink<string>` could compare
+asymmetrically under CLR contravariance. The selected equality view may choose
+the compiler semantic capability or another truthful classifier-only form; it
+must never claim that `Sink<W>` is the only logical construction accepted by
+wrapper equality. This affects only the guard before the existing
+`FunctionAdapter` delegate comparison.
 
 `FunctionAdapter` is a metadata-public, non-generic interface in
 `Kotlin.Runtime.Internal`, because generated wrappers live in arbitrary user
@@ -135,8 +175,12 @@ The producer KLIB records the fun-interface declaration and logical abstract
 method exactly as other targets do. The producer DLL records the ordinary
 interface owner and member binding. A consumer which performs a SAM conversion
 generates its wrapper in the consumer assembly and binds its implemented slot
-through the producer's self-describing physical ABI. No wrapper TypeDef,
-constructor name, or private field crosses the library boundary.
+through the producer's self-describing physical ABI. In the generic-owner
+rehearsal, producer-recorded natural TypeDef, MethodDef, variance, and callable
+policy are the only authority for giving that consumer-local wrapper a
+physical binder. The consumer does not repeat admission from the logical KLIB
+or infer it from the wrapper name. No wrapper TypeDef, constructor name, or
+private field crosses the library boundary.
 
 An inline producer body may contain a logical conversion in serialized IR.
 After inlining, the consuming compilation runs the same Common SAM lowering
@@ -180,6 +224,8 @@ including:
   references, receiver adaptation, and exactly-once evaluation;
 - nullable conversion, primitive parameters/results, generic fun interfaces,
   inheritance, default members, and suspend abstract methods;
+- the rehearsal-only invariant wrapper binder, exact closed and caller-
+  MethodDef constructions, and the unchanged erased-production inverse;
 - wrapper equality/hash behavior and negative cross-interface equality;
 - `is`/`as` through the ordinary interface identity;
 - physical absence of a CLR delegate base or extra public wrapper TypeDef;

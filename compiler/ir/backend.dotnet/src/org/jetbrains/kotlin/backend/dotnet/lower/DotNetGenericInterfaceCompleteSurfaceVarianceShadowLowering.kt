@@ -42,6 +42,8 @@ import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.expressions.IrTypeOperator
+import org.jetbrains.kotlin.ir.expressions.IrTypeOperatorCall
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
@@ -61,6 +63,56 @@ internal data class DotNetGenericInterfaceCompleteSurfaceAnalysis(
 )
 
 /**
+ * Freezes interface-only physical authority before target-generated implementation owners are
+ * built. The same analysis is repeated after class planning; every plan consumed in between must
+ * remain byte-for-byte equivalent at that later authority epoch.
+ */
+internal class DotNetEarlyGenericInterfaceCompleteSurfaceAuthorityLowering(
+    private val context: DotNetBackendContext,
+) : ModuleLoweringPass {
+    override fun lower(irModule: IrModuleFragment) {
+        check(!context.preSamGenericInterfaceNaturalAuthorityAnalysisCompleted) {
+            "Internal .NET backend error: pre-SAM natural-interface authority ran more than once"
+        }
+        check(context.earlyAdmittedGenericSamNaturalAuthorityPlans.isEmpty()) {
+            "Internal .NET backend error: pre-SAM natural-interface authority had pre-existing output"
+        }
+        val analysis = DotNetGenericInterfaceCompleteSurfaceVarianceShadowLowering(context)
+            .analyze(irModule)
+        val referencedSamInterfaces = linkedSetOf<IrClassSymbol>()
+        irModule.acceptVoid(object : IrVisitorVoid() {
+            override fun visitElement(element: IrElement) {
+                element.acceptChildrenVoid(this)
+            }
+
+            override fun visitTypeOperator(expression: IrTypeOperatorCall) {
+                if (expression.operator == IrTypeOperator.SAM_CONVERSION) {
+                    ((expression.typeOperand as? IrSimpleType)?.classifier as? IrClassSymbol)
+                        ?.let(referencedSamInterfaces::add)
+                }
+                expression.acceptChildrenVoid(this)
+            }
+        })
+        for (entry in analysis.authorityPlans.entries) {
+            val symbol = entry.key
+            val plan = entry.value
+            if (symbol !in referencedSamInterfaces) continue
+            val admitted = symbol.owner.dotNetDirectCallableNaturalAuthorityPlanOrNull(
+                context,
+                analysis.authorityPlans,
+            )
+            if (admitted != null) {
+                check(admitted.hasSameFrozenAuthorityAs(plan)) {
+                    "Internal .NET backend error: early SAM admission changed complete-natural authority"
+                }
+                context.earlyAdmittedGenericSamNaturalAuthorityPlans[symbol] = admitted
+            }
+        }
+        context.preSamGenericInterfaceNaturalAuthorityAnalysisCompleted = true
+    }
+}
+
+/**
  * Computes the proposed variance of one complete natural CLR interface without changing IR.
  *
  * This phase deliberately runs before the current declared/exact interface split. It observes
@@ -76,6 +128,9 @@ internal class DotNetGenericInterfaceCompleteSurfaceVarianceShadowLowering(
         context.externalDeclarationsForLowering()
 
     override fun lower(irModule: IrModuleFragment) {
+        check(context.earlyGenericInterfaceCompleteNaturalAuthorityAnalysisCompleted) {
+            "Internal .NET backend error: final complete-surface analysis preceded early authority"
+        }
         check(!context.genericInterfaceCompleteSurfaceVarianceShadowAnalysisCompleted) {
             "Internal .NET backend error: complete-surface variance shadow ran more than once"
         }

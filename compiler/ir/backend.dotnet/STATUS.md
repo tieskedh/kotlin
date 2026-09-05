@@ -22,8 +22,7 @@ ADRs, and dated evidence in [`docs/archive`](docs/archive/README.md).
 The detailed checkpoint evidence and the disposition of earlier bounded proofs
 are in the
 [2026-09-05 consolidation archive](docs/archive/generic-owner-physical-authority-consolidation-2026-09-05.md).
-The immediately preceding nested-result correction is recorded in the
-[2026-09-03 archive](docs/archive/generic-owner-nested-variant-result-correction-2026-09-03.md).
+Current representation rules are linked from the navigation section below.
 
 ## Production contract
 
@@ -47,24 +46,30 @@ The immediately preceding nested-result correction is recorded in the
 
 ## Latest verification
 
-The focused ABI-69 direct-callable gate completed on 2026-09-05. It admits a
-declaration-independent natural result over an ordered strict owner-input
-vector without a declaration- or stdlib-specific role. The separately compiled
-`StrictOrder<T>.compare(T,T): Int` proof passed PSI and LightTree on .NET 10 and
-Framework 4.8 in both candidate and production-erased inverse modes: four
-suites and four tests per mode, with zero failures, errors, or skips. It also
-proved ordinary C# implementation, direct unboxed exact/generic calls, one
-`StrictOrder<!T>` delegate field and one receiver identity. The directly
-affected backend gate passed 48 tests with zero failures, errors, or skips.
+The focused ABI-69 generic-SAM-wrapper gate completed on 2026-09-05. A
+Common-generated implementation of an admitted CLR-generic SAM interface now
+owns one invariant physical binder, closes each use from the exact conversion
+operand, and retains classifier-based Common equality. The separately compiled
+`Sink<in T>` fixture passed PSI and LightTree on .NET 10 and Framework 4.8 in
+both candidate and production-erased inverse modes: four suites and four tests
+per mode, with zero failures, errors, or skips. The physical checks cover local
+and producer-recorded interface authority, `object`, `string`, value-type, and
+caller-MethodDef constructions, one raw `FunctionN` field, and no fabricated
+interface edge. The lasting rules are in the
+[fun-interface decision](docs/decisions/fun-interfaces.md) and
+[generic-interface draft](docs/decisions/draft-adr-reified-generic-interface-owner.md).
 
-The source-built Runtime/Stdlib census advanced past the former `Comparator`
-natural-MethodDef admission mismatch. Its next identical four-lane failure is
-the generated arity-zero SAM owner `kotlin.collections.sam$kotlin_Comparator$0`
-attempting to instantiate `Comparator<!0>` without a physical owner-parameter
-substitution. This later failure is not part of the direct-callable feature.
+The source-built Runtime/Stdlib integration tests
+`DotNetLibraryIntegrationTest.testProducesNet48StdlibDll` and
+`testProducesNet10StdlibDll` also pass. They prove source production through
+DLL assembly on both profiles, and the former generated
+`kotlin.collections.sam$kotlin_Comparator$0` missing-binder failure is absent in
+those lanes. They do not by themselves prove the complete census or semantic
+execution corpus.
 
-The latest full ABI-69/schema-22 aggregate gate completed on 2026-09-05.
-Direct JUnit XML audit of the production-erased aggregate found 212 suites and
+The latest full target-wide checkpoint remains the ABI-69/schema-22 aggregate
+completed on 2026-09-05; it predates the bounded generic-SAM-wrapper slice.
+Direct JUnit XML audit of that production-erased aggregate found 212 suites and
 2,813 tests, with zero failures, errors, or skips:
 
 | Root | Suites | Tests |
@@ -89,16 +94,11 @@ and commands are preserved in the consolidation archive.
 
 ## Active work
 
-Resume the source-built Runtime/Stdlib generic-owner rehearsal census within
-phase 1 of the way forward. The next real failure selects the next structural
-provenance, placement, operation, or state rule. Do not add declaration,
-package, collection, `Map`, member-name, IR-origin, or stdlib exceptions.
-
-The immediate failure is the generated Comparator SAM owner described above.
-Determine whether the generated class must retain a proven construction from
-its captured callable, acquire a truthful physical binder, or remain blocked;
-an arity-zero TypeDef must never publish an interface edge containing a
-nonexistent `!0`.
+Resume the source-built Runtime/Stdlib generic-owner rehearsal census beyond
+the closed generated-SAM-owner case within phase 1 of the way forward. The next
+real failure selects the next structural provenance, placement, operation, or
+state rule. Do not add declaration, package, collection, `Map`, member-name,
+IR-origin, or stdlib exceptions.
 
 The next slice must preserve ordinary C# overrides and implementations: hidden
 semantic compiler ABI cannot become a second source-level obligation. It must
