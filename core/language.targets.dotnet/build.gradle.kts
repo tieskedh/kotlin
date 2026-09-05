@@ -1,4 +1,4 @@
-import org.jetbrains.kotlin.build.foreign.CheckForeignClassUsageTask
+import org.jetbrains.kotlin.build.foreign.registerForeignClassUsageTasks
 import org.jetbrains.kotlin.gradle.dsl.abi.ExperimentalAbiValidation
 
 plugins {
@@ -8,8 +8,6 @@ plugins {
     id("gradle-plugin-compiler-dependency-configuration")
     id("kotlin-git.gradle-build-conventions.foreign-class-usage-checker")
 }
-
-project.configureJvmToolchain(JdkMajorVersion.JDK_1_8)
 
 dependencies {
     api(kotlinStdlib())
@@ -26,6 +24,6 @@ sourceSets {
     "test" { none() }
 }
 
-val checkForeignClassUsage = tasks.register("checkForeignClassUsage", CheckForeignClassUsageTask::class) {
+registerForeignClassUsageTasks {
     outputFile = file("api/language-targets-dotnet-api.foreign")
 }
