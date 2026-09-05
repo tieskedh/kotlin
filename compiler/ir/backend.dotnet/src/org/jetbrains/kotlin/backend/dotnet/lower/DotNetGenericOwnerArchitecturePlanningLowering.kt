@@ -70,6 +70,7 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetPhysicalValueStableName
 import org.jetbrains.kotlin.backend.dotnet.genericOwnerDeclarationIndependentLeafPrototypeOrNull
 import org.jetbrains.kotlin.backend.dotnet.genericOwnerPrototypePhysicalGenericParameters
 import org.jetbrains.kotlin.backend.dotnet.genericOwnerPrototypeStateType
+import org.jetbrains.kotlin.backend.dotnet.hasSameFrozenAuthorityAs
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericClassDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericInterfaceDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetComparableClass
@@ -316,16 +317,31 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 "Internal .NET backend error: local generic interface '${declaration.name}' was indexed twice"
             }
         }
-        check(context.earlyGenericInterfaceCompleteNaturalAuthorityPlans.isEmpty()) {
+        check(context.preSamGenericInterfaceNaturalAuthorityAnalysisCompleted) {
+            "Internal .NET backend error: generic-owner planning preceded pre-SAM interface authority"
+        }
+        check(context.earlyGenericInterfaceCompleteNaturalAuthorityPlans.isEmpty() &&
+                !context.earlyGenericInterfaceCompleteNaturalAuthorityAnalysisCompleted
+        ) {
             "Internal .NET backend error: early natural-interface authority was planned more than once"
         }
         if (context.configuration.dotNetGenericOwnerRehearsal) {
             val earlyInterfaceAnalysis = DotNetGenericInterfaceCompleteSurfaceVarianceShadowLowering(context)
                 .analyze(irModule)
+            for (entry in context.earlyAdmittedGenericSamNaturalAuthorityPlans.entries) {
+                val symbol = entry.key
+                val preSamPlan = entry.value
+                val earlyPlan = earlyInterfaceAnalysis.authorityPlans[symbol]
+                check(earlyPlan != null && preSamPlan.hasSameFrozenAuthorityAs(earlyPlan)) {
+                    "Internal .NET backend error: pre-SAM natural-interface authority changed " +
+                            "before generic-class planning for '${symbol.owner.name}'"
+                }
+            }
             context.earlyGenericInterfaceCompleteNaturalAuthorityPlans.putAll(
                 earlyInterfaceAnalysis.authorityPlans,
             )
         }
+        context.earlyGenericInterfaceCompleteNaturalAuthorityAnalysisCompleted = true
         val producerAccesses = producerFunctions.associateWithTo(linkedMapOf()) { function ->
             function.collectDirectAccesses(producerFunctions)
         }
@@ -337,6 +353,15 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             context.genericOwnerArchitecturePlans[owner] = plan(owner, producerAccesses, initializerAccesses)
         }
         linkDetachedOverrideFamilies(producerAccesses, initializerAccesses, constructionSites)
+        for (entry in context.genericSamWrapperNaturalInterfaces.entries) {
+            val wrapper = entry.key
+            val interfaceSymbol = entry.value
+            val wrapperPlan = context.genericOwnerArchitecturePlans[wrapper]
+            check(wrapperPlan?.isReifiedByGenericOwnerRehearsal == true) {
+                "Generic SAM wrapper '${wrapper.name}' for '${interfaceSymbol.owner.name}' has no " +
+                        "complete verifier-visible CLR construction plan"
+            }
+        }
         val callRoutes = GenericOwnerCallRouteAnalyzer(
             producerFunctions = producerFunctions,
             producerInitializers = producerInitializers,
@@ -2461,8 +2486,17 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             val delegatedOwner = delegated?.parent as? IrClass
             DotNetGenericOwnerConstructorPlan(
                 source = constructor,
-                logicalBindingKey = context.preLoweringDeclarationKeys[constructor]
-                    ?: constructor.dotNetLibraryAbiKeyOrNull("F"),
+                // Local/generated implementation owners never publish a constructor ABI. In
+                // particular, a generated SAM wrapper deliberately stores Common's raw
+                // FunctionN carrier, whose logical default type still mentions FunctionN's own
+                // external parameters. Asking the Kotlin mangler to invent a cross-module key
+                // for that private constructor is both unnecessary and ill-scoped.
+                logicalBindingKey = if (owner.isNonAbiGenericOwnerImplementation()) {
+                    null
+                } else {
+                    context.preLoweringDeclarationKeys[constructor]
+                        ?: constructor.dotNetLibraryAbiKeyOrNull("F")
+                },
                 parameterSlotDomains = constructor.parameters.map { parameter ->
                     if (parameter.type.referencesGenericOwnerParameter(owner)) {
                         DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT

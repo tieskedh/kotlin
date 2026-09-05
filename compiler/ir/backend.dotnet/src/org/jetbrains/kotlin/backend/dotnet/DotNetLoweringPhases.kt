@@ -74,6 +74,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetValueClassImplementationS
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetValueClassBoxingHelpersLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetGenericInterfaceBridgeLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetGenericInterfaceCompleteSurfaceVarianceShadowLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetEarlyGenericInterfaceCompleteSurfaceAuthorityLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetLocalGenericOwnerPhysicalAuthorityLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetGenericOwnerArchitecturePlanningLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetGenericOwnerFinalRoutingLowering
@@ -185,6 +186,9 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     ::DotNetInventNamesForLocalClasses,
     ::DotNetAnonymousObjectSuperConstructorLowering,
     ::DotNetCallableReferenceLowering,
+    // Freeze interface-only physical authority before generated implementation owners choose
+    // their binders. The identical analysis is repeated after class planning and must agree.
+    ::DotNetEarlyGenericInterfaceCompleteSurfaceAuthorityLowering,
     // JVM/Native ownership: callable references first become the established Kotlin FunctionN
     // object, then Common replaces the preserved SAM_CONVERSION with an ordinary wrapper class.
     // Kotlin fun interfaces remain Kotlin interfaces; CLR delegates are an explicit export concern.

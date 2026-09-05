@@ -19,6 +19,7 @@ import org.jetbrains.kotlin.ir.IrStatement
 import org.jetbrains.kotlin.ir.builders.*
 import org.jetbrains.kotlin.ir.builders.declarations.*
 import org.jetbrains.kotlin.ir.declarations.*
+import org.jetbrains.kotlin.ir.expressions.IrConstructorCall
 import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrGetValue
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperator
@@ -88,6 +89,53 @@ abstract class SingleAbstractMethodLowering(val context: CommonBackendContext) :
 
     protected open fun postprocessCreatedObjectProxy(klass: IrClass) {}
 
+    /**
+     * Selects the supertype physically implemented by one cached SAM wrapper. A target may add
+     * wrapper-owned type parameters here; the hook runs after [IrClass.parent] is set but before
+     * the wrapper receiver and members are created.
+     */
+    protected open fun configureCreatedObjectProxySuperType(
+        klass: IrClass,
+        superType: IrType,
+    ): IrType = superType
+
+    /** Maps a SAM member type into the physical wrapper supertype selected above. */
+    protected open fun remapCreatedObjectProxyMemberType(
+        klass: IrClass,
+        superType: IrType,
+        type: IrType,
+    ): IrType = type
+
+    /** Selects the classifier view used by generated SAM equality. */
+    protected open fun getCreatedObjectProxyEqualityType(
+        klass: IrClass,
+        superType: IrType,
+    ): IrType = superType
+
+    /** Selects the expression carrier returned by one use of the cached wrapper. */
+    protected open fun getCreatedObjectProxyResultType(
+        klass: IrClass,
+        typeOperand: IrType,
+        defaultType: IrType,
+    ): IrType = defaultType
+
+    /** Closes one constructor use of a cached SAM wrapper over its original operand type. */
+    protected open fun configureCreatedObjectProxyConstructorCall(
+        call: IrConstructorCall,
+        klass: IrClass,
+        typeOperand: IrType,
+    ) {}
+
+    /**
+     * Whether a non-trivial callable expression needs the JVM-inliner-safe temporary described at
+     * the use site below. Targets whose callable lowering is already final may keep the expression
+     * directly inside the wrapper constructor call.
+     */
+    protected open fun requiresCreatedObjectProxyArgumentTemporary(
+        klass: IrClass,
+        invokable: IrExpression,
+    ): Boolean = invokable !is IrGetValue
+
     override fun lower(irFile: IrFile) {
         cachedImplementations.clear()
         inlineCachedImplementations.clear()
@@ -132,25 +180,34 @@ abstract class SingleAbstractMethodLowering(val context: CommonBackendContext) :
                 createObjectProxy(erasedSuperType, getWrapperVisibility(expression, allScopes), expression)
             }
 
-            return if (superType.isNullable() && invokable.type.isNullable()) {
-                irBlock(invokable, null, superType) {
+            val resultType = getCreatedObjectProxyResultType(implementation, expression.typeOperand, superType)
+
+            return if (resultType.isNullable() && invokable.type.isNullable()) {
+                irBlock(invokable, null, resultType) {
                     val invokableVariable = createTmpVariable(invokable)
-                    val instance = irCall(implementation.constructors.single()).apply {
+                    val instance = irCall(implementation.constructors.single().symbol).apply {
                         arguments[0] = irGet(invokableVariable)
+                        configureCreatedObjectProxyConstructorCall(this, implementation, expression.typeOperand)
                     }
-                    +irIfNull(superType, irGet(invokableVariable), irNull(), instance)
+                    +irIfNull(resultType, irGet(invokableVariable), irNull(), instance)
                 }
-            } else if (invokable !is IrGetValue) {
+            } else if (requiresCreatedObjectProxyArgumentTemporary(implementation, invokable)) {
                 // Hack for the JVM inliner: since the SAM wrappers might be regenerated, avoid putting complex logic
                 // between the creation of the wrapper and the call of its `<init>`. `MethodInliner` tends to break
                 // otherwise, e.g. if the argument constructs an anonymous object, resulting in new-new-<init>-<init>.
                 // (See KT-21781 for a similar problem with anonymous object constructor arguments.)
-                irBlock(invokable, null, superType) {
+                irBlock(invokable, null, resultType) {
                     val invokableVariable = createTmpVariable(invokable)
-                    +irCall(implementation.constructors.single()).apply { arguments[0] = irGet(invokableVariable) }
+                    +irCall(implementation.constructors.single().symbol).apply {
+                        arguments[0] = irGet(invokableVariable)
+                        configureCreatedObjectProxyConstructorCall(this, implementation, expression.typeOperand)
+                    }
                 }
             } else {
-                irCall(implementation.constructors.single()).apply { arguments[0] = invokable }
+                irCall(implementation.constructors.single().symbol).apply {
+                    arguments[0] = invokable
+                    configureCreatedObjectProxyConstructorCall(this, implementation, expression.typeOperand)
+                }
             }
         }
     }
@@ -189,9 +246,12 @@ abstract class SingleAbstractMethodLowering(val context: CommonBackendContext) :
             visibility = wrapperVisibility
             setSourceRange(createFor)
         }.apply {
-            createThisReceiverParameter()
-            superTypes = listOf(superType) memoryOptimizedPlus getAdditionalSupertypes(superType)
             parent = enclosingContainer!!
+        }
+        val implementationSuperType = configureCreatedObjectProxySuperType(subclass, superType)
+        subclass.apply {
+            createThisReceiverParameter()
+            superTypes = listOf(implementationSuperType) memoryOptimizedPlus getAdditionalSupertypes(implementationSuperType)
         }
 
         val field = subclass.addField {
@@ -222,9 +282,14 @@ abstract class SingleAbstractMethodLowering(val context: CommonBackendContext) :
             }
         }
 
+        val implementationReturnType = remapCreatedObjectProxyMemberType(
+            subclass,
+            implementationSuperType,
+            superMethod.returnType,
+        )
         subclass.addFunction {
             name = superMethod.name
-            returnType = superMethod.returnType
+            returnType = implementationReturnType
             visibility = superMethod.visibility
             modality = Modality.FINAL
             origin = IrDeclarationOrigin.SYNTHETIC_GENERATED_SAM_IMPLEMENTATION
@@ -238,12 +303,35 @@ abstract class SingleAbstractMethodLowering(val context: CommonBackendContext) :
                 superType.classOrFail.owner.functions.firstOrNull { it.overrides(overriddenMethodOfAny) }?.symbol
             }
             parameters = (listOf(subclass.thisReceiver!!) + superMethod.nonDispatchParameters)
-                .memoryOptimizedMap { it.copyTo(this) }
+                .memoryOptimizedMap { parameter ->
+                    if (parameter === subclass.thisReceiver) {
+                        // The receiver already belongs to the generated class. Do not ask
+                        // copyTo to reinterpret class binders as method binders.
+                        parameter.copyTo(this, type = parameter.type)
+                    } else {
+                        // Preserve copyTo's source-to-target type-parameter remapping before a
+                        // backend refines the copied signature for its physical supertype.
+                        parameter.copyTo(this).also { copiedParameter ->
+                            copiedParameter.type = remapCreatedObjectProxyMemberType(
+                                subclass,
+                                implementationSuperType,
+                                copiedParameter.type,
+                            )
+                            copiedParameter.varargElementType = copiedParameter.varargElementType?.let { elementType ->
+                                remapCreatedObjectProxyMemberType(
+                                    subclass,
+                                    implementationSuperType,
+                                    elementType,
+                                )
+                            }
+                        }
+                    }
+                }
             body = context.createIrBuilder(symbol).irBlockBody {
                 +irReturn(
                     irCall(
                         getSuspendFunctionWithoutContinuation(wrappedFunctionClass.functions.single { it.name == OperatorNameConventions.INVOKE }).symbol,
-                        superMethod.returnType
+                        implementationReturnType
                     ).apply {
                         dispatchReceiver = irGetField(irGet(dispatchReceiverParameter!!), field)
                         nonDispatchParameters.forEachIndexed { index, parameter ->
@@ -253,8 +341,12 @@ abstract class SingleAbstractMethodLowering(val context: CommonBackendContext) :
             }
         }
 
-        if (superType.needEqualsHashCodeMethods)
-            generateEqualsHashCode(subclass, superType, field)
+        if (implementationSuperType.needEqualsHashCodeMethods)
+            generateEqualsHashCode(
+                subclass,
+                getCreatedObjectProxyEqualityType(subclass, implementationSuperType),
+                field,
+            )
 
         subclass.addFakeOverrides(
             context.typeSystem,

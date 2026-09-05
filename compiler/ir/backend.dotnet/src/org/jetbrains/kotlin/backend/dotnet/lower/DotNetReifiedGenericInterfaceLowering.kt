@@ -2647,34 +2647,11 @@ internal class DotNetReifiedGenericInterfaceLowering(
      * second combined representation rule.
      */
     private fun IrClass.completeNaturalDirectCallableAuthorityPlanOrNull():
-            DotNetGenericInterfaceCompleteNaturalAuthorityPlan? {
-        val plan = context.genericInterfaceCompleteSurfaceVarianceAuthorityPlans[symbol]
-            ?: return null
-        if (!hasFirstReifiedInterfaceOwnerShape() || parent !is IrFile ||
-            dotNetDirectInterfaceTypes().isNotEmpty() ||
-            plan.inventory.directPropertyAccessors.isNotEmpty() ||
-            plan.inventory.directParentTypes != superTypes
-        ) {
-            return null
-        }
-        val members = declaredInterfaceMembers()
-        if (members.isEmpty() ||
-            plan.inventory.directCallableMembers != members.map { member -> member.symbol } ||
-            members.map { member -> member.name }.distinct().size != members.size ||
-            members.any { member -> !member.isDirectOwnerInputIndependentResultMember(this) }
-        ) {
-            return null
-        }
-        val selected = plan.surfaceDecision.parameters.singleOrNull() ?: return null
-        if (plan.surfaceInput.logicalMaximumVariances != listOf(
-                typeParameters.single().variance.toDotNetGenericOwnerPhysicalTypeParameterVariance(),
-            ) || selected.index != 0 ||
-            selected.requiredPolarity != DotNetGenericInterfaceCompleteSurfacePolarity.IN
-        ) {
-            return null
-        }
-        return plan
-    }
+            DotNetGenericInterfaceCompleteNaturalAuthorityPlan? =
+        dotNetDirectCallableNaturalAuthorityPlanOrNull(
+            context,
+            context.genericInterfaceCompleteSurfaceVarianceAuthorityPlans,
+        )
 
     private fun IrClass.completeNaturalDependencyPlanOrNull():
             DotNetGenericInterfaceCompleteNaturalAuthorityPlan? {
@@ -3262,40 +3239,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
      * status, declaration names, packages, and stdlib ownership are irrelevant.
      */
     private fun IrSimpleFunction.isDirectOwnerInputIndependentResultMember(owner: IrClass): Boolean {
-        if (visibility != DescriptorVisibilities.PUBLIC || modality != Modality.ABSTRACT ||
-            body != null || this in context.interfaceDefaultImplementations ||
-            correspondingPropertySymbol != null || isSuspend || typeParameters.isNotEmpty() ||
-            parameters.firstOrNull()?.kind != IrParameterKind.DispatchReceiver ||
-            parameters.count { parameter -> parameter.kind == IrParameterKind.DispatchReceiver } != 1 ||
-            parameters.any { parameter ->
-                parameter.kind != IrParameterKind.DispatchReceiver &&
-                        parameter.kind != IrParameterKind.Regular
-            } ||
-            returnType.isMarkedNullable() ||
-            returnType.genericOwnerDeclarationIndependentLeafPrototypeOrNull() == null
-        ) {
-            return false
-        }
-        val inputs = parameters.filter { parameter -> parameter.kind == IrParameterKind.Regular }
-        if (inputs.isEmpty() || inputs.any { input ->
-                input.defaultValue != null || input.varargElementType != null
-            }
-        ) {
-            return false
-        }
-        var hasOwnerInput = false
-        for (input in inputs) {
-            val simple = input.type as? IrSimpleType
-            val parameter = (simple?.classifier as? IrTypeParameterSymbol)?.owner
-            if (parameter?.parent === owner && !simple.isMarkedNullable() &&
-                input.type.isLegalAtOwnerVariance(owner, TypePolarity.IN)
-            ) {
-                hasOwnerInput = true
-            } else if (input.type.genericOwnerDeclarationIndependentLeafPrototypeOrNull() == null) {
-                return false
-            }
-        }
-        return hasOwnerInput
+        return isDotNetDirectOwnerInputIndependentResultMember(context, owner)
     }
 
     /**

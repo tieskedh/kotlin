@@ -307,6 +307,53 @@ implicit completion of the natural implementation.
   admitted only after their complete natural and semantic families are
   deterministic across separate assemblies.
 
+## Generated implementation-owner binders
+
+A compiler-generated implementation class is subject to the same physical
+TypeDef rules as a source class. Every owner parameter referenced by its base,
+InterfaceImpl, field, or MethodDef signatures must be declared by that physical
+owner. An arity-zero generated TypeDef may not implement `I<!0>`, and a
+method-generic `!!0` can never supply a TypeDef-level interface edge.
+
+When one generated implementation definition must serve several exact
+constructions of an admitted natural interface, the generated class acquires
+fresh invariant physical binders. For the Common SAM-wrapper pattern this is:
+
+```text
+private sealed sam$Sink<W> : Sink<W>, FunctionAdapter
+```
+
+The binder belongs to the generated wrapper, not to the logical fun-interface
+declaration. The interface edge and generated member signatures substitute the
+producer-authoritative interface parameter with `W`. Every wrapper constructor
+use is then closed from the original exact SAM operand: a caller MethodDef's
+second parameter produces `sam$Sink<!!1>`, while closed operands produce their
+actual `object`, `string`, value-type, or other verifier-nameable argument. One
+cached wrapper TypeDef remains sufficient; choosing the first observed
+construction as its global representation is forbidden.
+
+Authority is established before the generated owner is built. A local
+interface uses the same bounded admission query later consumed by final
+interface materialization. A separately compiled interface uses its
+producer-recorded natural TypeDef, MethodDef, variance, and callable policy.
+Logical KLIB, a generated name, or the current conversion type cannot by itself
+prove that a reified interface exists. The later planner must consume and
+confirm the same authority; disagreement fails closed.
+
+Generated SAM equality retains Common's classifier-plus-`FunctionAdapter`
+semantics. Its classifier guard cannot be the exact `Sink<W>` construction:
+under CLR variance, two wrappers over the same function could otherwise compare
+asymmetrically. A star or semantic classifier view may guard the delegate
+comparison only when that view is already guaranteed; it does not fabricate a
+natural construction.
+
+This rule does not introduce a representation-repair proxy or shadow state.
+The SAM wrapper is the conversion object already required by Common lowering
+and keeps its single raw `FunctionN` field. The current executable proof is
+deliberately bounded to one unconstrained interface parameter and the admitted
+direct-callable SAM shape. More parameters, bounds, inherited SAM families,
+projections, and non-exact construction arguments remain unproved.
+
 ## Callable contracts and split-nullable results
 
 Parameter policies and result layout are independent components of the shared
@@ -451,8 +498,9 @@ Framework 4.8, .NET 10, separate assemblies, trimming, and NativeAOT:
 11. Kotlin/C#, C#/Kotlin, defaults, diamonds, and deeper inheritance preserve
     MethodDef/MethodImpl authority;
 12. ordinary C# overrides are observed through widened Kotlin routes;
-13. no runtime public-name/arity fallback, proxy, wrapper, or shadow state is
-    present;
+13. no runtime public-name/arity fallback, representation-repair proxy or
+    wrapper, or shadow state is present; a Common-required SAM conversion
+    wrapper remains permitted under the generated-owner rule above;
 14. schema mismatch and partial old/new interface families fail closed; and
 15. the exact erased-production inverse produces the pre-rehearsal surface.
 

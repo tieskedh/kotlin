@@ -256,6 +256,16 @@ internal class DotNetBackendContext(
      */
     val earlyGenericInterfaceCompleteNaturalAuthorityPlans:
         MutableMap<IrClassSymbol, DotNetGenericInterfaceCompleteNaturalAuthorityPlan> = linkedMapOf()
+    /** The ordinary pre-class-planning representation epoch ran, even with no candidate. */
+    var earlyGenericInterfaceCompleteNaturalAuthorityAnalysisCompleted: Boolean = false
+    /** The narrower pre-SAM epoch ran, even when no conversion consumed its output. */
+    var preSamGenericInterfaceNaturalAuthorityAnalysisCompleted: Boolean = false
+    /** Bounded subset a generated implementation owner may consume before final admission. */
+    val earlyAdmittedGenericSamNaturalAuthorityPlans:
+        MutableMap<IrClassSymbol, DotNetGenericInterfaceCompleteNaturalAuthorityPlan> = linkedMapOf()
+    /** Generated SAM implementation owners which consumed one exact natural interface binder. */
+    val genericSamWrapperNaturalInterfaces: MutableMap<IrClass, IrClassSymbol> =
+        java.util.IdentityHashMap()
     val consumedEarlyGenericInterfaceNaturalAuthorityPlans: MutableSet<IrClassSymbol> = linkedSetOf()
     /** Explicitly admitted subset populated later by bounded reified-interface admission only. */
     val admittedGenericInterfaceCompleteNaturalAuthorityPlans:
