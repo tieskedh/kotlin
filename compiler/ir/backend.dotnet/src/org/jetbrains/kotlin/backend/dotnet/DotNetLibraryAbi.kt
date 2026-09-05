@@ -1424,7 +1424,9 @@ object DotNetLibraryAbiCodec {
         return declarations.toSortedMap().mapKeys { entry ->
             DECLARATION_PROPERTY_PREFIX + encodeText(entry.key)
         }.mapValues { entry ->
-            val declaration = entry.value
+            val declaration = requireNotNull(entry.value) {
+                "physical ABI declaration '${entry.key}' cannot be null"
+            }
             val fields = when (declaration) {
                 is DotNetPhysicalDeclaration.Class -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.Function -> declaration.encodeFields()
