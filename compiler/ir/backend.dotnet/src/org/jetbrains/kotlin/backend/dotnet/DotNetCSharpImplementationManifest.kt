@@ -18,6 +18,7 @@ import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.util.fileOrNull
+import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.isFakeOverride
 import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.isPublishedApi
@@ -990,24 +991,38 @@ internal fun collectDotNetCSharpImplementationManifest(
             val unsupportedReasons = buildList {
                 directSuperInterfaces.forEach { superType ->
                     val superInterface = (superType.classifier as? IrClassSymbol)?.owner
+                    val physicalSuperType = typeMapper.canonicalGenericInterfaceSignatureView()
+                        .toDotNetIlImplementedInterfaceType(superType)
+                    val physicalSuperClassInfo = when (physicalSuperType) {
+                        is DotNetIlValueType.UserClass -> physicalSuperType.classInfo
+                        is DotNetIlValueType.GenericInstance -> physicalSuperType.classInfo
+                        else -> null
+                    }
                     val isSameAssemblyParent =
                         superInterface in availableClasses && superInterface?.fileOrNull in files
-                    val externalParentAssembly = superInterface
-                        ?.let(typeMapper::classInfoOrNull)
-                        ?.assemblyName
+                    val externalParentAssembly = physicalSuperClassInfo?.assemblyName
                     val isExternalKotlinLibraryParent = externalLibraries.any { library ->
                         library.artifact.assemblyName.equals(externalParentAssembly, ignoreCase = true)
                     }
                     val isRuntimeManifestParent =
-                        superInterface?.let(DotNetRuntimeTypes::supportsCSharpInheritedSourceAuthoring) == true
+                        superInterface?.let { runtimeInterface ->
+                            DotNetRuntimeTypes.supportsCSharpInheritedSourceAuthoring(
+                                runtimeInterface,
+                                physicalSuperClassInfo,
+                            )
+                        } == true
                     if (
                         !isSameAssemblyParent &&
                         !isExternalKotlinLibraryParent &&
                         !isRuntimeManifestParent
                     ) {
                         add(
-                            "non-library inherited interface contracts are not supported " +
-                                    "by the first C# authoring schema"
+                            "non-library inherited interface contract '" +
+                                    (superInterface?.fqNameWhenAvailable?.asString()
+                                        ?: superInterface?.name?.asString()
+                                        ?: superType.toString()) +
+                                    "' (assembly=${externalParentAssembly ?: "<unknown>"}) is not " +
+                                    "supported by the first C# authoring schema"
                         )
                     }
                 }

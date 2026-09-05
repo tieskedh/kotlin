@@ -1022,11 +1022,27 @@ internal object DotNetRuntimeTypes {
     fun supportsCSharpSourceAuthoring(irClass: IrClass): Boolean =
         DotNetClassifierInfo.derive(irClass).isCharSequence
 
-    /** Runtime interfaces whose ordinary CLR TypeDef fully exposes inherited C# obligations. */
-    fun supportsCSharpInheritedSourceAuthoring(irClass: IrClass): Boolean {
-        if (supportsCSharpSourceAuthoring(irClass)) return true
-        val info = genericInterfaceDescriptorFor(irClass)?.info ?: return false
-        return info.declaredClassInfo == null && info.exactClassInfo == null
+    /**
+     * Whether the actual CLR TypeDef selected for a Runtime super-interface exposes the complete
+     * inherited C# contract without a later generated interface adding another Runtime view.
+     *
+     * A split Runtime family is deliberately rejected even when the direct edge is canonical. A
+     * generated exact sibling can add that family's declared/exact closure afterwards, and the
+     * current authoring manifest has neither the preserved substitution nor the result-carrier
+     * guarantee needed to implement those additional MethodDefs without a cast or wrapper.
+     */
+    fun supportsCSharpInheritedSourceAuthoring(
+        irClass: IrClass,
+        physicalClassInfo: DotNetIlClassInfo?,
+    ): Boolean {
+        val expected = if (supportsCSharpSourceAuthoring(irClass)) {
+            charSequenceImplementationClassInfo(irClass)
+        } else {
+            val info = genericInterfaceDescriptorFor(irClass)?.info ?: return false
+            if (info.declaredClassInfo != null || info.exactClassInfo != null) return false
+            info.canonicalClassInfo
+        }
+        return physicalClassInfo != null && physicalClassInfo.ilTypeRef == expected?.ilTypeRef
     }
 
     /** The non-generic implementation capability for the classified CharSequence carrier. */
@@ -1164,7 +1180,10 @@ internal object DotNetRuntimeTypes {
         } ?: return null
         return DotNetIlFunctionInfo(
             owner = physicalOwner,
-            signature = function.dotNetSignature(typeMapper),
+            // This resolves a handwritten Runtime MethodDef just like the reflection bindings
+            // below. Its current signature is scalar-only, but the physical contract must remain
+            // canonical if a future Runtime member acquires a nested generic-interface carrier.
+            signature = function.dotNetSignature(typeMapper.canonicalGenericInterfaceSignatureView()),
             physicalMethodName = function.dotNetAbiMethodName(
                 isErasedGenericClass = typeMapper::isErasedGenericClass,
             ),
@@ -1182,12 +1201,17 @@ internal object DotNetRuntimeTypes {
     ): DotNetIlFunctionInfo? {
         val owner = function.parent as? IrClass ?: return null
         val ownerInfo = typeMapper.classifierInfo(owner)
+        // These MethodDefs already exist in Kotlin.Runtime. Their nested List/Map carriers are
+        // canonical physical identities even while the rehearsal makes those logical interfaces
+        // natural CLR generics elsewhere. Reconstructing a retained Runtime signature through the
+        // caller's default view would rewrite physical metadata from a later logical type.
+        val runtimeSignatureMapper = typeMapper.canonicalGenericInterfaceSignatureView()
         return when {
             owner.isDotNetBigArityFunctionN == true &&
                     function.dotNetIlMethodName() in setOf("Invoke", "get_arity") ->
                 DotNetIlFunctionInfo(
                     owner = bigArityFunctionClass,
-                    signature = function.dotNetSignature(typeMapper),
+                    signature = function.dotNetSignature(runtimeSignatureMapper),
                     physicalMethodName = function.dotNetIlMethodName(),
                 )
             owner.isDotNetFunctionReferenceBase == true &&
@@ -1203,7 +1227,7 @@ internal object DotNetRuntimeTypes {
                     ) + KFUNCTION_DECLARATION_GETTERS + KCALLABLE_DECLARATION_GETTERS ->
                 DotNetIlFunctionInfo(
                     owner = functionReferenceBase,
-                    signature = function.dotNetSignature(typeMapper),
+                    signature = function.dotNetSignature(runtimeSignatureMapper),
                     physicalMethodName = function.name.asString(),
                 )
             ownerInfo.runtimeKind == DotNetRuntimeClassifierKind.K_CALLABLE &&
@@ -1222,7 +1246,7 @@ internal object DotNetRuntimeTypes {
                     ) ->
                 DotNetIlFunctionInfo(
                     owner = kCallableBase,
-                    signature = function.dotNetSignature(typeMapper),
+                    signature = function.dotNetSignature(runtimeSignatureMapper),
                     physicalMethodName = function.dotNetIlMethodName(),
                 )
             ownerInfo.runtimeKind == DotNetRuntimeClassifierKind.K_VISIBILITY &&
@@ -1230,14 +1254,14 @@ internal object DotNetRuntimeTypes {
                     setOf("values", "valueOf", "get_entries", "<EnsureInitialized>") ->
                 DotNetIlFunctionInfo(
                     owner = kVisibilityClass,
-                    signature = function.dotNetSignature(typeMapper),
+                    signature = function.dotNetSignature(runtimeSignatureMapper),
                     physicalMethodName = function.dotNetIlMethodName(),
                 )
             ownerInfo.runtimeKind == DotNetRuntimeClassifierKind.K_FUNCTION &&
                     function.dotNetIlMethodName() in KFUNCTION_DECLARATION_GETTERS ->
                 DotNetIlFunctionInfo(
                     owner = kFunctionBase,
-                    signature = function.dotNetSignature(typeMapper),
+                    signature = function.dotNetSignature(runtimeSignatureMapper),
                     physicalMethodName = function.dotNetIlMethodName(),
                 )
             else -> null
@@ -1411,9 +1435,10 @@ internal object DotNetRuntimeTypes {
         typeMapper: DotNetIlTypeMapper,
         availableFunctions: MutableMap<IrSimpleFunction, DotNetIlFunctionInfo>,
     ) {
+        val runtimeSignatureMapper = typeMapper.canonicalGenericInterfaceSignatureView()
         availableFunctions[functionAdapter.getFunctionDelegate] = DotNetIlFunctionInfo(
             functionAdapterClass,
-            functionAdapter.getFunctionDelegate.dotNetSignature(typeMapper),
+            functionAdapter.getFunctionDelegate.dotNetSignature(runtimeSignatureMapper),
         )
         val enumBase = irBuiltIns.enumClass.owner
         val enumMembers = buildList {
@@ -1430,7 +1455,7 @@ internal object DotNetRuntimeTypes {
                 ?: error("Internal .NET backend error: kotlin.Function$arity has no invoke member")
             availableFunctions[invoke] = DotNetIlFunctionInfo(
                 fixedFunctionClasses[arity],
-                invoke.dotNetSignature(typeMapper),
+                invoke.dotNetSignature(runtimeSignatureMapper),
             )
         }
         for (propertyName in listOf(
@@ -1450,7 +1475,7 @@ internal object DotNetRuntimeTypes {
                 ?: error("Internal .NET backend error: kotlin.reflect.KCallable.$propertyName has no getter")
             availableFunctions[getter] = DotNetIlFunctionInfo(
                 kCallableBase,
-                getter.dotNetSignature(typeMapper),
+                getter.dotNetSignature(runtimeSignatureMapper),
             )
         }
         irBuiltIns.kCallableClass.owner.functions
@@ -1461,7 +1486,7 @@ internal object DotNetRuntimeTypes {
             .forEach { call ->
                 availableFunctions[call] = DotNetIlFunctionInfo(
                     kCallableBase,
-                    call.dotNetSignature(typeMapper),
+                    call.dotNetSignature(runtimeSignatureMapper),
                 )
             }
         irBuiltIns.kFunctionClass.owner.properties
@@ -1471,7 +1496,7 @@ internal object DotNetRuntimeTypes {
                     ?: error("Internal .NET backend error: kotlin.reflect.KFunction.${property.name} has no getter")
                 availableFunctions[getter] = DotNetIlFunctionInfo(
                     kFunctionBase,
-                    getter.dotNetSignature(typeMapper),
+                    getter.dotNetSignature(runtimeSignatureMapper),
                 )
             }
         val kProperty = irBuiltIns.kPropertyClass.owner
@@ -1482,7 +1507,7 @@ internal object DotNetRuntimeTypes {
                 ?: continue
             availableFunctions[getter] = DotNetIlFunctionInfo(
                 kPropertyBase,
-                getter.dotNetSignature(typeMapper),
+                getter.dotNetSignature(runtimeSignatureMapper),
             )
         }
         kProperty.declarations.filterIsInstance<IrClass>()
@@ -1493,7 +1518,7 @@ internal object DotNetRuntimeTypes {
             ?.let { getter ->
                 availableFunctions[getter] = DotNetIlFunctionInfo(
                     kPropertyAccessorBase,
-                    getter.dotNetSignature(typeMapper),
+                    getter.dotNetSignature(runtimeSignatureMapper),
                 )
             }
         val kMutableProperty = irBuiltIns.kMutableProperty0Class.owner.superTypes
@@ -1507,7 +1532,7 @@ internal object DotNetRuntimeTypes {
             ?.let { getter ->
                 availableFunctions[getter] = DotNetIlFunctionInfo(
                     kMutablePropertyBase,
-                    getter.dotNetSignature(typeMapper),
+                    getter.dotNetSignature(runtimeSignatureMapper),
                 )
             }
         for (arity in 0..2) {
@@ -1517,7 +1542,7 @@ internal object DotNetRuntimeTypes {
                 ?.let { getter ->
                     availableFunctions[getter] = DotNetIlFunctionInfo(
                         fixedPropertyClasses[arity],
-                        getter.dotNetSignature(typeMapper),
+                        getter.dotNetSignature(runtimeSignatureMapper),
                     )
                 }
             irBuiltIns.getKPropertyClass(mutable = true, n = arity).owner.properties
@@ -1526,7 +1551,7 @@ internal object DotNetRuntimeTypes {
                 ?.let { getter ->
                     availableFunctions[getter] = DotNetIlFunctionInfo(
                         fixedMutablePropertyClasses[arity],
-                        getter.dotNetSignature(typeMapper),
+                        getter.dotNetSignature(runtimeSignatureMapper),
                     )
                 }
         }
@@ -1536,7 +1561,7 @@ internal object DotNetRuntimeTypes {
                 ?: error("Internal .NET backend error: kotlin.reflect.KClass.$propertyName has no getter")
             availableFunctions[getter] = DotNetIlFunctionInfo(
                 kClassBase,
-                getter.dotNetSignature(typeMapper),
+                getter.dotNetSignature(runtimeSignatureMapper),
             )
         }
         val kAnnotatedElement = kClass.superTypes
@@ -1554,7 +1579,7 @@ internal object DotNetRuntimeTypes {
                 ?: error("Internal .NET backend error: kotlin.reflect.KAnnotatedElement.annotations has no getter")
             availableFunctions[annotationsGetter] = DotNetIlFunctionInfo(
                 kAnnotatedElementBase,
-                annotationsGetter.dotNetSignature(typeMapper),
+                annotationsGetter.dotNetSignature(runtimeSignatureMapper),
             )
         }
         val kDeclarationContainer = kClass.superTypes
@@ -1570,7 +1595,7 @@ internal object DotNetRuntimeTypes {
                 ?: error("Internal .NET backend error: kotlin.reflect.KClass.members has no getter")
             availableFunctions[kClassMembersGetter] = DotNetIlFunctionInfo(
                 kClassBase,
-                kClassMembersGetter.dotNetSignature(typeMapper),
+                kClassMembersGetter.dotNetSignature(runtimeSignatureMapper),
             )
             val membersGetter = kDeclarationContainer.properties
                 .single { property -> property.name.asString() == "members" }
@@ -1578,13 +1603,13 @@ internal object DotNetRuntimeTypes {
                 ?: error("Internal .NET backend error: kotlin.reflect.KDeclarationContainer.members has no getter")
             availableFunctions[membersGetter] = DotNetIlFunctionInfo(
                 kDeclarationContainerBase,
-                membersGetter.dotNetSignature(typeMapper),
+                membersGetter.dotNetSignature(runtimeSignatureMapper),
             )
         }
         val isInstance = kClass.functions.single { function -> function.name.asString() == "isInstance" }
         availableFunctions[isInstance] = DotNetIlFunctionInfo(
             kClassBase,
-            isInstance.dotNetSignature(typeMapper),
+            isInstance.dotNetSignature(runtimeSignatureMapper),
         )
         val kType = irBuiltIns.kTypeClass.owner
         for (propertyName in listOf("classifier", "arguments", "isMarkedNullable")) {
@@ -1592,7 +1617,7 @@ internal object DotNetRuntimeTypes {
                 ?: error("Internal .NET backend error: kotlin.reflect.KType.$propertyName has no getter")
             availableFunctions[getter] = DotNetIlFunctionInfo(
                 kTypeBase,
-                getter.dotNetSignature(typeMapper),
+                getter.dotNetSignature(runtimeSignatureMapper),
             )
         }
         for (arity in fixedPropertyClasses.indices) {
@@ -1600,31 +1625,31 @@ internal object DotNetRuntimeTypes {
                 .single { it.name.asString() == "get" }
             availableFunctions[get] = DotNetIlFunctionInfo(
                 fixedPropertyClasses[arity],
-                get.dotNetSignature(typeMapper),
+                get.dotNetSignature(runtimeSignatureMapper),
             )
             val set = irBuiltIns.getKPropertyClass(mutable = true, arity).owner.functions
                 .single { it.name.asString() == "set" }
             availableFunctions[set] = DotNetIlFunctionInfo(
                 fixedMutablePropertyClasses[arity],
-                set.dotNetSignature(typeMapper),
+                set.dotNetSignature(runtimeSignatureMapper),
             )
         }
         propertyReferenceFactoryFunctions.forEach { factory ->
             availableFunctions[factory] = DotNetIlFunctionInfo(
                 propertyReferenceFactory,
-                factory.dotNetSignature(typeMapper),
+                factory.dotNetSignature(runtimeSignatureMapper),
             )
         }
         memberReferenceFactoryFunctions.forEach { factory ->
             availableFunctions[factory] = DotNetIlFunctionInfo(
                 memberReferenceFactory,
-                factory.dotNetSignature(typeMapper),
+                factory.dotNetSignature(runtimeSignatureMapper),
             )
         }
         callableAnnotationFactoryFunctions.forEach { factory ->
             availableFunctions[factory] = DotNetIlFunctionInfo(
                 callableAnnotationFactory,
-                factory.dotNetSignature(typeMapper),
+                factory.dotNetSignature(runtimeSignatureMapper),
             )
         }
     }

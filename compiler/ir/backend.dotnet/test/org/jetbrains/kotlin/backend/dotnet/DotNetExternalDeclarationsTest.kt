@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.backend.dotnet.lower.requiresProducerRecordedGenericOwnerConstructorMethodDef
 import org.jetbrains.kotlin.builtins.DefaultBuiltIns
 import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
@@ -13,6 +14,7 @@ import org.jetbrains.kotlin.descriptors.impl.ModuleDescriptorImpl
 import org.jetbrains.kotlin.ir.builders.declarations.addTypeParameter
 import org.jetbrains.kotlin.ir.builders.declarations.addValueParameter
 import org.jetbrains.kotlin.ir.builders.declarations.buildClass
+import org.jetbrains.kotlin.ir.builders.declarations.buildConstructor
 import org.jetbrains.kotlin.ir.builders.declarations.buildFun
 import org.jetbrains.kotlin.ir.declarations.createEmptyExternalPackageFragment
 import org.jetbrains.kotlin.ir.declarations.impl.IrFactoryImpl
@@ -242,6 +244,7 @@ class DotNetExternalDeclarationsTest {
                 semanticHookMethodGenericParameterCount = null,
                 foreignOverrideProbeMethodName = null,
                 foreignOverrideProbeMethodGenericParameterCount = null,
+                semanticObjectParameterIndices = setOf(0),
             ),
             "H:$logicalOwnerKey" to DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily(
                 ownerPath = listOf("sample.GenericOwner`2"),
@@ -294,6 +297,106 @@ class DotNetExternalDeclarationsTest {
         )
         assertSame(exactOwner, resolver.exactGenericInterfaceOwnerInfoOrNull(logicalOwnerKey))
         assertNull(resolver.exactGenericInterfaceOwnerInfoOrNull("C:sample/Producer"))
+
+        val inconsistentDeclarations = declarations + (
+                "G:$logicalMemberKey" to
+                        (declarations.getValue("G:$logicalMemberKey") as
+                                DotNetPhysicalDeclaration.GenericOwnerMemberFamily).copy(
+                            semanticObjectParameterIndices = emptySet(),
+                        )
+                )
+        val failure = assertFailsWith<IllegalArgumentException> {
+            DotNetExternalDeclarations(
+                listOf(
+                    DotNetExternalLibrary(
+                        artifact = DotNetLibraryArtifact("sample.Library", "netstandard2.0"),
+                        assemblyFile = File("sample.Library.dll"),
+                        declarations = inconsistentDeclarations,
+                        friendAssemblies = emptySet(),
+                    )
+                )
+            )
+        }
+        assertEquals(
+            "published generic-interface member '$logicalMemberKey' lacks or contradicts its producer G family",
+            failure.message,
+        )
+    }
+
+    @Test
+    fun rejectsNonPublishedSemanticGenericOwnerFamilyWithoutHook() {
+        val logicalOwnerKey = "C:sample/GenericOwner"
+        val logicalMemberKey = "F:sample/GenericOwner/member"
+        val capabilityOwnerPath = listOf("sample.GenericOwnerKotlinSemantic")
+        val declarations = mapOf(
+            logicalOwnerKey to DotNetPhysicalDeclaration.Class(
+                ownerPath = listOf("sample.GenericOwner`1"),
+                physicalTypeParameterCount = 1,
+                genericOwnerAbi = DotNetGenericOwnerAbi(
+                    capabilityAssemblyName = "sample.Library",
+                    capabilityOwnerPath = capabilityOwnerPath,
+                ),
+            ),
+            "G:$logicalMemberKey" to DotNetPhysicalDeclaration.GenericOwnerMemberFamily(
+                ownerPath = capabilityOwnerPath,
+                ownerLogicalKey = logicalOwnerKey,
+                logicalMemberKey = logicalMemberKey,
+                capabilityMethodName = "member__KotlinCapability__1234",
+                capabilityMethodGenericParameterCount = 0,
+                defaultCapabilityMethodName = null,
+                defaultCapabilityMethodGenericParameterCount = null,
+                semanticHookOwnerPath = null,
+                semanticHookMethodName = null,
+                semanticHookMethodGenericParameterCount = null,
+                foreignOverrideProbeMethodName = null,
+                foreignOverrideProbeMethodGenericParameterCount = null,
+                semanticObjectParameterIndices = setOf(0),
+            ),
+        )
+
+        val failure = assertFailsWith<IllegalArgumentException> {
+            DotNetExternalDeclarations(
+                listOf(
+                    DotNetExternalLibrary(
+                        artifact = DotNetLibraryArtifact("sample.Library", "netstandard2.0"),
+                        assemblyFile = File("sample.Library.dll"),
+                        declarations = declarations,
+                        friendAssemblies = emptySet(),
+                    )
+                )
+            )
+        }
+        assertEquals(
+            "external non-published generic-owner member '$logicalMemberKey' has semantic policy " +
+                    "without a semantic hook",
+            failure.message,
+        )
+
+        val wrongCapability = declarations + (
+                "G:$logicalMemberKey" to
+                        (declarations.getValue("G:$logicalMemberKey") as
+                                DotNetPhysicalDeclaration.GenericOwnerMemberFamily).copy(
+                            ownerPath = listOf("sample.UnrelatedSemantic"),
+                            semanticObjectParameterIndices = emptySet(),
+                        )
+                )
+        val wrongCapabilityFailure = assertFailsWith<IllegalArgumentException> {
+            DotNetExternalDeclarations(
+                listOf(
+                    DotNetExternalLibrary(
+                        artifact = DotNetLibraryArtifact("sample.Library", "netstandard2.0"),
+                        assemblyFile = File("sample.Library.dll"),
+                        declarations = wrongCapability,
+                        friendAssemblies = emptySet(),
+                    )
+                )
+            )
+        }
+        assertEquals(
+            "external generic-owner member '$logicalMemberKey' is inconsistent with its " +
+                    "owning class and capability records",
+            wrongCapabilityFailure.message,
+        )
     }
 
     @Test
@@ -304,26 +407,19 @@ class DotNetExternalDeclarationsTest {
             DefaultBuiltIns.Instance,
         )
         val module = IrModuleFragmentImpl(moduleDescriptor)
-        val file = IrFileImpl(
-            NaiveSourceBasedFileEntryImpl("genericOwner.kt"),
-            IrFileSymbolImpl(),
-            FqName("sample"),
-            module,
-        ).also { module.files += it }
+        val externalPackage = createEmptyExternalPackageFragment(module, FqName("sample"))
         val logicalOwner = IrFactoryImpl.buildClass {
             name = Name.identifier("GenericOwner")
             kind = ClassKind.INTERFACE
             modality = Modality.ABSTRACT
             visibility = DescriptorVisibilities.PUBLIC
         }.apply {
-            parent = file
+            parent = externalPackage
         }
         logicalOwner.addTypeParameter {
             name = Name.identifier("T")
             variance = Variance.OUT_VARIANCE
         }
-        file.declarations += logicalOwner
-
         val logicalOwnerKey = checkNotNull(logicalOwner.dotNetLibraryAbiKeyOrNull("C"))
         val capabilityOwnerPath = listOf("sample.GenericOwnerKotlinSemantic")
         val declarations = mapOf(
@@ -501,6 +597,192 @@ class DotNetExternalDeclarationsTest {
             logicalKey to physicalFunction,
             "S:$logicalKey" to semanticResult,
         )).hasNaturalGenericOwnerFunctionReturn(factory))
+    }
+
+    @Test
+    fun sourceBackedBootstrapDeclarationsRetainExternalPhysicalAuthority() {
+        val moduleDescriptor = ModuleDescriptorImpl(
+            Name.special("<bootstrapProductTestModule>"),
+            LockBasedStorageManager("DotNetExternalBootstrapProductTest"),
+            DefaultBuiltIns.Instance,
+        )
+        val module = IrModuleFragmentImpl(moduleDescriptor)
+        val file = IrFileImpl(
+            NaiveSourceBasedFileEntryImpl("bootstrap.kt"),
+            IrFileSymbolImpl(),
+            FqName("sample"),
+            module,
+        ).also { module.files += it }
+        val owner = IrFactoryImpl.buildClass {
+            name = Name.identifier("Bootstrap")
+            visibility = DescriptorVisibilities.PUBLIC
+        }.apply { parent = file }
+        val ownerType = IrSimpleTypeImpl(
+            owner.symbol,
+            SimpleTypeNullability.NOT_SPECIFIED,
+            emptyList(),
+            emptyList(),
+        )
+        val factory = IrFactoryImpl.buildFun {
+            name = Name.identifier("bootstrap")
+            returnType = ownerType
+            visibility = DescriptorVisibilities.PUBLIC
+        }.apply { parent = file }
+        file.declarations += listOf(owner, factory)
+
+        val ownerKey = checkNotNull(owner.dotNetLibraryAbiKeyOrNull("C"))
+        val factoryKey = checkNotNull(factory.dotNetLibraryAbiKeyOrNull("F"))
+        val resolver = DotNetExternalDeclarations(listOf(DotNetExternalLibrary(
+            artifact = DotNetLibraryArtifact("sample.BootstrapProduct", "netstandard2.0"),
+            assemblyFile = File("sample.BootstrapProduct.dll"),
+            declarations = mapOf(
+                ownerKey to DotNetPhysicalDeclaration.Class(
+                    ownerPath = listOf("sample.Bootstrap"),
+                ),
+                factoryKey to DotNetPhysicalDeclaration.Function(
+                    ownerPath = listOf("sample.BootstrapKt"),
+                    methodName = "bootstrap",
+                    isInstance = false,
+                    methodGenericParameterCount = 0,
+                ),
+            ),
+            friendAssemblies = emptySet(),
+        )))
+        val mapper = DotNetIlTypeMapper(
+            availableClasses = emptyMap(),
+            externalDeclarations = resolver,
+        )
+
+        val ownerInfo = checkNotNull(resolver.classInfoOrNull(owner, mapper))
+        assertEquals("sample.BootstrapProduct", ownerInfo.assemblyName)
+        assertEquals(listOf("sample.Bootstrap"), ownerInfo.physicalPathComponents())
+        val factoryInfo = checkNotNull(resolver.functionInfoOrNull(factory, mapper))
+        assertEquals("sample.BootstrapProduct", factoryInfo.owner.assemblyName)
+        assertEquals("bootstrap", factoryInfo.physicalMethodName)
+        assertEquals(
+            DotNetIlReturnType.Value(DotNetIlValueType.UserClass(ownerInfo)),
+            factoryInfo.signature.returnType,
+        )
+    }
+
+    @Test
+    fun constructorAuthorityUsesCurrentEmitterOwnershipRatherThanSourceBacking() {
+        val moduleDescriptor = ModuleDescriptorImpl(
+            Name.special("<bootstrapConstructorTestModule>"),
+            LockBasedStorageManager("DotNetExternalBootstrapConstructorTest"),
+            DefaultBuiltIns.Instance,
+        )
+        val module = IrModuleFragmentImpl(moduleDescriptor)
+        val file = IrFileImpl(
+            NaiveSourceBasedFileEntryImpl("bootstrapConstructor.kt"),
+            IrFileSymbolImpl(),
+            FqName("sample"),
+            module,
+        ).also { module.files += it }
+        val owner = IrFactoryImpl.buildClass {
+            name = Name.identifier("Box")
+            visibility = DescriptorVisibilities.PUBLIC
+        }.apply { parent = file }
+        val parameter = owner.addTypeParameter {
+            name = Name.identifier("T")
+        }
+        val constructor = IrFactoryImpl.buildConstructor {
+            isPrimary = true
+            visibility = DescriptorVisibilities.PUBLIC
+            returnType = owner.symbol.typeWith(parameter.typeParameterDefaultType)
+        }.apply {
+            parent = owner
+            addValueParameter("value", parameter.typeParameterDefaultType)
+        }
+        owner.declarations += constructor
+        file.declarations += owner
+
+        assertTrue(
+            owner.requiresProducerRecordedGenericOwnerConstructorMethodDef(
+                currentModuleClasses = emptySet(),
+                hasSemanticCarrierParameter = true,
+            ),
+            "a source-backed bootstrap owner is external to the current user emission",
+        )
+        assertFalse(
+            owner.requiresProducerRecordedGenericOwnerConstructorMethodDef(
+                currentModuleClasses = setOf(owner),
+                hasSemanticCarrierParameter = true,
+            ),
+            "the same declaration must not consume an external record in its own emission",
+        )
+        assertFalse(
+            owner.requiresProducerRecordedGenericOwnerConstructorMethodDef(
+                currentModuleClasses = emptySet(),
+                hasSemanticCarrierParameter = false,
+            ),
+            "an ordinary declaration-stable constructor parameter needs no rehearsal seal",
+        )
+
+        val ownerKey = checkNotNull(owner.dotNetLibraryAbiKeyOrNull("C"))
+        val constructorKey = checkNotNull(constructor.dotNetLibraryAbiKeyOrNull("F"))
+        val ownerPath = listOf("sample.Box`1")
+        val exactConstructor = DotNetPhysicalDeclaration.GenericOwnerConstructorMethodDef(
+            logicalOwnerKey = ownerKey,
+            logicalConstructorKey = constructorKey,
+            ownerPath = ownerPath,
+            physicalMethod = DotNetGenericOwnerPhysicalMethodIdentityRecord(
+                physicalOwnerPath = ownerPath,
+                physicalMethodName = ".ctor",
+                signature = DotNetGenericOwnerPhysicalMethodSignatureRecord(
+                    isInstance = true,
+                    genericArity = 0,
+                    resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Void,
+                    parameterSlots = listOf(DotNetGenericOwnerPhysicalValueSlotRecord(
+                        domain = DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
+                        type = DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType(),
+                    )),
+                ),
+            ),
+            visibility = DotNetGenericOwnerPhysicalConstructorVisibility.PUBLIC,
+        )
+        val resolver = DotNetExternalDeclarations(listOf(DotNetExternalLibrary(
+            artifact = DotNetLibraryArtifact("sample.BootstrapProduct", "netstandard2.0"),
+            assemblyFile = File("sample.BootstrapProduct.dll"),
+            declarations = mapOf(
+                ownerKey to DotNetPhysicalDeclaration.Class(
+                    ownerPath = ownerPath,
+                    physicalTypeParameterCount = 1,
+                ),
+                constructorKey to DotNetPhysicalDeclaration.Function(
+                    ownerPath = ownerPath,
+                    methodName = ".ctor",
+                    isInstance = true,
+                    methodGenericParameterCount = 0,
+                ),
+                exactConstructor.indexKey() to exactConstructor,
+            ),
+            friendAssemblies = emptySet(),
+        )))
+
+        val externalMapper = DotNetIlTypeMapper(
+            availableClasses = emptyMap(),
+            localClasses = emptySet(),
+            externalDeclarations = resolver,
+            genericOwnerRehearsal = true,
+        )
+        assertEquals(
+            "sample.BootstrapProduct",
+            checkNotNull(externalMapper.externalGenericOwnerConstructorInfoOrNull(constructor))
+                .owner.assemblyName,
+        )
+
+        val localClassInfo = DotNetIlClassInfo(
+            "sample.Box`1",
+            typeParameterVariances = listOf(Variance.INVARIANT),
+        )
+        val localMapper = DotNetIlTypeMapper(
+            availableClasses = mapOf(owner to localClassInfo),
+            localClasses = setOf(owner),
+            externalDeclarations = resolver,
+            genericOwnerRehearsal = true,
+        )
+        assertNull(localMapper.externalGenericOwnerConstructorInfoOrNull(constructor))
     }
 
     @Test

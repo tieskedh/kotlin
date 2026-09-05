@@ -218,6 +218,12 @@ internal class DotNetBackendContext(
     val erasedGenericClasses: MutableSet<IrClass> = hashSetOf()
     /** Rehearsal-only generic interfaces whose natural CLR owner is the truthful `I<T>` TypeDef. */
     val reifiedGenericInterfaces: MutableSet<IrClass> = hashSetOf()
+    /**
+     * Frozen pristine-IR variance hazards for local Kotlin interfaces. This index can only veto
+     * exact class-state/result provenance; it is never positive physical or admission authority.
+     */
+    val localGenericInterfaceLogicalHazards:
+        MutableMap<IrClassSymbol, DotNetLocalGenericInterfaceLogicalHazard> = linkedMapOf()
     /** Natural CLR members and their producer-derived payload for `T + out bool isNull`. */
     val splitNullableResultPayloadTypes: MutableMap<IrSimpleFunction, IrType> =
         java.util.IdentityHashMap()
@@ -242,6 +248,15 @@ internal class DotNetBackendContext(
     /** Every BOUND pre-split plan; presence here alone never admits a physical interface shape. */
     val genericInterfaceCompleteSurfaceVarianceAuthorityPlans:
         MutableMap<IrClassSymbol, DotNetGenericInterfaceCompleteNaturalAuthorityPlan> = linkedMapOf()
+    /**
+     * Dependency-closed complete-natural plans available before generic-class state selection.
+     * Presence is still only EARLY_REPRESENTATION_PLAN evidence. A class-state query which uses
+     * one records the symbol in [consumedEarlyGenericInterfaceNaturalAuthorityPlans], and the
+     * later interface lowering must admit the identical plan before any emission may proceed.
+     */
+    val earlyGenericInterfaceCompleteNaturalAuthorityPlans:
+        MutableMap<IrClassSymbol, DotNetGenericInterfaceCompleteNaturalAuthorityPlan> = linkedMapOf()
+    val consumedEarlyGenericInterfaceNaturalAuthorityPlans: MutableSet<IrClassSymbol> = linkedSetOf()
     /** Explicitly admitted subset populated later by bounded reified-interface admission only. */
     val admittedGenericInterfaceCompleteNaturalAuthorityPlans:
         MutableMap<IrClassSymbol, DotNetGenericInterfaceCompleteNaturalAuthorityPlan> = linkedMapOf()
@@ -357,10 +372,19 @@ internal class DotNetBackendContext(
     /** External generic-class member to its producer-bound, un-emitted capability slot stub. */
     val externalGenericOwnerCapabilitySlots:
         MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
+    /** External masked-default helper to its producer-bound, un-emitted capability slot stub. */
+    val externalGenericOwnerDefaultCapabilitySlots:
+        MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
+    /** External generic-class member to its producer-bound, un-emitted semantic-hook stub. */
+    val externalGenericOwnerSemanticHooks:
+        MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
     /** Rehearsal-only logical member to its instance capability slot for masked defaults. */
     val genericOwnerDefaultCapabilitySlots: MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
     /** Rehearsal-only logical member to its separately overridable semantic MethodDef. */
     val genericOwnerSemanticHooks: MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
+    /** Local semantic-hook member to the body placement actually selected during materialization. */
+    val genericOwnerMemberBodyPlacements:
+        MutableMap<IrSimpleFunction, DotNetGenericOwnerMemberBodyPlacement> = linkedMapOf()
     /** Logical generic-owner member to its final semantic capability dispatcher. */
     val genericOwnerCapabilityDispatchers: MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
     /** Natural function to its compiler-owned classifier-derived object-input entry. */
@@ -391,7 +415,7 @@ internal class DotNetBackendContext(
     /** Rehearsal-only value/field/function slots whose proven Kotlin view is wider than one C<T>. */
     val genericOwnerCapabilityDeclarations: MutableSet<IrDeclaration> =
         java.util.Collections.newSetFromMap(java.util.IdentityHashMap())
-    /** Early-proven exact interface slots which a final routing rescan must never degrade. */
+    /** Exact-looking interface slots, subject to revocation by the final authoritative call route. */
     val genericOwnerExactInterfaceDeclarationTypes: MutableMap<IrDeclaration, IrType> =
         java.util.IdentityHashMap()
     /** Natural C<T> slots proven to contain a Kotlin object which also implements its capability. */

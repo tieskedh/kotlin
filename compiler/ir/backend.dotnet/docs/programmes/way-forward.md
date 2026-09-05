@@ -33,377 +33,107 @@ not preserved through compatibility aliases. See the
 
 ## Primary critical path
 
-### 1. Consolidate generic-owner physical authority
+### 1. Complete the generic-owner rehearsal census
 
-The current priority is the production-inert generic-interface/class-owner
-rehearsal. Production remains on the accepted erased owners while the candidate
-proves that natural CLR-generic declarations can be the normal route and that
-semantic capabilities remain only the necessary escape hatch.
+The schema-22 physical-authority consolidation is the current foundation.
+Production remains on erased owners while the rehearsal prefers natural CLR-
+generic declarations and uses semantic capabilities only where the CLR cannot
+truthfully name the Kotlin view.
 
-The consolidation separates:
+Resume the source-built Runtime/Stdlib census now, inside this phase. Each real
+failure may add only a structural rule derived from:
 
 - Kotlin IR/KLIB logical authority;
-- producer-selected, retained-foreign, and final-emission CLR declaration
+- producer-selected, retained-foreign, BOUND, or sealed-emission declaration
   authority;
-- per-value physical-carrier provenance; and
-- producer-wide state/storage selection.
+- per-value produced-carrier and selected-view provenance;
+- destination storage/entry facts;
+- independent parameter-domain and result-layout policies; or
+- producer-wide open-world state authority.
 
-The interface review additionally replaces the desired exact-sibling ABI with
-one complete natural CLR-generic TypeDef plus semantic routing. Physical
-variance is retained only where the complete interface surface is CLR-legal;
-otherwise the affected parameter is physically invariant while Kotlin's
-logical variance remains in KLIB. Ordinary CLR-language implementations must
-not require a hidden generated ABI for behavior derivable from real interface
-slots.
+Do not add declaration, package, collection, `Map`, member-name, IR-origin, or
+stdlib exceptions. A broad semantic input may not contaminate unrelated exact
+receiver-derived state, and exact provenance may not narrow a genuinely broad
+source value. Selected view lineage can choose among already guaranteed views;
+it can never prove that a view exists.
 
-The bounded declaration/MethodDef stages and the first producer-wide state
-stage are closed. Stage 6 reaches one monotone fixpoint across detached-family
-inheritance, private-helper reachability, state, and output pairing, then admits
-from final per-field requirements rather than the diagnostic owner disposition.
-BOUND freezes the complete existing instance-field set, exact explicit-writer
-lineages and multiplicities, and the positional initializer contract.
-Immediately beforehand, after bridge/body production, the complete live module
-re-proves every typed store; an unsupported live store makes the family
-unavailable, while any post-BOUND change is an internal conflict. Final
-observations are validated before dependency/IL/PE publication: the full field
-set matches BOUND, the owner-dependent FieldDef seals separately, and snapshots
-publish only after ILAsm success. The seal checks TypeDef category/arity,
-carrier and exact parameter index, cross-scope uniqueness, and the newly
-observed physical field name. This
-distinguishes a producer-proven private mutable `!T` slot from a hostile owner
-whose widened writes require one private mutable `object` slot, without shadow
-state or changed identity. Details and remaining grammar are
-[archived](../archive/generic-owner-producer-wide-state-fielddef-authority-2026-08-29.md).
+The current candidate must continue to preserve:
 
-The first grammar accepts only an exact positional constructor-parameter
-initializer. Typed direct stores consume the exact non-dispatch writer
-parameter with the field's direct `T` type. Init-block, other-field, computed,
-and other nontrivial initializers remain unavailable and fall back out of this
-proof; they are not hard user errors.
+- one receiver identity and one authoritative state;
+- no wrapper, proxy, or shadow state;
+- no fabricated CLR construction;
+- existing emitted and retained foreign MethodDef/MethodImpl/FieldDef authority;
+- ordinary C# implementation and override behavior without a hidden compiler-
+  ABI obligation;
+- exact separate-compilation consumption of producer records; and
+- a production-erased inverse and rollback.
 
-Stage 7 composes one strict owner-dependent callable input with a distinct
-split-nullable owner result on a custom structural declaration. Semantic role,
-MethodDef binder, parameter domains, and result layout remain independent. The
-same grammar now also proves `<R>(K, R): V?` as
-`!V <!!R>(!K, !!R, out bool)` without a combined role; the existing Runtime
-`Map` family is deliberately unchanged. Final local operation authority
-consumes the same contract from an exact constructed receiver plus argument and
-MethodSpec facts, and may replace a weaker conservative semantic fallback only
-when the logical family has no semantic-result requirement. The bounded proofs
-and their exact erased inverses are recorded in the
-[Stage 7 archive](../archive/generic-owner-callable-contract-composition-2026-08-31.md)
-and
-[owner-input operation archive](../archive/generic-owner-physical-owner-input-operation-2026-09-01.md),
-with the generic composition in the
-[MethodSpec/split archive](../archive/generic-owner-methodspec-split-nullable-composition-2026-09-01.md).
-The retained-foreign adapter authenticates one selected open root-interface
-MethodDef directly from retained and re-resolved raw metadata. This is a per-
-MethodDef authority unit rather than a one-member declaration restriction: one
-consumer now independently binds a no-argument method and two same-name, same-
-arity overloads with different physical parameter signatures. Its receiver may
-be the root of a resource-bounded acyclic graph of public top-level memberless
-interfaces, each with a complete ordered vector of up to 1,024 binders and a
-complete retained/raw edge set. Graphs may cross assemblies, branch, share
-diamond nodes, and close, forward, or permute binders at every level. The
-existing physical-view closure performs all substitution; selected lineage may
-select an already-proven construction but cannot establish one. Cycles and
-metadata disagreement conflict, while missing authority and resource limits
-fail unavailable. Resource-free external pipelines cover direct,
-cross-assembly, multi-edge, multi-view, intermediate, and recursive
-four-assembly unconstrained forms. The recursive proof derives
-`PairOuter<int,string> -> PairForwarding<string,int> -> Source<int>` without a
-false `Source<string>` view. The overload proof emits each exact original parent
-signature without names, arity heuristics, or interface row order as physical
-authority.
+Exit this phase only when the shared model explains the complete selected
+Runtime/Stdlib family and its hostile negatives, including value/reference/
+nullable/value-class substitutions, stars and projections, mutable state,
+defaults, properties, diamonds, deep Kotlin/C# inheritance, multiple owner and
+method parameters, and separate producers and consumers.
 
-The first constrained TypeDef boundary now admits bounded TypeSpec-backed
-nominal rows in the retained inherited graph. The shared CLR validator proves
-each exact closed or forwarded `InterfaceImpl` construction in its source
-TypeDef's open binder context. That proof is keyed by source and exact unbound
-target edge and survives substitution only along that edge; it cannot authorize
-arbitrary constructions of the constrained target. A positive dependent
-`TDerived : TBase` chain and a missing-implication conflict are executable
-metadata-model evidence. The resource-free external FIR fixture has no selected
-physical core catalog, so constrained end-to-end FIR remains a later gate rather
-than acquiring a duplicate local validator.
-
-An exact direct nominal constraint may now name a public, top-level,
-non-generic CLR interface, ordinary reference class, or value type whose
-retained hierarchy agrees with raw metadata. Its exact TypeDef becomes an
-auxiliary carrier and may also close an inherited edge. This does not infer the
-TypeDef by name, authorize a constrained generic construction, or claim a
-complete edge set for the auxiliary TypeDef; missing selected hierarchy remains
-`Unavailable`.
-
-A TypeSpec may also recursively construct an exact public generic interface,
-ordinary reference class, sealed CLR delegate, or value type whose selected/raw
-TypeDef has a complete supported binder vector. The construction can contain
-exact value arguments and can close or flow through an inherited edge.
-Reference, non-nullable-value, and nullable-value carriers use the shared
-physical classifier. An actual signature must agree with the selected TypeDef's
-class/value marker. Only a bare TypeDef/TypeRef constraint row may infer that
-marker from the selected definition because the metadata row has no signature-
-side kind. Non-nullable values preserve `NON_NULL_ONLY`; a selected
-`System.Nullable<T>` construction preserves `INLINE_NULLABLE_VALUE`. A
-constrained construction is admitted at any nested depth only when the shared
-nominal and special-constraint validators prove that exact subtree in the
-source TypeDef's open context. Exact `class`, `struct`, `new()`, and
-`allows ref struct` flags use this same grammar. Open binder rows remain target-
-independent declaration authority, while a
-construction needing special or possible by-ref-like validation requires an
-explicit target. This proves by-ref-like-capable binder forwarding on .NET 10,
-rejects it on Framework 4.8, and remains unavailable without a target. The
-proof is scoped to source, exact edge root, and constrained subtree. An outer
-proof cannot satisfy an inner construction by implication, and the general
-construction helper remains closed. A variant non-interface binder is admitted
-only when the shared classifier proves a sealed TypeDef whose immediate selected
-base is the exact selected `System.MulticastDelegate`. Names and `Invoke`-
-shaped members are not evidence; ordinary variant classes and non-sealed
-delegates conflict, while missing core/hierarchy authority is unavailable.
-Exact covariant and contravariant delegate constructions are retained. An
-orthogonal TypeDef fact records the selected/raw proof that a variant `CLASS`
-is a sealed CLR delegate; category remains `CLASS`. Interfaces and those
-delegates then share one reference-only variance transfer. The transfer uses a
-single frontend/backend argument-direction planner, physical reference
-classification, and exact recorded ancestry. It preserves the source carrier
-and object identity, adds the converted construction only to per-value
-provenance, and never mutates the recorded-interface closure. Nested interface
-variance and SZ-array reference covariance compose; differing value arguments,
-unknown open binders, wrong direction, missing ancestry, or an unauthenticated
-variant class fail closed. Declared delegate members are still outside retained
-operation authority. Carrier traversal shares the physical ABI's depth and
-node ceilings. Constraint-bearing source and target constructions now compose
-only inside one variance transfer: selected raw metadata and the shared nominal/
-special validators revalidate each exact subtree for the requested target
-profile. Success adds a per-value view but no edge or reusable construction
-authority; unrelated constrained constructions remain unavailable.
-
-Raw inherited-graph and auxiliary-nominal binder counts, plus their aggregate
-constraint-row count, are reserved before generic-context resolution. Both
-reuse the physical-artifact collection ceiling, so hostile metadata cannot
-force an unbounded normalized constraint graph before the adapter returns
-`Unavailable`.
-
-Constraint-safe variance composition is now closed without making the general
-construction helper permissive or treating an earlier edge proof as authority
-for a different construction. The same selected-graph service validates direct
-owners and inherited graphs, nominal plus special constraints, nested carriers,
-and Framework 4.8/.NET 10 target profiles.
-
-The bounded producer-recorded delegate declaration boundary is now closed for
-unconstrained TypeDefs. Physical-library ABI 66 carries an orthogonal
-`SEALED_CLR_DELEGATE` fact beside the ordered GenericParam variance vector. Only
-the decoded producer adapter may turn that record into class-category delegate
-authority; the general declaration binder still rejects caller-authored facts,
-and names or `Invoke` shapes remain irrelevant. Mixed `in`/`out` binder vectors
-reuse the same reference-only conversion and leave ancestry, carrier, identity,
-and state unchanged. The record deliberately supplies no delegate member or
-operation authority. Producer-side delegate synthesis and constrained producer
-delegate rows remain later schema/emission work.
-
-Physical authority and value provenance remain the active prerequisite to the
-source-built Stdlib census. Bounded local-placement forms are executable
-evidence: equal direct carriers, one unique recorded control-flow construction,
-bare or constructed current-owner parameter entries, a parameterless natural
-`Direct(!n)` result, and a natural `SplitNullable(!n, bool)` result retained in
-two private locals when a positive number of reads are all bare, unprotected
-returns to the same physical MethodDef. Every retained split call consumes one
-final exact-natural operation witness; without a MethodSpec it may have any
-complete ordered vector of identity-preserving `STRICT_OWNER_INPUT(!m)` slots
-and fixed declaration-independent Boolean, Int32, String, or Object leaves.
-Natural and semantic MethodDefs must agree on every fixed leaf. The hand-off to
-operation routing admits only a regular parameter with producer-planned
-`DECLARATION_INDEPENDENT` domain, matching supported fixed leaves on its typed
-and current physical prototypes, and final `Direct(Fixed(same leaf))` storage;
-owner, constructed, broad semantic-object, fallback-object, and MethodDef-
-binder facts remain excluded.
-The first publication slice supplies a positive number of direct occurrences
-of one invariant input. One further
-exact shape composes `<R>(K, R): V?` with open `!K`/`!!R` inputs, an owner-bound
-`<!m>` MethodSpec, and an independent split `!V` result. Local producer members
-are bound to published contracts by declaration identity; separate consumers
-use validated producer records. Exact rules and current evidence belong in the
-owning ADR and `STATUS.md`, not in this route map.
-
-The split pair may also receive a flat exhaustive control-flow initializer when
-at least two exact call identities independently produce the identical payload.
-Each branch retains its own operation witness; only the destination pair joins.
-A bare call and FIR2IR's non-returnable same-typed single-call braced-arm block
-are the complete transparent grammar. The emitter revalidates the ordered live
-call set and writes every selected operation into one shared pair before an
-empty-stack join.
-
-These proofs authorize no cast, semantic adaptation, field/state choice, ABI
-change, or fabricated construction. The split pair is not general local state:
-unsupported/nested ordinary carriers, fixed leaves combined with a MethodSpec,
-other MethodSpec calls, other control-flow shapes, captures,
-fields, and every non-return, mixed, protected, other-target, nested-expression,
-or sequential consumer still use their independently proven layout or the
-ordinary materializing boundary. Multiple static direct-return sites are
-admitted only because every executed site terminates its path. Star/projected
-or truly broad source values never gain exact authority from a logical type.
-
-The bounded local-final direct-call gate is now closed. A logically widened
-producer call may replace its conservative semantic target only when an exact
-final implementation carrier is independently proven and final emission seals
-both generated semantic dispatchers as positional forwarders to the same typed
-entry. Exportable families publish an orthogonal `K` certificate tied to the
-exact `J` family; exact construction or selected lineage alone is never such a
-certificate. The completed scope and hostile inverse are recorded in the
-[dated archive](../archive/generic-owner-semantic-equivalence-certificate-2026-09-02.md),
-while the normative identity, lineage, and operation rules live in the
+The architecture is owned by the
 [physical-authority ADR](../decisions/draft-adr-generic-owner-physical-authority.md).
-
-Objective external `K` authentication and its first bounded routing consumer
-are closed. `K` remains declaration authority only; scope and prerequisites are
-recorded in the
-[external routing archive](../archive/generic-owner-external-semantic-equivalence-routing-2026-09-02.md).
-
-The first path-complete direct-result grammar is now closed: direct call leaves,
-implicit identity wrappers, recursively nested non-returnable
-`IrBlock`/`IrComposite` nodes with exactly one expression, and exhaustive
-`IrWhen` nodes with at least two non-false reachable arms, a terminal true/else
-arm, and no later reachable arm. The plan identity-binds the root and ordered
-result spine rather than the whole IR child tree. Every reachable result call
-retains its complete final operation and must rebind the same live MethodDef and
-result carrier; condition calls do not supply result authority. `IrComposite`
-is model-only in this checkpoint, while emitted/executed proof covers the
-`IrBlock`/`IrWhen` shape produced by FIR2IR. General prefix-bearing containers
-stay outside this first grammar because their local slots do not exist at the
-outer placement boundary. The exact scope is recorded in the
-[dated archive](../archive/generic-owner-path-complete-direct-result-calls-2026-09-03.md).
-
-The older flat exhaustive split-nullable walker is a temporary narrower leaf
-policy, not a separate representation rule. Converge it on the same structural
-result-spine traversal only when each path can retain and rebind the complete
-split operation, payload, and flag obligations.
-
-The first current caller-MethodDef `!!R` entry/local, its separate exact natural
-callee-MethodSpec use, and the shared late emitter call-edge seal are closed.
-The seal covers both owner-bound `!T` and caller-bound `!!R` MethodSpecs, binds
-open callee and instantiated caller scopes independently, and validates the
-selected MethodDef, receiver, rendered owner token, complete MethodSpec,
-ordinary inputs, and direct/split result before coercion. It grants no new
-operation or placement authority; semantic-equivalence and retained-foreign
-witnesses retain their independent seals. Exact evidence is in the
-[dated archive](../archive/generic-owner-physical-methodspec-call-edge-seal-2026-09-03.md).
-
-The first ordered prefix-bearing direct-result container is now closed for the
-exact caller-MethodDef operation above. Two immutable bare-read prefix locals
-retain independent `I<!T>` and `!!R` placement; only the `!T` outer remains
-pending until the two carriers pass correlation. Emission creates both slots once and
-in order, emits the bare call once, and consumes the actual shared MethodSpec
-call-edge seal. Permission is exact-root-only and elides only the balanced
-implicit `T -> Any? -> T` carrier roundtrip. Missing, wrong, extra, shared,
-effectful, mutable, wrapped, branch-local, or differently consumed prefixes
-deny the outer and its direct/split dependents without revoking independent
-prefix facts. Exact scope and four-lane/inverse evidence are in the
-[dated archive](../archive/generic-owner-ordered-prefix-methodspec-result-2026-09-03.md).
-
-Continue with broader consumer categories, MethodSpec and ordinary-
-argument/result shapes, null/bottom/unknown joins, and explicit representation-
-changing conversions. Prefer the next source-built-stdlib blocker only when it
-exposes one of those general structural gaps; do not add a declaration, package,
-collection, Map, member-name, IR-origin, or stdlib exception. Only after those
-value rules stabilize should the consumer widen to captures, properties, class
-nodes, MethodImpls, or new Runtime/Stdlib declarations.
-
-Broader state remains a separate producer-wide proof. A comparison surface may
-disappear only after downstream owner closure is an epoch invariant and its
-hostile erased inverse remains exact.
-
-It must preserve one receiver identity and one authoritative state, never
-fabricate a CLR construction, and never allow a logically widened view to
-create physical evidence. Broad semantic input may not contaminate unrelated
-exact receiver-derived state. Exact provenance may not narrow a genuinely
-broad source value.
-
-The shared model is owned by the
-[physical-authority/provenance draft](../decisions/draft-adr-generic-owner-physical-authority.md).
-Interface shape, current comparison boundary, and remaining hostile grammar are
-owned by the
-[generic-interface reopening draft](../decisions/draft-adr-reified-generic-interface-owner.md),
-the [generic-class-owner programme](generic-class-owner-reopening.md), its
-[carrier/admission matrix](generic-class-owner-carrier-matrix.md), and its
+The admitted generic-interface shape and migration conditions are owned by the
+[generic-interface ADR](../decisions/draft-adr-reified-generic-interface-owner.md),
+[generic-owner programme](generic-class-owner-reopening.md),
+[carrier matrix](generic-class-owner-carrier-matrix.md), and
 [migration plan](generic-class-owner-migration-plan.md).
-
-Exit this phase only when one shared authority/provenance model explains every
-bounded recognizer and its hostile negatives without declaration, package,
-collection, member-name, or IR-origin exceptions.
-
-Retained-foreign physical-conversion coverage must derive inherited,
-implementation, open, projected, vararg, and multiple-view cases from the
-shared provenance model. Legal reference-only CLR covariance/contravariance
-must remain available; a missing reference-hierarchy proof is not evidence of
-an invalid CLR conversion.
 
 ### 2. Make the generic-owner go/no-go decision
 
-After consolidation, run one complete rehearsal over:
+After the rehearsal census closes, run the complete candidate over:
 
-- Runtime and source-built Stdlib interface families;
-- value, reference, nullable, value-class, star, projection, and variance cases;
-- mutable state, defaults, properties, diamonds, deep inheritance, and
-  multiple owner/method parameters;
-- separate Kotlin and C# producers, implementations, subclasses, and consumers;
-- Framework 4.8, .NET 10, ReadyToRun, trimming, and NativeAOT; and
+- Runtime and source-built Stdlib families;
+- Kotlin and C# producers, implementations, subclasses, and consumers;
+- Framework 4.8, .NET 10, ReadyToRun, trimming, and NativeAOT;
+- representative applications, reflection/tooling, concurrency and memory-
+  model cases, and performance/code-size measurements; and
 - the exact production-erased inverse and rollback.
 
-This checkpoint chooses **GO**, **CONSTRAIN**, or **NO-GO** for the architecture;
-it does not by itself authorize production migration. A GO still has to satisfy
-every entry condition in the
-[migration plan](generic-class-owner-migration-plan.md), including ordinary
-product breadth, representative applications, reflection, the concurrency and
-memory model, the public C# surface, and representative measurements. Only
-then may the accepted erased-owner decisions be amended and the complete
-selected production family switch atomically. There is no per-interface pilot
-and no mixed erased/generic production epoch. A constrained result keeps each
-unsupported whole declaration erased; a no-go retains the erased Kotlin ABI
-and uses explicit C# export/adapters where the CLR cannot truthfully carry the
-complete Kotlin contract.
+Choose **GO**, **CONSTRAIN**, or **NO-GO**. This decision does not itself switch
+production. A constrained result keeps each unsupported whole declaration
+erased. A no-go retains the erased Kotlin ABI and uses explicit C# export or
+adapters where the CLR cannot carry the complete contract.
 
-### 3. Resume Common Runtime/Stdlib closure
+### 3. Close and migrate the production family after GO
 
-Only after the go/no-go checkpoint resumes should the collection census select
-another generic-owner-dependent family. Continue by complete Common/generated
-dependency closure, never by handwritten target algorithms or declaration-name
-exceptions. Kotlin collection identity remains distinct from optional BCL
-adapters.
+Only after GO, satisfy every entry condition in the migration plan, complete
+the chosen Runtime/Stdlib production dependency closure, and amend the accepted
+erased-owner decisions. Switch compiler, Runtime, Stdlib, metadata, importer,
+tooling, tests, and rollback atomically. There is no per-interface pilot and no
+mixed erased/generic production epoch.
 
-The current admitted surface, exclusions, and next dependency calculation are
-owned by [`common-collections.md`](common-collections.md). Independent
-non-generic foundations may proceed only when they do not pre-commit the
-generic-owner decision.
+Kotlin collection identity remains distinct from optional BCL adapters. The
+selected dependency closure and exclusions are owned by
+[`common-collections.md`](common-collections.md).
 
 ## Independent workstreams
 
-These may advance in bounded slices when they do not alter the current
-generic-owner critical path or share unsafe build outputs:
+These may advance in bounded slices when they do not alter the generic-owner
+critical path or share unsafe build outputs:
 
 - [`structured-cli-ir.md`](structured-cli-ir.md): migrate complete physical
-  ECMA-335 forms from text construction into the policy-free CLI model, removing
-  the superseded string path in the same slice;
-- [`compiler-architecture.md`](compiler-architecture.md): preserve mature-target
-  ownership and extract only when a concrete independent consumer exists;
+  ECMA-335 forms from text construction into the policy-free CLI model;
+- [`compiler-architecture.md`](compiler-architecture.md): preserve mature-
+  target ownership and extract only for a concrete independent consumer;
 - [`clr-annotations.md`](clr-annotations.md): extend imported/exported CLR facts
-  only through exact mappings and Kotlin stability rules;
+  through exact mappings and Kotlin stability rules; and
 - explicit C# export and build/distribution work that does not redefine Kotlin
   runtime identity.
 
-Completed foundations such as
-[`inline-functions.md`](inline-functions.md) remain maintenance constraints for
-their consumers; they are not independent active workstreams.
-
 Upstream integration and concrete correctness repairs take precedence when they
-would invalidate the active checkpoint. Performance or cleanup work is selected
-only for a measured material hotspot, a real bug, or demonstrable duplication.
+would invalidate the checkpoint. Performance or cleanup work is selected only
+for a measured material hotspot, a real bug, or demonstrable duplication.
 
 ## Cross-cutting entry and exit rules
 
 Every semantic or representation slice must:
 
 1. identify the authoritative Common declaration or compiler rule;
-2. inspect the relevant JVM, JS, Wasm, and Native precedent;
+2. inspect relevant JVM, JS, Wasm, and Native precedent;
 3. isolate the exact CLR constraint requiring different treatment;
 4. update the owning ADR/programme before or with an ABI-bearing change;
 5. implement one complete producer/consumer slice and fail closed outside it;
@@ -415,25 +145,25 @@ Unsupported input must fail with a located diagnostic or explicit rejection;
 it must not silently shrink a published library. Golden CIL text is physical
 evidence, not sufficient semantic evidence.
 
-The strict target aggregate remains one supported entry point. Its internal
-groups may be partitioned only when they remain disjoint, exhaustive, visible
-to repository test lifecycle, and safe around Framework ILAsm/CLR4 resources.
-Current commands and counts belong only in [`../../STATUS.md`](../../STATUS.md).
+The strict aggregate remains one supported entry point. Internal groups may be
+partitioned only when disjoint, exhaustive, visible to the repository lifecycle,
+and safe around Framework ILAsm/CLR4 resources. Current commands and counts
+belong only in [`../../STATUS.md`](../../STATUS.md).
 
 ## Parked families
 
 Parking means “fail clearly without constraining the future ABI,” not
-“approximate now.” The following remain outside the current critical path:
+“approximate now.” Outside the current critical path are:
 
 - multi-field value classes and unsigned Runtime/Stdlib publication;
 - coroutine scheduling, `kotlinx.coroutines`, debugger integration, and
   `Task`/`ValueTask` export;
-- the wider concurrency, volatility, synchronization, and atomic surface;
+- wider concurrency, volatility, synchronization, and atomic APIs;
 - broad member/constructor reflection and unselected CLR annotation shapes;
 - unsupported foreign generic constraints and nullable generic leaves;
-- broad KMP/distribution integration beyond the current target model; and
-- speculative wrapper elimination, specialization, or devirtualization without
-  a complete semantic and measurement gate.
+- broad KMP/distribution integration; and
+- speculative specialization or devirtualization without semantic and
+  measurement gates.
 
 An active programme or accepted ADR may refine this list. Adjacent work must not
 assume a parked representation.
@@ -443,21 +173,19 @@ assume a parked representation.
 ### Gate A — viable internal experimental backend
 
 - publication fails on evicted or unbound declarations;
-- logical keys, physical bindings, source visibility, friends, and profiles are
+- logical keys, physical bindings, visibility, friends, and profiles are
   explicit and cross-module safe;
 - `net48`, `netstandard2.0`, and `net10.0` products are deliberate; and
-- the strict target matrix is green with no unavailable required tool hidden as
-  a skip.
+- the strict matrix is green with no unavailable required tool hidden as a skip.
 
 ### Gate B — third-party experimental binaries
 
-- every ABI draft required by the supported surface is accepted or excluded;
+- every required ABI draft is accepted or explicitly excluded;
 - compiler, KLIB, physical ABI, Runtime/Stdlib, importer, and tooling version
   skew fails predictably;
-- signing, assembly versioning, packaging, and distribution ownership are
-  specified;
+- signing, assembly versioning, packaging, and distribution are specified;
 - Kotlin ABI, compiler ABI, and C# export are mechanically distinguishable; and
-- supported importer and foreign implementation paths have freeze-level tests.
+- importer and foreign implementation paths have freeze-level tests.
 
 ### Gate C — official experimental target discussion
 
@@ -467,12 +195,10 @@ assume a parked representation.
 - the full profile/runtime matrix runs in CI;
 - shared semantic and multi-module coverage approaches mature-target scale;
 - diagnostics and CIL/metadata validation are structured; and
-- every parked language area has an inclusion schedule or explicit supported-
-  surface exclusion.
+- every parked language area has an inclusion schedule or explicit exclusion.
 
 ## Maintenance
 
 Keep only open ordering and gates here. Completed tranche narratives belong in
-Git and dated archive evidence; durable representation rules belong in ADRs;
-current head and verification belong in `STATUS.md`. When an active workstream
-changes priority, update this route map and its owning programme together.
+Git and dated archives; durable representation rules belong in ADRs; current
+head and verification belong in `STATUS.md`.

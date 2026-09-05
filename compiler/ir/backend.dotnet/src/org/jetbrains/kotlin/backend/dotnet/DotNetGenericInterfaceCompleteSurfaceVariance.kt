@@ -243,6 +243,16 @@ internal class DotNetGenericInterfaceCompleteNaturalAuthorityPlan(
     }
 }
 
+/** Exact equality across two independently computed EARLY_REPRESENTATION_PLAN epochs. */
+internal fun DotNetGenericInterfaceCompleteNaturalAuthorityPlan.hasSameFrozenAuthorityAs(
+    other: DotNetGenericInterfaceCompleteNaturalAuthorityPlan,
+): Boolean = owner === other.owner &&
+        inventory.directCallableMembers == other.inventory.directCallableMembers &&
+        inventory.directPropertyAccessors == other.inventory.directPropertyAccessors &&
+        inventory.directParentTypes == other.inventory.directParentTypes &&
+        surfaceInput == other.surfaceInput &&
+        surfaceDecision == other.surfaceDecision
+
 private fun DotNetGenericInterfaceCompleteSurfaceOwnerInput.frozen() = copy(
     logicalMaximumVariances = logicalMaximumVariances.toList(),
     positions = positions.map { position ->

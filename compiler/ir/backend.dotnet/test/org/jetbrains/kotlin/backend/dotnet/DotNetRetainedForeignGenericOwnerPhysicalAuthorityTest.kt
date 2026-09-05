@@ -5,13 +5,22 @@
 
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.builtins.DefaultBuiltIns
 import org.jetbrains.kotlin.config.DotNetTarget
 import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
+import org.jetbrains.kotlin.descriptors.impl.ModuleDescriptorImpl
+import org.jetbrains.kotlin.ir.builders.declarations.addTypeParameter
 import org.jetbrains.kotlin.ir.builders.declarations.buildClass
+import org.jetbrains.kotlin.ir.builders.declarations.buildFun
+import org.jetbrains.kotlin.ir.declarations.IrClass
+import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.MetadataSource
+import org.jetbrains.kotlin.ir.declarations.createEmptyExternalPackageFragment
 import org.jetbrains.kotlin.ir.declarations.impl.IrFactoryImpl
+import org.jetbrains.kotlin.ir.declarations.impl.IrModuleFragmentImpl
+import org.jetbrains.kotlin.ir.types.defaultType as typeParameterDefaultType
 import org.jetbrains.kotlin.load.dotnet.DotNetClrAssemblyReference
 import org.jetbrains.kotlin.load.dotnet.DotNetClrAssemblyMetadata
 import org.jetbrains.kotlin.load.dotnet.DotNetClrClasspathAssembly
@@ -41,15 +50,136 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeSpecification
 import org.jetbrains.kotlin.load.dotnet.DotNetManagedAssemblyIdentity
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.Name
+import org.jetbrains.kotlin.storage.LockBasedStorageManager
+import org.jetbrains.kotlin.types.Variance
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
+    @Test
+    fun `retained foreign provenance is the terminal TypeDef and MethodDef authority`() {
+        val fixture = fixture()
+        val imported = retainedForeignIrFixture(fixture)
+        val referencedAssemblies = mutableListOf<DotNetClrClasspathAssembly.WithoutCarrier>()
+        val mapper = DotNetIlTypeMapper(
+            availableClasses = emptyMap(),
+            foreignAssemblyReferenceSink = referencedAssemblies::add,
+        )
+
+        val owner = assertNotNull(mapper.classInfoOrNull(imported.owner))
+        val function = assertNotNull(mapper.referencedFunctionInfoOrNull(imported.function))
+
+        assertEquals("Foreign.Source`1", owner.ilClassName)
+        assertEquals("Foreign.Authority", owner.assemblyName)
+        assertEquals(1, owner.typeParameterCount)
+        assertEquals(owner, function.owner)
+        assertEquals("Transfer", function.physicalMethodName)
+        assertEquals(1, function.signature.methodGenericParameterCount)
+        assertEquals(
+            DotNetIlReturnType.Value(
+                DotNetIlValueType.TypeParameter(0, isMethodParameter = false),
+            ),
+            function.signature.returnType,
+        )
+        assertEquals(listOf(fixture.source.assembly), referencedAssemblies.distinct())
+    }
+
+    @Test
+    fun `retained foreign declarations never consume Kotlin producer records by logical key`() {
+        val fixture = fixture()
+        val imported = retainedForeignIrFixture(fixture)
+        val ownerKey = checkNotNull(imported.owner.dotNetLibraryAbiKeyOrNull("C"))
+        val functionKey = checkNotNull(imported.function.dotNetLibraryAbiKeyOrNull("F"))
+        val externalDeclarations = retainedForeignCollisionDeclarations(
+            ownerKey,
+            functionKey,
+        )
+        val mapper = DotNetIlTypeMapper(
+            availableClasses = emptyMap(),
+            externalDeclarations = externalDeclarations,
+            genericOwnerRehearsal = true,
+        )
+
+        assertFalse(externalDeclarations.hasClass(imported.owner))
+        assertFalse(externalDeclarations.hasGenericInterface(imported.owner))
+        assertFalse(externalDeclarations.hasReifiedGenericInterface(imported.owner))
+        assertNull(externalDeclarations.classInfoOrNull(imported.owner, mapper))
+        assertNull(externalDeclarations.genericOwnerMemberFamilyOrNull(imported.function))
+        assertFalse(externalDeclarations.hasNaturalGenericOwnerFunctionReturn(imported.function))
+        assertNull(externalDeclarations.functionInfoOrNull(imported.function, mapper))
+    }
+
+    @Test
+    fun `simultaneous retained foreign and Kotlin producer TypeDef authority fails closed`() {
+        val fixture = fixture()
+        val imported = retainedForeignIrFixture(fixture)
+        val ownerKey = checkNotNull(imported.owner.dotNetLibraryAbiKeyOrNull("C"))
+        val functionKey = checkNotNull(imported.function.dotNetLibraryAbiKeyOrNull("F"))
+        val mapper = DotNetIlTypeMapper(
+            availableClasses = emptyMap(),
+            externalDeclarations = retainedForeignCollisionDeclarations(ownerKey, functionKey),
+            genericOwnerRehearsal = true,
+        )
+
+        val failure = assertFailsWith<DotNetIlUnsupportedException> {
+            mapper.classInfoOrNull(imported.owner)
+        }
+
+        assertEquals(
+            "retained foreign CLR TypeDef '$ownerKey' also has producer-recorded Kotlin authority (C)",
+            failure.reason,
+        )
+    }
+
+    @Test
+    fun `simultaneous retained foreign and Kotlin producer MethodDef authority fails closed`() {
+        val fixture = fixture()
+        val imported = retainedForeignIrFixture(fixture)
+        val ownerKey = checkNotNull(imported.owner.dotNetLibraryAbiKeyOrNull("C"))
+        val functionKey = checkNotNull(imported.function.dotNetLibraryAbiKeyOrNull("F"))
+        val mapper = DotNetIlTypeMapper(
+            availableClasses = emptyMap(),
+            externalDeclarations = retainedForeignCollisionDeclarations(ownerKey, functionKey),
+            genericOwnerRehearsal = true,
+        )
+
+        val failure = assertFailsWith<DotNetIlUnsupportedException> {
+            mapper.referencedFunctionInfoOrNull(imported.function)
+        }
+
+        assertEquals(
+            "retained foreign CLR MethodDef '$functionKey' also has producer-recorded Kotlin authority (F)",
+            failure.reason,
+        )
+    }
+
+    @Test
+    fun `semantic capability metadata cannot outrank a retained foreign MethodDef`() {
+        val fixture = fixture()
+        val imported = retainedForeignIrFixture(fixture)
+        val mapper = DotNetIlTypeMapper(
+            availableClasses = emptyMap(),
+            genericOwnerRehearsal = true,
+            genericOwnerCapabilityDeclarations = setOf(imported.function),
+        )
+
+        val failure = assertFailsWith<DotNetIlUnsupportedException> {
+            mapper.referencedFunctionInfoOrNull(imported.function)
+        }
+
+        assertEquals(
+            "retained foreign CLR MethodDef 'transfer' also has semantic capability declaration",
+            failure.reason,
+        )
+    }
+
     @Test
     fun `retained metadata binds exact owner MethodDef and generic parameter rows`() {
         val fixture = fixture(
@@ -4068,6 +4198,75 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
             target = target,
         )
 
+    private fun retainedForeignIrFixture(fixture: Fixture): RetainedForeignIrFixture {
+        val moduleDescriptor = ModuleDescriptorImpl(
+            Name.special("<retainedForeignAuthorityTestModule>"),
+            LockBasedStorageManager("DotNetRetainedForeignAuthorityTest"),
+            DefaultBuiltIns.Instance,
+        )
+        val module = IrModuleFragmentImpl(moduleDescriptor)
+        val externalPackage = createEmptyExternalPackageFragment(module, FqName("collision"))
+        val owner = IrFactoryImpl.buildClass {
+            name = Name.identifier("Source")
+            kind = ClassKind.INTERFACE
+            modality = Modality.ABSTRACT
+            visibility = DescriptorVisibilities.PUBLIC
+        }.apply {
+            parent = externalPackage
+            metadata = object : MetadataSource.Class {
+                override val name: Name = this@apply.name
+                override val platformDeclarationSource: Any = fixture.source
+
+                override fun recordLocalClassType(type: FqName) = Unit
+
+                override fun asFirSymbol(): Any? = null
+            }
+        }
+        val ownerParameter = owner.addTypeParameter {
+            name = Name.identifier("T")
+            variance = Variance.INVARIANT
+        }
+        val function = IrFactoryImpl.buildFun {
+            name = Name.identifier("transfer")
+            returnType = ownerParameter.typeParameterDefaultType
+            modality = Modality.ABSTRACT
+            visibility = DescriptorVisibilities.PUBLIC
+            containerSource = fixture.source
+        }.apply {
+            parent = owner
+            addTypeParameter {
+                name = Name.identifier("M")
+                variance = Variance.INVARIANT
+            }
+        }
+        owner.declarations += function
+        externalPackage.declarations += owner
+        return RetainedForeignIrFixture(owner, function)
+    }
+
+    private fun retainedForeignCollisionDeclarations(
+        ownerKey: String,
+        functionKey: String,
+    ): DotNetExternalDeclarations = DotNetExternalDeclarations(listOf(
+        DotNetExternalLibrary(
+            artifact = DotNetLibraryArtifact("collision.Kotlin", "netstandard2.0"),
+            assemblyFile = File("collision.Kotlin.dll"),
+            declarations = mapOf(
+                ownerKey to DotNetPhysicalDeclaration.Class(
+                    ownerPath = listOf("collision.KotlinSource`1"),
+                    physicalTypeParameterCount = 1,
+                ),
+                functionKey to DotNetPhysicalDeclaration.Function(
+                    ownerPath = listOf("collision.KotlinSource`1"),
+                    methodName = "KotlinTransfer",
+                    isInstance = true,
+                    methodGenericParameterCount = 1,
+                ),
+            ),
+            friendAssemblies = emptySet(),
+        ),
+    ))
+
     private fun fixture(
         ownerParameterAttributes: Int = 0,
         methodParameterAttributes: Int = 0,
@@ -5883,6 +6082,11 @@ class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
 
     private fun Boolean.toNominalCarrierKind(): NominalCarrierKind =
         if (this) NominalCarrierKind.REFERENCE_CLASS else NominalCarrierKind.INTERFACE
+
+    private data class RetainedForeignIrFixture(
+        val owner: IrClass,
+        val function: IrSimpleFunction,
+    )
 
     private data class Fixture(
         val source: DotNetClrImportedMethodSource,

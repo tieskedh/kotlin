@@ -23,6 +23,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetStdlibArtifact
 import org.jetbrains.kotlin.backend.dotnet.validateDotNetGenericOwnerNaturalMethodDefAgainstClrMetadata
 import org.jetbrains.kotlin.backend.dotnet.validateDotNetGenericOwnerImplementationMethodDefAgainstClrMetadata
+import org.jetbrains.kotlin.backend.dotnet.validateDotNetGenericOwnerConstructorMethodDefAgainstClrMetadata
 import org.jetbrains.kotlin.backend.dotnet.readAndValidateDotNetGenericOwnerPeMetadata
 import org.jetbrains.kotlin.load.dotnet.DotNetManagedResourceReader
 import org.jetbrains.kotlin.load.dotnet.decodeDotNetClrAssemblyMetadata
@@ -710,6 +711,8 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
             .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef>()
         val implementationMethodDefs = declarations.values
             .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef>()
+        val constructorMethodDefs = declarations.values
+            .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerConstructorMethodDef>()
         val sealedFamilies = declarations.values
             .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerSealedFamily>()
         val semanticEquivalenceCertificates = declarations.values
@@ -717,6 +720,7 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
                     DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate>()
         var genericOwnerPeValidationStamp = DotNetGenericOwnerPeValidationStamp.EMPTY
         if (naturalMethodDefs.isNotEmpty() || implementationMethodDefs.isNotEmpty() ||
+            constructorMethodDefs.isNotEmpty() ||
             sealedFamilies.isNotEmpty() || semanticEquivalenceCertificates.isNotEmpty()
         ) {
             val producerTarget = checkNotNull(DotNetTarget.fromString(targetFramework))
@@ -725,14 +729,27 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
                     assemblyFile = embeddedSource.assemblyFile,
                     sealedFamilies = sealedFamilies,
                     semanticEquivalenceCertificates = semanticEquivalenceCertificates,
-                    coreLibraryAssemblyName = producerTarget.coreLibraryAssemblyName,
+                    producerTarget = producerTarget,
                 )
                 val assemblyMetadata = genericOwnerPeValidation.assemblyMetadata
                 naturalMethodDefs.forEach { declaration ->
                     validateDotNetGenericOwnerNaturalMethodDefAgainstClrMetadata(
                         declaration = declaration,
                         assembly = assemblyMetadata,
-                        coreLibraryAssemblyName = producerTarget.coreLibraryAssemblyName,
+                        producerTarget = producerTarget,
+                    )
+                }
+                constructorMethodDefs.forEach { declaration ->
+                    val owner = declarations[declaration.logicalOwnerKey]
+                            as? DotNetPhysicalDeclaration.Class
+                        ?: throw IllegalArgumentException(
+                            "constructor '${declaration.logicalConstructorKey}' lacks its C owner",
+                        )
+                    validateDotNetGenericOwnerConstructorMethodDefAgainstClrMetadata(
+                        declaration = declaration,
+                        ownerDeclaration = owner,
+                        assembly = assemblyMetadata,
+                        producerTarget = producerTarget,
                     )
                 }
                 val naturalByMemberKey = naturalMethodDefs.associateBy { declaration ->
@@ -747,7 +764,7 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
                         declaration = declaration,
                         naturalDeclaration = natural,
                         assembly = assemblyMetadata,
-                        coreLibraryAssemblyName = producerTarget.coreLibraryAssemblyName,
+                        producerTarget = producerTarget,
                     )
                 }
                 genericOwnerPeValidationStamp = genericOwnerPeValidation.stamp

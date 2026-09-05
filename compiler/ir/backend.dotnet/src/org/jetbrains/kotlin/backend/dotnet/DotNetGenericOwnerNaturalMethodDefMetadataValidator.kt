@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.config.DotNetTarget
 import org.jetbrains.kotlin.load.dotnet.DotNetClrAssemblyMetadata
 import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterKind
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMemberReferenceSignature
@@ -36,18 +37,120 @@ data class DotNetGenericOwnerImplementationMethodDefMetadataBinding(
     val splitNullableOutParameter: DotNetClrParameterDefinition?,
 )
 
+/** Exact PE row authenticated for one producer-recorded generic-owner constructor `L`. */
+data class DotNetGenericOwnerConstructorMethodDefMetadataBinding(
+    val logicalConstructorKey: String,
+    val declaringType: DotNetClrTypeDefinition,
+    val methodDefinition: DotNetClrMethodDefinition,
+)
+
+/**
+ * Authenticates a complete producer-recorded constructor header against objective CLR metadata.
+ *
+ * `F` is only a weak logical-to-name endpoint. The full `L` signature selects one overload, and
+ * these flag checks prove that the selected row is in fact a normal instance constructor rather
+ * than another same-named MethodDef with a constructor-looking signature.
+ */
+fun validateDotNetGenericOwnerConstructorMethodDefAgainstClrMetadata(
+    declaration: DotNetPhysicalDeclaration.GenericOwnerConstructorMethodDef,
+    ownerDeclaration: DotNetPhysicalDeclaration.Class,
+    assembly: DotNetClrAssemblyMetadata,
+    producerTarget: DotNetTarget,
+): DotNetGenericOwnerConstructorMethodDefMetadataBinding {
+    require(ownerDeclaration.ownerPath == declaration.ownerPath &&
+            ownerDeclaration.physicalClassVarianceKind == DotNetPhysicalClassVarianceKind.ORDINARY &&
+            ownerDeclaration.physicalTypeParameterVariances.all { variance ->
+                variance == DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT
+            }
+    ) {
+        "constructor '${declaration.logicalConstructorKey}' is joined to the wrong physical C owner"
+    }
+    val token = validateDotNetGenericOwnerNaturalMethodDefTokenAgainstClrMetadata(
+        logicalMemberKey = declaration.logicalConstructorKey,
+        physicalMethod = declaration.physicalMethod,
+        assembly = assembly,
+        producerTarget = producerTarget,
+    )
+    val method = token.methodDefinition
+    val ownerParameters = assembly.requireContiguousGenericParameters(
+        token.declaringType.handle,
+        "TypeDef",
+    )
+    val directlyDerivesFromCoreValueTypeOrEnum = token.declaringType.baseType?.let { baseType ->
+        assembly.matchesCoreLibraryTopLevelTypeReference(
+            handle = baseType,
+            expectedTypePath = listOf("System", "ValueType"),
+            expectedGenericArity = 0,
+            producerTarget = producerTarget,
+        ) || assembly.matchesCoreLibraryTopLevelTypeReference(
+            handle = baseType,
+            expectedTypePath = listOf("System", "Enum"),
+            expectedGenericArity = 0,
+            producerTarget = producerTarget,
+        )
+    } == true
+    require(!token.declaringType.isInterface &&
+            !directlyDerivesFromCoreValueTypeOrEnum &&
+            ownerParameters.size == ownerDeclaration.physicalTypeParameterCount &&
+            ownerParameters.map { parameter -> parameter.variance } ==
+            ownerDeclaration.physicalTypeParameterVariances.map { variance -> variance.toClrVariance() } &&
+            ownerParameters.all { parameter ->
+                parameter.variance == DotNetClrGenericParameterVariance.INVARIANT &&
+                        !parameter.hasReferenceTypeConstraint &&
+                        !parameter.hasNotNullableValueTypeConstraint &&
+                        !parameter.hasDefaultConstructorConstraint && !parameter.allowsByRefLike &&
+                        assembly.genericParameterConstraints.none { constraint ->
+                            constraint.owner == parameter.handle
+                        }
+            }
+    ) {
+        "producer DLL '${assembly.identity.name}' has reference-class TypeDef category, arity, variance, or " +
+                "constraints which disagree with constructor '${declaration.logicalConstructorKey}'"
+    }
+    val ownerChain = declaration.ownerPath.indices.map { depth ->
+        assembly.requireTypeDefinition(declaration.ownerPath.take(depth + 1))
+    }
+    require(ownerChain.last() == token.declaringType && ownerChain.withIndex().all { entry ->
+        entry.value.visibility == if (entry.index == 0) {
+            DotNetClrTypeVisibility.PUBLIC
+        } else {
+            DotNetClrTypeVisibility.NESTED_PUBLIC
+        }
+    }) {
+        "producer DLL '${assembly.identity.name}' has a non-public TypeDef in the owner chain of " +
+                "constructor '${declaration.logicalConstructorKey}'"
+    }
+    require(token.splitNullableOutParameter == null &&
+            method.name == ".ctor" &&
+            method.visibility == declaration.visibility.toClrVisibility() &&
+            !method.isStatic && !method.isVirtual && !method.isAbstract && !method.isFinal &&
+            (method.attributes and NEW_SLOT_ATTRIBUTE) == 0 &&
+            (method.attributes and HIDE_BY_SIG_ATTRIBUTE) != 0 &&
+            method.isSpecialName && method.isRuntimeSpecialName &&
+            assembly.requireContiguousGenericParameters(method.handle, "MethodDef").isEmpty()
+    ) {
+        "producer DLL '${assembly.identity.name}' has MethodDef flags which disagree with " +
+                "constructor '${declaration.logicalConstructorKey}'"
+    }
+    return DotNetGenericOwnerConstructorMethodDefMetadataBinding(
+        logicalConstructorKey = declaration.logicalConstructorKey,
+        declaringType = token.declaringType,
+        methodDefinition = method,
+    )
+}
+
 /**
  * Validates one ABI-63 natural MethodDef record against the objective metadata of its producer DLL.
  *
  * The declaration-index loader must call this before making the record available to a separately
  * compiled consumer. A match is structural and token-exact: logical IR types, source names, and
- * overload heuristics are never used to reconstruct the MethodDef. [coreLibraryAssemblyName] is
- * the physical core-library AssemblyRef selected by the producer's recorded target profile.
+ * overload heuristics are never used to reconstruct the MethodDef. [producerTarget] selects the
+ * bounded core-library AssemblyRef spellings admitted for the recorded producer profile.
  */
 fun validateDotNetGenericOwnerNaturalMethodDefAgainstClrMetadata(
     declaration: DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef,
     assembly: DotNetClrAssemblyMetadata,
-    coreLibraryAssemblyName: String,
+    producerTarget: DotNetTarget,
 ): DotNetGenericOwnerNaturalMethodDefMetadataBinding {
     val publication = declaration.publication()
     require(publication.logicalOwnerKey == declaration.logicalOwnerKey &&
@@ -60,7 +163,7 @@ fun validateDotNetGenericOwnerNaturalMethodDefAgainstClrMetadata(
         logicalMemberKey = declaration.logicalMemberKey,
         physicalMethod = declaration.physicalMethod,
         assembly = assembly,
-        coreLibraryAssemblyName = coreLibraryAssemblyName,
+        producerTarget = producerTarget,
     )
     assembly.requireNaturalDeclarationMatchesProducerSeal(
         logicalMemberKey = declaration.logicalMemberKey,
@@ -79,7 +182,7 @@ fun validateDotNetGenericOwnerImplementationMethodDefAgainstClrMetadata(
     declaration: DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef,
     naturalDeclaration: DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef,
     assembly: DotNetClrAssemblyMetadata,
-    coreLibraryAssemblyName: String,
+    producerTarget: DotNetTarget,
 ): DotNetGenericOwnerImplementationMethodDefMetadataBinding {
     require(declaration.logicalInterfaceMemberKey == naturalDeclaration.logicalMemberKey) {
         "an implementation MethodDef descriptor is joined to the wrong natural MethodDef"
@@ -88,7 +191,7 @@ fun validateDotNetGenericOwnerImplementationMethodDefAgainstClrMetadata(
         logicalMemberKey = declaration.implementationMemberKey,
         physicalMethod = declaration.physicalMethod,
         assembly = assembly,
-        coreLibraryAssemblyName = coreLibraryAssemblyName,
+        producerTarget = producerTarget,
     )
     val type = token.declaringType
     require(type.visibility == DotNetClrTypeVisibility.PUBLIC && !type.isInterface &&
@@ -173,7 +276,7 @@ fun validateDotNetGenericOwnerImplementationMethodDefAgainstClrMetadata(
         actual = naturalInterfaces.single().second,
         ownerGenericArity = ownerParameters.size,
         methodGenericArity = 0,
-        coreLibraryAssemblyName = coreLibraryAssemblyName,
+        producerTarget = producerTarget,
     )) {
         "producer DLL '${assembly.identity.name}' has the wrong InterfaceImpl arguments for " +
                 "${naturalDeclaration.ownerPath.renderPhysicalPath()} on " +
@@ -183,7 +286,7 @@ fun validateDotNetGenericOwnerImplementationMethodDefAgainstClrMetadata(
         logicalMemberKey = naturalDeclaration.logicalMemberKey,
         physicalMethod = naturalDeclaration.physicalMethod,
         assembly = assembly,
-        coreLibraryAssemblyName = coreLibraryAssemblyName,
+        producerTarget = producerTarget,
     )
     fun memberReferenceParentNamesConstruction(
         parent: DotNetClrMetadataHandle,
@@ -199,7 +302,7 @@ fun validateDotNetGenericOwnerImplementationMethodDefAgainstClrMetadata(
             actual = assembly.canonicalizeExactLocalTypeReferences(parentSignature),
             ownerGenericArity = ownerParameters.size,
             methodGenericArity = 0,
-            coreLibraryAssemblyName = coreLibraryAssemblyName,
+            producerTarget = producerTarget,
         )
     }
     fun declarationNamesNaturalConstruction(handle: DotNetClrMetadataHandle): Boolean = when (handle.table) {
@@ -395,15 +498,11 @@ internal fun validateDotNetGenericOwnerNaturalMethodDefTokenAgainstClrMetadata(
     logicalMemberKey: String,
     physicalMethod: DotNetGenericOwnerPhysicalMethodIdentityRecord,
     assembly: DotNetClrAssemblyMetadata,
-    coreLibraryAssemblyName: String,
+    producerTarget: DotNetTarget,
 ): DotNetGenericOwnerNaturalMethodDefMetadataBinding {
     require(logicalMemberKey.isNotEmpty()) {
         "a generic-owner natural MethodDef validation requires a logical member key"
     }
-    require(coreLibraryAssemblyName.isNotEmpty()) {
-        "a generic-owner natural MethodDef validation requires the selected core-library AssemblyRef"
-    }
-
     val declaringType = assembly.requireTypeDefinition(physicalMethod.physicalOwnerPath)
     val ownerGenericArity = assembly.requireContiguousGenericParameters(
         declaringType.handle,
@@ -427,7 +526,7 @@ internal fun validateDotNetGenericOwnerNaturalMethodDefTokenAgainstClrMetadata(
             method = method,
             expected = expected,
             ownerGenericArity = ownerGenericArity,
-            coreLibraryAssemblyName = coreLibraryAssemblyName,
+            producerTarget = producerTarget,
         )
     }
     require(matches.size == 1) {
@@ -562,6 +661,18 @@ private fun DotNetIlRawMethodDefVisibility.toClrVisibility(): DotNetClrMethodVis
     DotNetIlRawMethodDefVisibility.PRIVATE -> DotNetClrMethodVisibility.PRIVATE
 }
 
+private fun DotNetGenericOwnerPhysicalConstructorVisibility.toClrVisibility():
+        DotNetClrMethodVisibility = when (this) {
+    DotNetGenericOwnerPhysicalConstructorVisibility.PUBLIC -> DotNetClrMethodVisibility.PUBLIC
+    DotNetGenericOwnerPhysicalConstructorVisibility.FAMILY -> DotNetClrMethodVisibility.FAMILY
+    DotNetGenericOwnerPhysicalConstructorVisibility.ASSEMBLY -> DotNetClrMethodVisibility.ASSEMBLY
+    DotNetGenericOwnerPhysicalConstructorVisibility.FAMILY_AND_ASSEMBLY ->
+        DotNetClrMethodVisibility.FAMILY_AND_ASSEMBLY
+    DotNetGenericOwnerPhysicalConstructorVisibility.FAMILY_OR_ASSEMBLY ->
+        DotNetClrMethodVisibility.FAMILY_OR_ASSEMBLY
+    DotNetGenericOwnerPhysicalConstructorVisibility.PRIVATE -> DotNetClrMethodVisibility.PRIVATE
+}
+
 private fun DotNetGenericOwnerPhysicalTypeParameterVariance.toClrVariance():
         DotNetClrGenericParameterVariance = when (this) {
     DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT ->
@@ -581,7 +692,7 @@ private fun DotNetClrAssemblyMetadata.matchPhysicalMethod(
     method: DotNetClrMethodDefinition,
     expected: DotNetGenericOwnerPhysicalMethodSignatureRecord,
     ownerGenericArity: Int,
-    coreLibraryAssemblyName: String,
+    producerTarget: DotNetTarget,
 ): MethodMatch? {
     val actual = method.signature
     if (actual.callingConvention != DotNetClrSignatureCallingConvention.DEFAULT ||
@@ -608,7 +719,7 @@ private fun DotNetClrAssemblyMetadata.matchPhysicalMethod(
             actual = actual.returnType,
             ownerGenericArity = ownerGenericArity,
             methodGenericArity = methodGenericArity,
-            coreLibraryAssemblyName = coreLibraryAssemblyName,
+            producerTarget = producerTarget,
         )
     ) {
         return null
@@ -624,7 +735,7 @@ private fun DotNetClrAssemblyMetadata.matchPhysicalMethod(
                 actual = actual.parameterTypes[index],
                 ownerGenericArity = ownerGenericArity,
                 methodGenericArity = methodGenericArity,
-                coreLibraryAssemblyName = coreLibraryAssemblyName,
+                producerTarget = producerTarget,
             )
         }
     ) {
@@ -706,7 +817,7 @@ private fun DotNetClrAssemblyMetadata.matchesPhysicalType(
     actual: DotNetClrTypeSignature,
     ownerGenericArity: Int,
     methodGenericArity: Int,
-    coreLibraryAssemblyName: String,
+    producerTarget: DotNetTarget,
 ): Boolean = when (expected.kind) {
     DotNetGenericOwnerPhysicalTypeKind.VOID -> actual == DotNetClrTypeSignature.Void
     DotNetGenericOwnerPhysicalTypeKind.BOOLEAN ->
@@ -734,7 +845,7 @@ private fun DotNetClrAssemblyMetadata.matchesPhysicalType(
         actual = actual,
         ownerGenericArity = ownerGenericArity,
         methodGenericArity = methodGenericArity,
-        coreLibraryAssemblyName = coreLibraryAssemblyName,
+        producerTarget = producerTarget,
     )
     DotNetGenericOwnerPhysicalTypeKind.SZ_ARRAY -> {
         val array = actual as? DotNetClrTypeSignature.SzArray ?: return false
@@ -743,7 +854,7 @@ private fun DotNetClrAssemblyMetadata.matchesPhysicalType(
             actual = array.elementType,
             ownerGenericArity = ownerGenericArity,
             methodGenericArity = methodGenericArity,
-            coreLibraryAssemblyName = coreLibraryAssemblyName,
+            producerTarget = producerTarget,
         )
     }
 }
@@ -753,7 +864,7 @@ private fun DotNetClrAssemblyMetadata.matchesNamedPhysicalType(
     actual: DotNetClrTypeSignature,
     ownerGenericArity: Int,
     methodGenericArity: Int,
-    coreLibraryAssemblyName: String,
+    producerTarget: DotNetTarget,
 ): Boolean {
     val expectedValueType = expected.namedTypeCategory == DotNetGenericOwnerPhysicalNamedTypeCategory.VALUE_TYPE
     val actualNamed: DotNetClrTypeSignature.Named
@@ -788,11 +899,11 @@ private fun DotNetClrAssemblyMetadata.matchesNamedPhysicalType(
             }
         }
 
-        DotNetGenericOwnerPhysicalTypeScope.CORE_LIBRARY -> matchesExternalTopLevelTypeReference(
+        DotNetGenericOwnerPhysicalTypeScope.CORE_LIBRARY -> matchesCoreLibraryTopLevelTypeReference(
             handle = actualNamed.type,
             expectedTypePath = expected.typePath,
             expectedGenericArity = expected.genericArity,
-            expectedAssemblyName = coreLibraryAssemblyName,
+            producerTarget = producerTarget,
         )
 
         DotNetGenericOwnerPhysicalTypeScope.ASSEMBLY -> matchesExternalTopLevelTypeReference(
@@ -812,23 +923,55 @@ private fun DotNetClrAssemblyMetadata.matchesNamedPhysicalType(
             actual = actualArguments[index],
             ownerGenericArity = ownerGenericArity,
             methodGenericArity = methodGenericArity,
-            coreLibraryAssemblyName = coreLibraryAssemblyName,
+            producerTarget = producerTarget,
         )
     }
 }
+
+/**
+ * Matches only the architecture record's neutral `CORE_LIBRARY` scope. The profile-specific
+ * facade policy must never be reused for an explicit assembly-scoped or retained foreign identity.
+ */
+internal fun DotNetClrAssemblyMetadata.matchesCoreLibraryTopLevelTypeReference(
+    handle: DotNetClrMetadataHandle,
+    expectedTypePath: List<String>,
+    expectedGenericArity: Int,
+    producerTarget: DotNetTarget,
+): Boolean = matchesTopLevelTypeReference(
+    handle = handle,
+    expectedTypePath = expectedTypePath,
+    expectedGenericArity = expectedGenericArity,
+    acceptsAssemblyName = { assemblyName ->
+        producerTarget.acceptsCoreLibraryPeAssemblyName(assemblyName)
+    },
+)
 
 internal fun DotNetClrAssemblyMetadata.matchesExternalTopLevelTypeReference(
     handle: DotNetClrMetadataHandle,
     expectedTypePath: List<String>,
     expectedGenericArity: Int,
     expectedAssemblyName: String,
+): Boolean = matchesTopLevelTypeReference(
+    handle = handle,
+    expectedTypePath = expectedTypePath,
+    expectedGenericArity = expectedGenericArity,
+    acceptsAssemblyName = { assemblyName ->
+        assemblyName.equals(expectedAssemblyName, ignoreCase = true)
+    },
+)
+
+private fun DotNetClrAssemblyMetadata.matchesTopLevelTypeReference(
+    handle: DotNetClrMetadataHandle,
+    expectedTypePath: List<String>,
+    expectedGenericArity: Int,
+    acceptsAssemblyName: (String) -> Boolean,
 ): Boolean {
     if (handle.table != TYPE_REF_TABLE) return false
     val reference = typeReferences.singleOrNull { candidate -> candidate.handle == handle } ?: return false
     val scope = reference.resolutionScope ?: return false
     if (scope.table != ASSEMBLY_REF_TABLE) return false
     val assemblyReference = assemblyReferences.singleOrNull { candidate -> candidate.handle == scope } ?: return false
-    if (!assemblyReference.name.equals(expectedAssemblyName, ignoreCase = true)) return false
+    if (!acceptsAssemblyName(assemblyReference.name)) return false
 
     val expectedNamespace = expectedTypePath.dropLast(1).joinToString(".")
     val expectedMetadataName = expectedTypePath.last() +

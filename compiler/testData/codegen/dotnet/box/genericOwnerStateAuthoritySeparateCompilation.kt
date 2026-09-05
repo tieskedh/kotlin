@@ -40,6 +40,27 @@ public open class LateStateBase<out T>(initial: T) {
     public open fun transfer(): T = state
 }
 
+/** A fixed covariant interface view can physically carry a different CLR construction. */
+public interface FixedStateProducer<out T> {
+    public fun read(): T
+}
+
+/**
+ * Until constructor and state object carriers are sealed, this owner must remain erased.
+ * `FixedStateProducer<Int>` is a legal value for both the constructor parameter and field, but it
+ * is not a CLR `FixedStateProducer<object>`. External Kotlin callers use the producer function
+ * below because no portable physical `.ctor` record exists yet.
+ */
+public class FixedSemanticHolder<T>(public val value: FixedStateProducer<Any?>) {
+    public fun readValue(): Any? = value.read()
+
+    public fun sameValue(expected: Any?): Boolean = value === expected
+}
+
+public fun <T> fixedSemanticHolder(
+    value: FixedStateProducer<Any?>,
+): FixedSemanticHolder<T> = FixedSemanticHolder(value)
+
 // MODULE: middle(lib)
 // FILE: stateMiddle.kt
 
@@ -97,6 +118,13 @@ public fun sameLate(owner: LateStateChild<Any?>, expected: Any?): Boolean =
 package generic.owner.state.authority
 
 fun box(): String {
+    val fixedProducer: FixedStateProducer<Int> = object : FixedStateProducer<Int> {
+        override fun read(): Int = 29
+    }
+    val fixedHolder = fixedSemanticHolder<String>(fixedProducer)
+    if (!fixedHolder.sameValue(fixedProducer) || fixedHolder.readValue() != 29) {
+        return "fixed semantic state"
+    }
     val typedInt = TypedStateChild(11)
     typedInt.write(12)
     if (typedInt.read() != 12 || readTypedStar(typedInt) != 12) return "typed int"

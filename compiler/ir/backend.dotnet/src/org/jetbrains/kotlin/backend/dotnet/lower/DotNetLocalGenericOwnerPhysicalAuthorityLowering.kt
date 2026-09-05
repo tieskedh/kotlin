@@ -25,6 +25,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalSlotDomain
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeDefIdentity
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerSymbolicCarrierReference
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberFamilyRole
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberBodyPlacement
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceView
 import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultPromotionView
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalAuthority
@@ -39,11 +40,13 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalComple
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalCompleteEmissionTypeKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalGenericParameterReference
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalGenericBinderReference
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerArchitecturePlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalInterfaceEdgeInput
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalInterfaceCapabilityDispatcherSelection
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalCurrentMethodInput
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalStateFamilyInput
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalStateInput
+import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalStateWriterParameterInput
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalTypeInput
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalTypeRole
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceCapabilityBindingKind
@@ -52,6 +55,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMember
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMemberRole
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeParameterVariance
 import org.jetbrains.kotlin.backend.dotnet.bindDotNetLocalGenericOwnerPhysicalCallableResultOrError
+import org.jetbrains.kotlin.backend.dotnet.bindExactLocalGenericOwnerDependentCarrierOrError
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateCarrierRequirement
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateCarrierPlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateMemorySemantics
@@ -73,15 +77,18 @@ import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.declarations.IrClass
+import org.jetbrains.kotlin.ir.declarations.IrConstructor
 import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrFunction
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.declarations.IrValueParameter
 import org.jetbrains.kotlin.ir.expressions.IrGetValue
 import org.jetbrains.kotlin.ir.expressions.IrSetField
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
+import org.jetbrains.kotlin.ir.symbols.IrFieldSymbol
 import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
@@ -386,13 +393,14 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
                 if (inputsByIdentity[ownerIdentity]?.role !=
                     DotNetLocalGenericOwnerPhysicalTypeRole.GENERIC_CLASS
                 ) continue
-                bindDirectOwnerParameterStateFamilyOrNull(
+                val selection = bindDirectOwnerParameterStateFamilyOrNull(
                     irModule,
-                    plan.owner,
-                    plan.stateCarriers.values,
+                    plan,
                     declarations,
+                    inputsByIdentity,
                 )
-                    ?.let(stateFamilies::add)
+                    ?: continue
+                stateFamilies += selection.family
             }
             DotNetGenericOwnerPhysicalBindingResult.Bound(
                 DotNetLocalGenericOwnerPhysicalBoundInput(
@@ -435,6 +443,8 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
     ): Pair<DotNetGenericOwnerPhysicalMethodDefReference, DotNetLocalGenericOwnerPhysicalCurrentMethodInput>? {
         prototype ?: return null
         val physical = prototype.function
+        val hasPairedNaturalBody = context.genericOwnerMemberBodyPlacements[source] ==
+                DotNetGenericOwnerMemberBodyPlacement.PAIRED_NATURAL_AND_SEMANTIC
         if (source.parent !== owner || prototype.source !== source || physical.parent !== owner ||
             context.preLoweringGenericOwnerFunctionInputAuthorities[source] == null ||
             source.isFakeOverride || source.body == null || source.isSuspend || source.isPublishedApi() ||
@@ -442,10 +452,13 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
             source.correspondingPropertySymbol != null || source.modality != Modality.FINAL ||
             source.overriddenSymbols.isNotEmpty() ||
             DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY !in family.roles ||
-            DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in family.roles ||
+            DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in family.roles &&
+                    !hasPairedNaturalBody ||
             family.roles.any { role ->
                 role != DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY &&
-                        role != DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER
+                        role != DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER &&
+                        !(hasPairedNaturalBody &&
+                                role == DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK)
             } ||
             family.maskedDefaultDispatcher != null || family.requiresDirectSuperTargets ||
             family.directSuperCallCount != 0 || family.directSuperCalls.isNotEmpty() ||
@@ -713,19 +726,29 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
     }
 
     /**
-     * First state grammar: the complete owner-dependent field set consists of exactly one private,
-     * mutable, direct owner-parameter slot. Multiple, nested, projected, logically nullable, and
-     * unresolved-writer shapes remain unavailable rather than being guessed. The resulting open
-     * `!T` FieldDef still applies to every CLR-valid construction of that admitted owner.
+     * First exact state grammar: every owner-dependent field is one private instance slot whose
+     * non-null invariant carrier can be bound recursively from admitted local TypeDefs, fixed
+     * leaves, and this owner's own GenericParams. Each field binds independently; projected,
+     * logically nullable, foreign, and unresolved-writer shapes remain unavailable rather than
+     * being guessed. Semantic state continues to select object explicitly.
      */
+    private data class BoundStateFamilySelection(
+        val family: DotNetLocalGenericOwnerPhysicalStateFamilyInput,
+    )
+
     private fun bindDirectOwnerParameterStateFamilyOrNull(
         module: IrModuleFragment,
-        owner: IrClass,
-        candidates: Collection<org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateCarrierPlan>,
+        plan: DotNetGenericOwnerArchitecturePlan,
         declarations: org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalDeclarationIndex,
-    ): DotNetLocalGenericOwnerPhysicalStateFamilyInput? {
+        inputsByIdentity: Map<
+                DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+                DotNetLocalGenericOwnerPhysicalTypeInput,
+                >,
+    ): BoundStateFamilySelection? {
+        val owner = plan.owner
+        val candidates = plan.stateCarriers.values
         val ownerDependent = candidates.filter { state -> state.field.type.referencesTypeParameterOf(owner) }
-        if (ownerDependent.size != 1) return null
+        if (ownerDependent.isEmpty()) return null
         val plannedInstanceFields = candidates.map(DotNetGenericOwnerStateCarrierPlan::field)
             .filterNot(IrField::isStatic)
             .mapTo(linkedSetOf(), IrField::symbol)
@@ -735,33 +758,40 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
         val states = mutableListOf<DotNetLocalGenericOwnerPhysicalStateInput>()
         for (state in ownerDependent) {
             val field = state.field
-            val parameterIndex = owner.typeParameters.indexOfFirst { parameter ->
-                field.type == parameter.defaultType
-            }.takeIf { index -> index >= 0 } ?: return null
-            if (field.isStatic || field.isFinal || !DescriptorVisibilities.isPrivate(field.visibility) ||
+            if (field.isStatic || !DescriptorVisibilities.isPrivate(field.visibility) ||
                 state.requirement !in setOf(
                     DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN,
                     DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED,
                 )
             ) return null
-            val initializer = state.initializers.singleOrNull() ?: return null
-            if (initializer.kind !=
-                    DotNetGenericOwnerPrototypeStateInitializerKind.POSITIONAL_CONSTRUCTOR_PARAMETER ||
-                initializer.constructorParameterIndex == null ||
-                state.initializationWriterLabels != setOf(initializer.producerName)
-            ) return null
-            if (state.requirement ==
-                    DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN &&
-                !module.hasOnlyLiveDirectOwnerParameterStores(state, owner)
-            ) return null
+            val hasImplicitInitializer = when (state.initializers.size) {
+                0 -> false
+                1 -> {
+                    val initializer = state.initializers.single()
+                    if (initializer.kind !=
+                            DotNetGenericOwnerPrototypeStateInitializerKind.POSITIONAL_CONSTRUCTOR_PARAMETER ||
+                        initializer.constructorParameterIndex == null ||
+                        state.initializationWriterLabels != setOf(initializer.producerName)
+                    ) return null
+                    true
+                }
+                else -> return null
+            }
             val carrier = when (state.requirement) {
-                DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN ->
-                    when (val binding = declarations.typeParameterOrError(ownerIdentity, parameterIndex)) {
-                        is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
-                        is DotNetGenericOwnerPhysicalBindingResult.Conflict,
-                        DotNetGenericOwnerPhysicalBindingResult.Unavailable,
-                        -> return null
-                    }
+                DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN -> {
+                    val binding = bindExactStateCarrierOrNull(
+                        field.type,
+                        owner,
+                        ownerIdentity,
+                        declarations,
+                        inputsByIdentity,
+                    ) ?: return null
+                    if (!binding.referencesCurrentOwnerParameter(ownerIdentity) ||
+                        binding !is DotNetGenericOwnerSymbolicCarrierReference.Parameter &&
+                        binding !is DotNetGenericOwnerSymbolicCarrierReference.Constructed
+                    ) return null
+                    binding
+                }
                 DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED ->
                     DotNetGenericOwnerSymbolicCarrierReference.objectCarrier()
                 DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE,
@@ -770,13 +800,42 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
                 DotNetGenericOwnerStateCarrierRequirement.TYPED_WRITE_VALUE_PROVENANCE_REQUIRED,
                 -> return null
             }
+            val implicitTypedWriter = if (state.requirement ==
+                    DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN &&
+                hasImplicitInitializer
+            ) {
+                field.exactTypedConstructorParameterInitializerOrNull(
+                    state.initializers.single().constructorParameterIndex!!,
+                    plan,
+                    carrier,
+                    ownerIdentity,
+                    declarations,
+                    inputsByIdentity,
+                ) ?: return null
+            } else {
+                null
+            }
+            val liveStores = module.liveDirectParameterStoreShape(
+                state,
+                plan,
+                carrier,
+                ownerIdentity,
+                declarations,
+                inputsByIdentity,
+            )
+            if (!hasImplicitInitializer && (!liveStores.hasStores || !liveStores.isValid)) return null
+            if (state.requirement ==
+                    DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN
+            ) {
+                if (!liveStores.isValid) return null
+            }
             if (state.memorySemantics != DotNetGenericOwnerStateMemorySemantics.PLAIN) return null
             states += DotNetLocalGenericOwnerPhysicalStateInput(
                 field = field.symbol,
                 logicalFieldName = field.name.asString(),
                 requirement = state.requirement,
                 memorySemantics = state.memorySemantics,
-                hasImplicitFieldInitializer = state.initializers.isNotEmpty(),
+                hasImplicitFieldInitializer = hasImplicitInitializer,
                 fieldDefinition = DotNetGenericOwnerPhysicalFieldDefReference(
                     identity = DotNetGenericOwnerPhysicalFieldDefIdentity.Local(field.symbol),
                     declaringType = ownerIdentity,
@@ -786,12 +845,24 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
                     isInitOnly = false,
                     carrier = carrier,
                 ),
+                typedWriterParameters = if (state.requirement ==
+                    DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN
+                ) {
+                    buildList {
+                        implicitTypedWriter?.let(::add)
+                        addAll(liveStores.typedWriterParameters)
+                    }.distinct()
+                } else {
+                    emptyList()
+                },
             )
         }
-        return DotNetLocalGenericOwnerPhysicalStateFamilyInput(
-            owner = ownerIdentity,
-            boundInstanceFields = boundInstanceFields,
-            states = states,
+        return BoundStateFamilySelection(
+            DotNetLocalGenericOwnerPhysicalStateFamilyInput(
+                owner = ownerIdentity,
+                boundInstanceFields = boundInstanceFields,
+                states = states,
+            ),
         )
     }
 
@@ -800,11 +871,28 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
      * facts alone cannot authorize a new copied/generated store; an unsupported live shape simply
      * leaves this rehearsal family unavailable rather than becoming a later internal failure.
      */
-    private fun IrModuleFragment.hasOnlyLiveDirectOwnerParameterStores(
+    private data class LiveDirectParameterStoreShape(
+        val isValid: Boolean,
+        val hasStores: Boolean,
+        val typedWriterParameters: Set<DotNetLocalGenericOwnerPhysicalStateWriterParameterInput>,
+    )
+
+    private fun IrModuleFragment.liveDirectParameterStoreShape(
         state: DotNetGenericOwnerStateCarrierPlan,
-        owner: IrClass,
-    ): Boolean {
+        plan: DotNetGenericOwnerArchitecturePlan,
+        selectedCarrier: DotNetGenericOwnerSymbolicCarrierReference,
+        ownerIdentity: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+        declarations: org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalDeclarationIndex,
+        inputsByIdentity: Map<
+                DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+                DotNetLocalGenericOwnerPhysicalTypeInput,
+                >,
+    ): LiveDirectParameterStoreShape {
+        val owner = plan.owner
         var valid = true
+        var hasStores = false
+        val typedWriterParameters =
+            linkedSetOf<DotNetLocalGenericOwnerPhysicalStateWriterParameterInput>()
         var containingFunction: IrFunction? = null
         acceptVoid(object : IrVisitorVoid() {
             override fun visitElement(element: IrElement) {
@@ -820,21 +908,180 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
 
             override fun visitSetField(expression: IrSetField) {
                 if (expression.symbol == state.field.symbol) {
+                    hasStores = true
                     val writer = containingFunction
                     val value = expression.value as? IrGetValue
                     val parameter = writer?.parameters?.singleOrNull { candidate ->
                         candidate.symbol == value?.symbol
                     }
-                    valid = valid && value != null && parameter != null &&
+                    val logicalDirectParameterStore = value != null && parameter != null &&
                             parameter.kind != IrParameterKind.DispatchReceiver &&
                             parameter.type == state.field.type && value.type == state.field.type &&
                             state.field.type.referencesTypeParameterOf(owner)
+                    val storeIsValid = if (state.requirement ==
+                        DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN
+                    ) {
+                        logicalDirectParameterStore && writer in state.directWriters && writer.parent === owner &&
+                                expression.hasCurrentThisReceiver(writer, owner) &&
+                                exactWriterParameterCarrierOrNull(
+                                    writer,
+                                    parameter,
+                                    plan,
+                                    ownerIdentity,
+                                    declarations,
+                                    inputsByIdentity,
+                                ) == selectedCarrier
+                    } else {
+                        logicalDirectParameterStore
+                    }
+                    valid = valid && storeIsValid
+                    if (storeIsValid && state.requirement ==
+                        DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN
+                    ) {
+                        typedWriterParameters += DotNetLocalGenericOwnerPhysicalStateWriterParameterInput(
+                            checkNotNull(writer).symbol,
+                            checkNotNull(parameter).symbol,
+                        )
+                    }
                 }
                 expression.acceptChildrenVoid(this)
             }
         })
-        return valid
+        return LiveDirectParameterStoreShape(
+            valid,
+            hasStores,
+            typedWriterParameters,
+        )
     }
+
+    private fun IrField.exactTypedConstructorParameterInitializerOrNull(
+        expectedParameterIndex: Int,
+        plan: DotNetGenericOwnerArchitecturePlan,
+        selectedCarrier: DotNetGenericOwnerSymbolicCarrierReference,
+        ownerIdentity: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+        declarations: org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalDeclarationIndex,
+        inputsByIdentity: Map<
+                DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+                DotNetLocalGenericOwnerPhysicalTypeInput,
+                >,
+    ): DotNetLocalGenericOwnerPhysicalStateWriterParameterInput? {
+        val value = initializer?.expression as? IrGetValue ?: return null
+        val parameter = value.symbol.owner as? IrValueParameter ?: return null
+        val constructor = parameter.parent as? IrConstructor ?: return null
+        val parameterIndex = constructor.parameters.indexOf(parameter)
+        if (constructor.parent !== plan.owner || parameterIndex != expectedParameterIndex ||
+            value.type != type
+        ) return null
+        if (exactWriterParameterCarrierOrNull(
+            constructor,
+            parameter,
+            plan,
+            ownerIdentity,
+            declarations,
+            inputsByIdentity,
+        ) != selectedCarrier) return null
+        return DotNetLocalGenericOwnerPhysicalStateWriterParameterInput(
+            constructor.symbol,
+            parameter.symbol,
+        )
+    }
+
+    private fun IrSetField.hasCurrentThisReceiver(writer: IrFunction, owner: IrClass): Boolean {
+        val receiver = receiver as? IrGetValue ?: return false
+        val expected = writer.dispatchReceiverParameter?.symbol ?: owner.thisReceiver?.symbol ?: return false
+        return receiver.symbol == expected
+    }
+
+    /**
+     * Returns the exact verifier-visible parameter carrier only when RepresentationPlan still owns
+     * this source MethodDef slot. A logical `T` is insufficient: generated semantic helpers and
+     * object-carried entries may retain that logical type while emitting `object` physically.
+     */
+    private fun exactWriterParameterCarrierOrNull(
+        writer: IrFunction,
+        parameter: IrValueParameter,
+        plan: DotNetGenericOwnerArchitecturePlan,
+        ownerIdentity: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+        declarations: org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalDeclarationIndex,
+        inputsByIdentity: Map<
+                DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+                DotNetLocalGenericOwnerPhysicalTypeInput,
+                >,
+    ): DotNetGenericOwnerSymbolicCarrierReference? {
+        if (writer.parent !== plan.owner || parameter.kind != IrParameterKind.Regular ||
+            writer in context.genericOwnerCapabilityDeclarations ||
+            writer in context.genericOwnerForeignDispatchDeclarations ||
+            parameter in context.genericOwnerCapabilityDeclarations ||
+            parameter in context.genericOwnerForeignDispatchDeclarations
+        ) return null
+        val isStrictPhysicalInput = when (writer) {
+            is IrConstructor -> {
+                val constructorPlan = plan.constructors.singleOrNull { candidate ->
+                    candidate.source === writer
+                } ?: return null
+                val index = writer.parameters.indexOf(parameter)
+                index >= 0 && index !in constructorPlan.semanticObjectParameterIndices &&
+                        constructorPlan.parameterSlotDomains.getOrNull(index) ==
+                        DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT
+            }
+            is IrSimpleFunction -> {
+                val memberPlan = plan.memberFamilies[writer] ?: return null
+                val explicitParameters = writer.parameters.filter { candidate ->
+                    candidate.kind != IrParameterKind.DispatchReceiver
+                }
+                val index = explicitParameters.indexOf(parameter)
+                index >= 0 && index !in memberPlan.semanticObjectParameterIndices &&
+                        memberPlan.parameterSlotDomains.getOrNull(index) ==
+                        DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT
+            }
+        }
+        if (!isStrictPhysicalInput) return null
+        return bindExactStateCarrierOrNull(
+            parameter.type,
+            plan.owner,
+            ownerIdentity,
+            declarations,
+            inputsByIdentity,
+        )
+    }
+
+    private fun bindExactStateCarrierOrNull(
+        type: IrType,
+        owner: IrClass,
+        ownerIdentity: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+        declarations: org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalDeclarationIndex,
+        inputsByIdentity: Map<
+                DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+                DotNetLocalGenericOwnerPhysicalTypeInput,
+                >,
+    ): DotNetGenericOwnerSymbolicCarrierReference? =
+        when (val result = bindExactLocalGenericOwnerDependentCarrierOrError(
+            type,
+            owner,
+            ownerIdentity,
+            declarations,
+        ) { classifier ->
+            val classIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+                classifier,
+                view = null,
+            )
+            val naturalIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+                classifier,
+                DotNetGenericInterfaceView.DECLARED,
+            )
+            when {
+                inputsByIdentity[classIdentity]?.role ==
+                        DotNetLocalGenericOwnerPhysicalTypeRole.GENERIC_CLASS -> classIdentity
+                inputsByIdentity[naturalIdentity]?.role ==
+                        DotNetLocalGenericOwnerPhysicalTypeRole.NATURAL_INTERFACE -> naturalIdentity
+                else -> null
+            }
+        }) {
+            is DotNetGenericOwnerPhysicalBindingResult.Bound -> result.value.carrier.type
+            is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                error("Internal .NET backend error: ${result.reason}")
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable -> null
+        }
 
     private fun IrClass.directInstanceFields(): Set<IrField> =
         declarations.flatMapTo(linkedSetOf()) { declaration ->

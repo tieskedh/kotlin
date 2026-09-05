@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.config.DotNetTarget
 import org.jetbrains.kotlin.load.dotnet.DotNetClrAssemblyMetadata
 import org.jetbrains.kotlin.load.dotnet.DotNetClrAssemblyReference
 import org.jetbrains.kotlin.load.dotnet.DotNetClrArrayShape
@@ -36,6 +37,158 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class DotNetGenericOwnerNaturalMethodDefMetadataValidatorTest {
+    @Test
+    fun bindsExactConstructorOverloadAndAuthenticatesConstructorFlags() {
+        val fixture = constructorMetadataFixture(includeStringDecoy = true)
+        val binding = validateDotNetGenericOwnerConstructorMethodDefAgainstClrMetadata(
+            declaration = constructorDeclaration(),
+            ownerDeclaration = constructorOwnerDeclaration(),
+            assembly = fixture.assembly,
+            producerTarget = TARGET,
+        )
+
+        assertEquals(fixture.objectConstructor, binding.methodDefinition.handle)
+
+        val selected = fixture.assembly.methodDefinitions.single { method ->
+            method.handle == fixture.objectConstructor
+        }
+        listOf(
+            selected.copy(attributes = selected.attributes and RUNTIME_SPECIAL_NAME_ATTRIBUTE.inv()),
+            selected.copy(attributes = selected.attributes and SPECIAL_NAME_ATTRIBUTE.inv()),
+            selected.copy(attributes = selected.attributes and HIDE_BY_SIG_ATTRIBUTE.inv()),
+            selected.copy(attributes = selected.attributes or VIRTUAL_ATTRIBUTE),
+            selected.copy(attributes = selected.attributes or NEW_SLOT_ATTRIBUTE),
+            selected.copy(attributes = selected.attributes or STATIC_ATTRIBUTE),
+        ).forEachIndexed { index, hostile ->
+            assertFailsWith<IllegalArgumentException>("constructor flag hostile $index was accepted") {
+                validateDotNetGenericOwnerConstructorMethodDefAgainstClrMetadata(
+                    declaration = constructorDeclaration(),
+                    ownerDeclaration = constructorOwnerDeclaration(),
+                    assembly = fixture.assembly.copy(
+                        methodDefinitions = fixture.assembly.methodDefinitions.map { method ->
+                            if (method.handle == hostile.handle) hostile else method
+                        },
+                    ),
+                    producerTarget = TARGET,
+                )
+            }
+        }
+
+        val ownerParameter = fixture.assembly.genericParameterDefinitions.single()
+        val ownerHostiles = listOf(
+            fixture.assembly.copy(typeDefinitions = fixture.assembly.typeDefinitions.map { type ->
+                type.copy(attributes = type.attributes or INTERFACE_ATTRIBUTE)
+            }),
+            fixture.assembly.copy(genericParameterDefinitions = emptyList()),
+            fixture.assembly.copy(genericParameterDefinitions = listOf(
+                ownerParameter.copy(attributes = COVARIANT_ATTRIBUTE),
+            )),
+            fixture.assembly.copy(genericParameterDefinitions = listOf(
+                ownerParameter.copy(attributes = REFERENCE_TYPE_CONSTRAINT_ATTRIBUTE),
+            )),
+        )
+        ownerHostiles.forEachIndexed { index, hostile ->
+            assertFailsWith<IllegalArgumentException>("constructor owner hostile $index was accepted") {
+                validateDotNetGenericOwnerConstructorMethodDefAgainstClrMetadata(
+                    declaration = constructorDeclaration(),
+                    ownerDeclaration = constructorOwnerDeclaration(),
+                    assembly = hostile,
+                    producerTarget = TARGET,
+                )
+            }
+        }
+    }
+
+    @Test
+    fun authenticatesTheCompleteNestedConstructorOwnerVisibilityChain() {
+        val ownerPath = listOf("demo.Outer", "Box`1")
+        val fixture = constructorMetadataFixture().withNestedOwner(
+            outerAttributes = IMPLEMENTATION_TYPE_ATTRIBUTES,
+            leafAttributes = NESTED_PUBLIC_TYPE_ATTRIBUTES,
+        )
+        validateDotNetGenericOwnerConstructorMethodDefAgainstClrMetadata(
+            declaration = constructorDeclaration(ownerPath),
+            ownerDeclaration = constructorOwnerDeclaration(ownerPath),
+            assembly = fixture,
+            producerTarget = TARGET,
+        )
+
+        val outer = fixture.typeDefinitions.single { type -> type.declaringType == null }
+        val hiddenOuter = fixture.copy(typeDefinitions = fixture.typeDefinitions.map { type ->
+            if (type.handle == outer.handle) type.copy(attributes = NOT_PUBLIC_TYPE_ATTRIBUTES) else type
+        })
+        val failure = assertFailsWith<IllegalArgumentException> {
+            validateDotNetGenericOwnerConstructorMethodDefAgainstClrMetadata(
+                declaration = constructorDeclaration(ownerPath),
+                ownerDeclaration = constructorOwnerDeclaration(ownerPath),
+                assembly = hiddenOuter,
+                producerTarget = TARGET,
+            )
+        }
+        assertTrue(failure.message.orEmpty().contains("non-public TypeDef"))
+    }
+
+    @Test
+    fun rejectsAmbiguousExactConstructorSignature() {
+        val fixture = constructorMetadataFixture(includeDuplicateObject = true)
+
+        val failure = assertFailsWith<IllegalArgumentException> {
+            validateDotNetGenericOwnerConstructorMethodDefAgainstClrMetadata(
+                declaration = constructorDeclaration(),
+                ownerDeclaration = constructorOwnerDeclaration(),
+                assembly = fixture.assembly,
+                producerTarget = TARGET,
+            )
+        }
+        assertTrue(failure.message.orEmpty().contains("ambiguous"))
+    }
+
+    @Test
+    fun rejectsVariantOrdinaryClassEvenWhenRecordedCAndPeAgree() {
+        val fixture = constructorMetadataFixture()
+        val ownerParameter = fixture.assembly.genericParameterDefinitions.single()
+        listOf(
+            DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT to COVARIANT_ATTRIBUTE,
+            DotNetGenericOwnerPhysicalTypeParameterVariance.CONTRAVARIANT to CONTRAVARIANT_ATTRIBUTE,
+        ).forEach { variancePair ->
+            val recordedVariance = variancePair.first
+            val peVariance = variancePair.second
+            assertFailsWith<IllegalArgumentException>(
+                "ordinary class owner with $recordedVariance GenericParam was accepted",
+            ) {
+                validateDotNetGenericOwnerConstructorMethodDefAgainstClrMetadata(
+                    declaration = constructorDeclaration(),
+                    ownerDeclaration = constructorOwnerDeclaration().copy(
+                        physicalTypeParameterVariances = listOf(recordedVariance),
+                    ),
+                    assembly = fixture.assembly.copy(
+                        genericParameterDefinitions = listOf(
+                            ownerParameter.copy(attributes = peVariance),
+                        ),
+                    ),
+                    producerTarget = TARGET,
+                )
+            }
+        }
+    }
+
+    @Test
+    fun rejectsConstructorsOnCoreValueTypeAndEnumOwners() {
+        listOf("ValueType", "Enum").forEach { baseTypeName ->
+            val fixture = constructorMetadataFixture()
+            assertFailsWith<IllegalArgumentException>(
+                "generic owner deriving directly from System.$baseTypeName was accepted",
+            ) {
+                validateDotNetGenericOwnerConstructorMethodDefAgainstClrMetadata(
+                    declaration = constructorDeclaration(),
+                    ownerDeclaration = constructorOwnerDeclaration(),
+                    assembly = fixture.withCoreOwnerBaseType(baseTypeName),
+                    producerTarget = TARGET,
+                )
+            }
+        }
+    }
+
     @Test
     fun joinsRecordedOrdinaryInputsAndDirectOwnerResultWithLogicalKlibProjection() {
         val owner = DotNetIlClassInfo(
@@ -106,7 +259,7 @@ class DotNetGenericOwnerNaturalMethodDefMetadataValidatorTest {
         val binding = validateDotNetGenericOwnerNaturalMethodDefAgainstClrMetadata(
             declaration = directNaturalMethodDefDeclaration(),
             assembly = assembly,
-            coreLibraryAssemblyName = CORE_LIBRARY,
+            producerTarget = TARGET,
         )
 
         assertEquals(fixture.targetMethod, binding.methodDefinition.handle)
@@ -141,7 +294,7 @@ class DotNetGenericOwnerNaturalMethodDefMetadataValidatorTest {
                 declaration.logicalMemberKey,
                 declaration.physicalMethod,
                 wrongTail,
-                CORE_LIBRARY,
+                TARGET,
             )
         }
 
@@ -153,7 +306,7 @@ class DotNetGenericOwnerNaturalMethodDefMetadataValidatorTest {
                 declaration.logicalMemberKey,
                 declaration.physicalMethod,
                 missingOut,
-                CORE_LIBRARY,
+                TARGET,
             )
         }
 
@@ -163,7 +316,7 @@ class DotNetGenericOwnerNaturalMethodDefMetadataValidatorTest {
                 declaration.logicalMemberKey,
                 declaration.physicalMethod,
                 ambiguous,
-                CORE_LIBRARY,
+                TARGET,
             )
         }
         assertTrue(ambiguity.message.orEmpty().contains("ambiguous"))
@@ -253,7 +406,7 @@ class DotNetGenericOwnerNaturalMethodDefMetadataValidatorTest {
                         declarationMethod = fixture.otherNaturalMethod,
                     ),
                 )),
-                coreLibraryAssemblyName = CORE_LIBRARY,
+                producerTarget = TARGET,
             )
         }
 
@@ -322,7 +475,7 @@ class DotNetGenericOwnerNaturalMethodDefMetadataValidatorTest {
                             declarationMethod = declarationReference.handle,
                         )),
                     ),
-                    coreLibraryAssemblyName = CORE_LIBRARY,
+                    producerTarget = TARGET,
                 )
             }
             assertTrue(failure.message.orEmpty().contains("explicitly redirects"))
@@ -371,7 +524,7 @@ class DotNetGenericOwnerNaturalMethodDefMetadataValidatorTest {
                                 interfaceType = aliasSpecification.handle,
                             ),
                 ),
-                coreLibraryAssemblyName = CORE_LIBRARY,
+                producerTarget = TARGET,
             )
         }
 
@@ -417,7 +570,7 @@ class DotNetGenericOwnerNaturalMethodDefMetadataValidatorTest {
                         declarationMethod = fixture.otherImplementationMethod,
                     )),
                 ),
-                coreLibraryAssemblyName = CORE_LIBRARY,
+                producerTarget = TARGET,
             )
         }
 
@@ -511,7 +664,7 @@ class DotNetGenericOwnerNaturalMethodDefMetadataValidatorTest {
                             declarationMethod = fixture.otherImplementationMethod,
                         )),
                     ),
-                    coreLibraryAssemblyName = CORE_LIBRARY,
+                    producerTarget = TARGET,
                 )
             }
             assertTrue(failure.message.orEmpty().contains("explicitly redirects"))
@@ -607,7 +760,7 @@ class DotNetGenericOwnerNaturalMethodDefMetadataValidatorTest {
                     ),
                 ),
             ),
-            coreLibraryAssemblyName = CORE_LIBRARY,
+            producerTarget = TARGET,
         )
 
         assertEquals(fixture.implementationMethod, binding.methodDefinition.handle)
@@ -736,7 +889,7 @@ class DotNetGenericOwnerNaturalMethodDefMetadataValidatorTest {
                     declarationMethod = fixture.otherImplementationMethod,
                 )),
             ),
-            coreLibraryAssemblyName = CORE_LIBRARY,
+            producerTarget = TARGET,
         )
 
         assertEquals(fixture.implementationMethod, binding.methodDefinition.handle)
@@ -770,7 +923,7 @@ class DotNetGenericOwnerNaturalMethodDefMetadataValidatorTest {
         return validateDotNetGenericOwnerNaturalMethodDefAgainstClrMetadata(
             declaration = publication.toNaturalMethodDefPhysicalDeclaration("demo/Source|class"),
             assembly = assembly,
-            coreLibraryAssemblyName = CORE_LIBRARY,
+            producerTarget = TARGET,
         )
     }
 
@@ -1070,8 +1223,181 @@ class DotNetGenericOwnerNaturalMethodDefMetadataValidatorTest {
         )
     }
 
+    private data class ConstructorMetadataFixture(
+        val assembly: DotNetClrAssemblyMetadata,
+        val objectConstructor: DotNetClrMetadataHandle,
+    )
+
+    private fun constructorDeclaration(
+        ownerPath: List<String> = listOf("demo.Box`1"),
+    ):
+            DotNetPhysicalDeclaration.GenericOwnerConstructorMethodDef {
+        return DotNetPhysicalDeclaration.GenericOwnerConstructorMethodDef(
+            logicalOwnerKey = "C:demo/Box",
+            logicalConstructorKey = "F:demo/Box.<init>|object",
+            ownerPath = ownerPath,
+            physicalMethod = DotNetGenericOwnerPhysicalMethodIdentityRecord(
+                physicalOwnerPath = ownerPath,
+                physicalMethodName = ".ctor",
+                signature = DotNetGenericOwnerPhysicalMethodSignatureRecord(
+                    isInstance = true,
+                    genericArity = 0,
+                    resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Void,
+                    parameterSlots = listOf(DotNetGenericOwnerPhysicalValueSlotRecord(
+                        DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
+                        DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType(),
+                    )),
+                ),
+            ),
+            visibility = DotNetGenericOwnerPhysicalConstructorVisibility.PUBLIC,
+        )
+    }
+
+    private fun constructorOwnerDeclaration(
+        ownerPath: List<String> = listOf("demo.Box`1"),
+    ) = DotNetPhysicalDeclaration.Class(
+        ownerPath = ownerPath,
+        physicalTypeParameterCount = 1,
+        physicalTypeParameterVariances = listOf(
+            DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+        ),
+    )
+
+    private fun constructorMetadataFixture(
+        includeStringDecoy: Boolean = false,
+        includeDuplicateObject: Boolean = false,
+    ): ConstructorMetadataFixture {
+        val owner = DotNetClrMetadataHandle(TYPE_DEF_TABLE, 1)
+        val objectConstructor = DotNetClrMetadataHandle(METHOD_DEF_TABLE, 1)
+        val stringConstructor = DotNetClrMetadataHandle(METHOD_DEF_TABLE, 2)
+        val duplicateObject = DotNetClrMetadataHandle(METHOD_DEF_TABLE, 3)
+        fun constructor(
+            handle: DotNetClrMetadataHandle,
+            parameterType: DotNetClrPrimitiveType,
+        ) = DotNetClrMethodDefinition(
+            handle = handle,
+            declaringType = owner,
+            name = ".ctor",
+            relativeVirtualAddress = 0,
+            implementationAttributes = 0,
+            attributes = CONSTRUCTOR_METHOD_ATTRIBUTES,
+            signature = DotNetClrMethodSignature(
+                callingConvention = DotNetClrSignatureCallingConvention.DEFAULT,
+                hasThis = true,
+                hasExplicitThis = false,
+                genericParameterCount = 0,
+                returnType = DotNetClrTypeSignature.Void,
+                parameterTypes = listOf(DotNetClrTypeSignature.Primitive(parameterType)),
+                varargParameterStart = null,
+            ),
+            rawSignature = emptyList(),
+        )
+        val methods = buildList {
+            add(constructor(objectConstructor, DotNetClrPrimitiveType.OBJECT))
+            if (includeStringDecoy) {
+                add(constructor(stringConstructor, DotNetClrPrimitiveType.STRING))
+            }
+            if (includeDuplicateObject) {
+                add(constructor(duplicateObject, DotNetClrPrimitiveType.OBJECT))
+            }
+        }
+        return ConstructorMetadataFixture(
+            assembly = DotNetClrAssemblyMetadata(
+                identity = DotNetManagedAssemblyIdentity(
+                    name = "Demo",
+                    version = "1.0.0.0",
+                    culture = "neutral",
+                    publicKey = emptyList(),
+                    publicKeyToken = emptyList(),
+                ),
+                assemblyReferences = emptyList(),
+                typeReferences = emptyList(),
+                typeDefinitions = listOf(DotNetClrTypeDefinition(
+                    handle = owner,
+                    namespaceName = "demo",
+                    metadataName = "Box`1",
+                    attributes = IMPLEMENTATION_TYPE_ATTRIBUTES,
+                    baseType = null,
+                    declaringType = null,
+                )),
+                interfaceImplementations = emptyList(),
+                exportedTypes = emptyList(),
+                typeSpecifications = emptyList(),
+                fieldDefinitions = emptyList(),
+                methodDefinitions = methods,
+                parameterDefinitions = emptyList(),
+                constantDefinitions = emptyList(),
+                fieldMarshalDefinitions = emptyList(),
+                memberReferences = emptyList(),
+                customAttributes = emptyList(),
+                propertyDefinitions = emptyList(),
+                methodSemantics = emptyList(),
+                genericParameterDefinitions = listOf(DotNetClrGenericParameterDefinition(
+                    handle = DotNetClrMetadataHandle(GENERIC_PARAMETER_TABLE, 1),
+                    number = 0,
+                    attributes = 0,
+                    owner = owner,
+                    name = "T",
+                )),
+                genericParameterConstraints = emptyList(),
+            ),
+            objectConstructor = objectConstructor,
+        )
+    }
+
+    private fun ConstructorMetadataFixture.withCoreOwnerBaseType(
+        metadataName: String,
+    ): DotNetClrAssemblyMetadata {
+        val coreLibrary = DotNetClrMetadataHandle(ASSEMBLY_REF_TABLE, 1)
+        val baseType = DotNetClrMetadataHandle(TYPE_REF_TABLE, 1)
+        return assembly.copy(
+            assemblyReferences = listOf(DotNetClrAssemblyReference(
+                handle = coreLibrary,
+                name = "System.Runtime",
+                version = "10.0.0.0",
+                culture = "neutral",
+                flags = 0,
+                publicKeyOrToken = emptyList(),
+                hashValue = emptyList(),
+            )),
+            typeReferences = listOf(DotNetClrTypeReference(
+                handle = baseType,
+                namespaceName = "System",
+                metadataName = metadataName,
+                resolutionScope = coreLibrary,
+            )),
+            typeDefinitions = assembly.typeDefinitions.map { type ->
+                type.copy(baseType = baseType)
+            },
+        )
+    }
+
+    private fun ConstructorMetadataFixture.withNestedOwner(
+        outerAttributes: Long,
+        leafAttributes: Long,
+    ): DotNetClrAssemblyMetadata {
+        val leaf = assembly.typeDefinitions.single()
+        val outer = DotNetClrTypeDefinition(
+            handle = DotNetClrMetadataHandle(TYPE_DEF_TABLE, 2),
+            namespaceName = "demo",
+            metadataName = "Outer",
+            attributes = outerAttributes,
+            baseType = null,
+            declaringType = null,
+        )
+        return assembly.copy(typeDefinitions = listOf(
+            outer,
+            leaf.copy(
+                namespaceName = "",
+                metadataName = "Box`1",
+                attributes = leafAttributes,
+                declaringType = outer.handle,
+            ),
+        ))
+    }
+
     private companion object {
-        const val CORE_LIBRARY = "System.Private.CoreLib"
+        val TARGET = DotNetTarget.NET10_0
         const val MODULE_TABLE = 0
         const val TYPE_REF_TABLE = 1
         const val TYPE_DEF_TABLE = 2
@@ -1092,10 +1418,18 @@ class DotNetGenericOwnerNaturalMethodDefMetadataValidatorTest {
         const val SEQUENTIAL_LAYOUT_ATTRIBUTE = 0x0000_0008L
         const val UNICODE_STRING_FORMAT_ATTRIBUTE = 0x0001_0000L
         const val VIRTUAL_ATTRIBUTE = 0x0040
+        const val STATIC_ATTRIBUTE = 0x0010
         const val NEW_SLOT_ATTRIBUTE = 0x0100
+        const val HIDE_BY_SIG_ATTRIBUTE = 0x0080
+        const val SPECIAL_NAME_ATTRIBUTE = 0x0800
+        const val RUNTIME_SPECIAL_NAME_ATTRIBUTE = 0x1000
         const val NATURAL_TYPE_ATTRIBUTES = 0x0000_00a1L
         const val IMPLEMENTATION_TYPE_ATTRIBUTES = 0x0000_0001L
+        const val NOT_PUBLIC_TYPE_ATTRIBUTES = 0x0000_0000L
+        const val NESTED_PUBLIC_TYPE_ATTRIBUTES = 0x0000_0002L
         const val NATURAL_METHOD_ATTRIBUTES = 0x05c6
         const val IMPLEMENTATION_METHOD_ATTRIBUTES = 0x01c6
+        const val CONSTRUCTOR_METHOD_ATTRIBUTES = 0x1886
+        const val CONTRAVARIANT_ATTRIBUTE = 0x0002
     }
 }

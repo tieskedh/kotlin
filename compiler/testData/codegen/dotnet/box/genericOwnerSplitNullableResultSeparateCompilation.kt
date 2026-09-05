@@ -39,6 +39,11 @@ public open class ExternalSplitBase<T>(private val base: T) : NullableSource<T> 
     public open fun read(index: Int): T? = if (index < 0) null else base
 }
 
+/** A covariant result refinement hides the root's split layout from the source-spelled result. */
+public open class LocalNestedSplit<U> : NullableSource<Any?> {
+    public override fun read(missing: Boolean): NullableSource<Any?>? = null
+}
+
 // MODULE: middle(lib)
 // FILE: implementations.kt
 
@@ -90,6 +95,11 @@ private class StringOpenChild(private val value: String) : OpenChild<String> {
 public fun intOpenChild(value: Int): OpenChild<Int> = IntOpenChild(value)
 
 public fun stringOpenChild(value: String): OpenChild<String> = StringOpenChild(value)
+
+/** The same negative proof must consume the external producer's recorded split layout. */
+public open class ExternalNestedSplit<U> : NullableSource<Any?> {
+    public override fun read(missing: Boolean): NullableSource<Any?>? = null
+}
 
 // MODULE: main(middle)
 // FILE: main.kt

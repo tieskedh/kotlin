@@ -18,17 +18,172 @@ import kotlin.test.assertTrue
 
 class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
     @Test
+    fun roundTripsInterfaceDefaultHelperObjectParameterPolicy() {
+        val helper = DotNetInterfaceDefaultImplementation(
+            bodyPlacement = DotNetInterfaceDefaultBodyPlacement.HELPER_ONLY,
+            helperOwnerPath = listOf("demo.DefaultImpls"),
+            helperMethodName = "readDefault",
+            helperMethodGenericParameterCount = 2,
+            helperObjectParameterIndices = setOf(0, 2),
+        )
+        val dispatcher = DotNetDefaultArgumentDispatcher(
+            ownerPath = listOf("demo.DefaultImpls"),
+            methodName = "readDefault\$default",
+            methodGenericParameterCount = 2,
+        )
+        listOf(null, dispatcher).forEachIndexed { index, defaultDispatcher ->
+            val logicalKey = "F:demo/Source.read$index"
+            val declarations = mapOf(logicalKey to DotNetPhysicalDeclaration.Function(
+                ownerPath = listOf("demo.Source`1"),
+                methodName = "read",
+                isInstance = true,
+                methodGenericParameterCount = 1,
+                interfaceDefaultImplementation = helper,
+                defaultArgumentDispatcher = defaultDispatcher,
+            ))
+
+            assertEquals(
+                declarations,
+                DotNetLibraryAbiCodec.decode(
+                    DotNetLibraryAbiCodec.encode(declarations).toProperties(),
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun semanticResultFamilyRequiresOneObjectLayoutAndNullability() {
+        val logicalMemberKey = "demo/Store.read|function"
+        val roots = listOf(logicalMemberKey)
+        val ownerPath = listOf("demo.Store`1")
+        val capabilityPath = listOf("demo.IStoreSemantic")
+        val typedName = "read"
+        val semanticName = dotNetGenericOwnerPhysicalMemberName(
+            typedName,
+            roots,
+            DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+        )
+        val capabilityName = dotNetGenericOwnerPhysicalMemberName(
+            typedName,
+            roots,
+            DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+        )
+        fun signature(
+            type: DotNetGenericOwnerPhysicalTypeExpressionRecord,
+            nullability: DotNetNullableReferenceFlag = DotNetNullableReferenceFlag.NON_NULL,
+        ) = DotNetGenericOwnerPhysicalMethodSignatureRecord(
+            isInstance = true,
+            genericArity = 0,
+            resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Direct(
+                DotNetGenericOwnerPhysicalValueSlotRecord(
+                    domain = DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT,
+                    type = type,
+                    nullableReferenceFlags = listOf(nullability),
+                ),
+            ),
+            parameterSlots = emptyList(),
+        )
+        val objectSignature = signature(DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType())
+        val roles = setOf(
+            DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+            DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+            DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+        )
+        val family = DotNetGenericOwnerPhysicalMemberFamilyRecord(
+            logicalMemberKey = logicalMemberKey,
+            overrideRootLogicalMemberKeys = roots,
+            policy = DotNetGenericOwnerMemberPolicy.SEMANTIC_BODY,
+            roles = roles,
+            semanticHookReasons = setOf(
+                DotNetGenericOwnerSemanticHookReason.SEMANTIC_INTERFACE_RESULT,
+            ),
+            semanticObjectParameterIndices = emptySet(),
+            slots = listOf(
+                DotNetGenericOwnerPhysicalMemberSlotRecord(
+                    role = DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                    visibility = DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC,
+                    physicalOwnerPath = ownerPath,
+                    physicalMethodName = typedName,
+                    dispatch = DotNetGenericOwnerPhysicalMemberDispatch.FINAL,
+                    signature = objectSignature,
+                    capabilitySlot = null,
+                ),
+                DotNetGenericOwnerPhysicalMemberSlotRecord(
+                    role = DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+                    visibility = DotNetGenericOwnerPhysicalMemberVisibility.FAMILY,
+                    physicalOwnerPath = ownerPath,
+                    physicalMethodName = semanticName,
+                    dispatch = DotNetGenericOwnerPhysicalMemberDispatch.FINAL,
+                    signature = objectSignature,
+                    capabilitySlot = null,
+                ),
+                DotNetGenericOwnerPhysicalMemberSlotRecord(
+                    role = DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+                    visibility = DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE,
+                    physicalOwnerPath = ownerPath,
+                    physicalMethodName = "${capabilityPath.joinToString(".")}.$capabilityName",
+                    dispatch = DotNetGenericOwnerPhysicalMemberDispatch.FINAL,
+                    signature = objectSignature,
+                    capabilitySlot = DotNetGenericOwnerPhysicalMethodIdentityRecord(
+                        capabilityPath,
+                        capabilityName,
+                        objectSignature,
+                    ),
+                ),
+            ),
+            directSuperTargets = emptyList(),
+            defaultDispatcher = null,
+        )
+
+        val wrongSemanticSignature = signature(
+            DotNetGenericOwnerPhysicalTypeExpressionRecord.stringType(),
+        )
+        val failure = assertFailsWith<IllegalArgumentException> {
+            family.copy(slots = family.slots.map { slot ->
+                if (slot.role != DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK) slot
+                else slot.copy(signature = wrongSemanticSignature)
+            })
+        }
+        assertTrue(failure.message.orEmpty().contains("semantic-result carrier and nullability"))
+
+        val wrongNullability = objectSignature.copy(
+            resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Direct(
+                DotNetGenericOwnerPhysicalValueSlotRecord(
+                    domain = DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT,
+                    type = DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType(),
+                    nullableReferenceFlags = listOf(DotNetNullableReferenceFlag.NULLABLE),
+                ),
+            ),
+        )
+        assertFailsWith<IllegalArgumentException> {
+            family.copy(slots = family.slots.map { slot ->
+                if (slot.role != DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER) slot
+                else slot.copy(
+                    signature = wrongNullability,
+                    capabilitySlot = slot.capabilitySlot?.copy(signature = wrongNullability),
+                )
+            })
+        }
+    }
+
+    @Test
     fun classifiesOnlyTheRehearsalEpochPhysicalRecords() {
         val publication = producerSealedFamilyPublicationFixture().withDirectResults()
         val declarations = producerSealedFamilyAbiFixture(
             publication,
             DotNetPublishedGenericInterfaceMemberResultLayout.DIRECT,
         ) +
-                semanticEquivalenceCertificateEntry(publication) + implementationMethodDefAbiFixture()
+                semanticEquivalenceCertificateEntry(publication) +
+                implementationMethodDefAbiFixture() +
+                constructorMethodDefAbiFixture()
         val records = declarations.genericOwnerRehearsalEpochRecords()
 
         assertEquals(
             setOf(
+                DotNetGenericOwnerRehearsalEpochRecordKind.GENERIC_OWNER_TYPE_DEF,
+                DotNetGenericOwnerRehearsalEpochRecordKind.GENERIC_OWNER_CONSTRUCTOR_METHOD_DEF,
+                DotNetGenericOwnerRehearsalEpochRecordKind
+                    .GENERIC_OWNER_CONSTRUCTOR_METHOD_DEF_SEAL,
                 DotNetGenericOwnerRehearsalEpochRecordKind.PUBLISHED_GENERIC_INTERFACE_FAMILY,
                 DotNetGenericOwnerRehearsalEpochRecordKind.GENERIC_OWNER_NATURAL_METHOD_DEF,
                 DotNetGenericOwnerRehearsalEpochRecordKind.GENERIC_OWNER_IMPLEMENTATION_METHOD_DEF,
@@ -39,7 +194,7 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
             records.mapTo(linkedSetOf(), DotNetGenericOwnerRehearsalEpochRecord::kind),
         )
         assertEquals(
-            setOf("H", "N", "M", "J", "K"),
+            setOf("C.reified", "F.ctor", "L", "H", "N", "M", "J", "K"),
             records.mapTo(linkedSetOf()) { record -> record.kind.wireTag },
         )
         val productionDeclarations =
@@ -61,7 +216,9 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
             publication,
             DotNetPublishedGenericInterfaceMemberResultLayout.DIRECT,
         ) +
-                semanticEquivalenceCertificateEntry(publication) + implementationMethodDefAbiFixture()
+                semanticEquivalenceCertificateEntry(publication) +
+                implementationMethodDefAbiFixture() +
+                constructorMethodDefAbiFixture()
         val records = declarations.genericOwnerRehearsalEpochRecords()
 
         records.forEach { record ->
@@ -73,9 +230,106 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
                     genericOwnerRehearsal = false,
                 )
             }
-            assertTrue(failure.message.orEmpty().contains("H/N/M/J/K"))
+            assertTrue(failure.message.orEmpty().contains(record.kind.wireTag))
         }
         assertEquals(declarations, backendOutput(declarations, genericOwnerRehearsal = true).declarations)
+    }
+
+    @Test
+    fun rejectsOverflowingGenericOwnerMemberFamilyCountsBeforeSlicingFields() {
+        val logicalMemberKey = "demo/Hostile.member|function"
+        val fields = listOf(
+            "G",
+            "demo/Hostile|class",
+            logicalMemberKey,
+            "member__KotlinCapability",
+            "0",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "0",
+            "3",
+            Int.MAX_VALUE.toString(),
+            Int.MAX_VALUE.toString(),
+            "0",
+        )
+        val properties = mapOf(
+            encodedPropertyKey("G:$logicalMemberKey") to
+                    encodeText(fields.joinToString("\u0000")),
+        ).toProperties()
+
+        val failure = assertFailsWith<IllegalArgumentException> {
+            DotNetLibraryAbiCodec.decode(properties)
+        }
+        assertTrue(failure.message.orEmpty().contains("invalid CLR owner-path payload"))
+    }
+
+    @Test
+    fun constructorlessPublishedGenericOwnerMarksAndGuardsTheRehearsalEpoch() {
+        val logicalOwnerKey = "C:demo/Token"
+        val candidateDeclarations = mapOf(
+            logicalOwnerKey to DotNetPhysicalDeclaration.Class(
+                ownerPath = listOf("demo.Token`1"),
+                physicalTypeParameterCount = 1,
+                genericOwnerAbi = DotNetGenericOwnerAbi(
+                    capabilityAssemblyName = "Demo",
+                    capabilityOwnerPath = listOf("demo.ITokenKotlinSemantic"),
+                ),
+            ),
+        )
+
+        // This deliberately has no F/L entry: it models a public `Token<T>` whose constructors
+        // are private and therefore cannot act as the library's generic-owner epoch marker.
+        val decoded = DotNetLibraryAbiCodec.decode(
+            DotNetLibraryAbiCodec.encode(candidateDeclarations).toProperties(),
+        )
+        assertEquals(candidateDeclarations, decoded)
+        assertEquals(
+            listOf(DotNetGenericOwnerRehearsalEpochRecord(
+                logicalOwnerKey,
+                DotNetGenericOwnerRehearsalEpochRecordKind.GENERIC_OWNER_TYPE_DEF,
+            )),
+            decoded.genericOwnerRehearsalEpochRecords(),
+        )
+
+        val externalLibrary = DotNetExternalLibrary(
+            artifact = DotNetLibraryArtifact("Demo", "netstandard2.0"),
+            assemblyFile = File("Demo.dll"),
+            declarations = decoded,
+            friendAssemblies = emptySet(),
+        )
+        assertEquals(
+            listOf(logicalOwnerKey),
+            externalLibrary.declarations.genericOwnerRehearsalEpochRecordIndexKeys(),
+        )
+
+        val productionFailure = assertFailsWith<IllegalArgumentException> {
+            backendOutput(externalLibrary.declarations, genericOwnerRehearsal = false)
+        }
+        assertTrue(productionFailure.message.orEmpty().contains("C.reified"))
+        assertEquals(
+            externalLibrary.declarations,
+            backendOutput(externalLibrary.declarations, genericOwnerRehearsal = true).declarations,
+        )
+
+        val productionDelegate = mapOf(
+            "C:demo/ProducerDelegate" to DotNetPhysicalDeclaration.Class(
+                ownerPath = listOf("demo.ProducerDelegate`1"),
+                physicalTypeParameterCount = 1,
+                physicalTypeParameterVariances = listOf(
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT,
+                ),
+                physicalClassVarianceKind = DotNetPhysicalClassVarianceKind.SEALED_CLR_DELEGATE,
+            ),
+        )
+        assertTrue(productionDelegate.genericOwnerRehearsalEpochRecords().isEmpty())
+        assertEquals(
+            productionDelegate,
+            backendOutput(productionDelegate, genericOwnerRehearsal = false).declarations,
+        )
     }
 
     @Test
@@ -90,7 +344,7 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
         val first = DotNetLibraryAbiCodec.encode(declarations)
         val second = DotNetLibraryAbiCodec.encode(declarations.toList().asReversed().toMap())
         assertEquals(first, second)
-        assertEquals("67", DotNetLibraryAbiCodec.ABI_VERSION)
+        assertEquals("68", DotNetLibraryAbiCodec.ABI_VERSION)
 
         val decoded = DotNetLibraryAbiCodec.decode(first.toProperties())
         assertEquals(declarations, decoded)
@@ -1408,6 +1662,50 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
                 ownerKey to owner,
                 memberKey to method,
                 implementation.indexKey() to implementation,
+            )
+        }
+
+        fun constructorMethodDefAbiFixture(): Map<String, DotNetPhysicalDeclaration> {
+            val ownerKey = "demo/ConstructorBox|class"
+            val constructorKey = "demo/ConstructorBox.<init>|object"
+            val ownerPath = listOf("demo.ConstructorBox`1")
+            val signature = DotNetGenericOwnerPhysicalMethodSignatureRecord(
+                isInstance = true,
+                genericArity = 0,
+                resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Void,
+                parameterSlots = listOf(
+                    DotNetGenericOwnerPhysicalValueSlotRecord(
+                        domain = DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
+                        type = DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType(),
+                    ),
+                ),
+            )
+            val constructor = DotNetPhysicalDeclaration.GenericOwnerConstructorMethodDef(
+                logicalOwnerKey = ownerKey,
+                logicalConstructorKey = constructorKey,
+                ownerPath = ownerPath,
+                physicalMethod = DotNetGenericOwnerPhysicalMethodIdentityRecord(
+                    physicalOwnerPath = ownerPath,
+                    physicalMethodName = ".ctor",
+                    signature = signature,
+                ),
+                visibility = DotNetGenericOwnerPhysicalConstructorVisibility.PUBLIC,
+            )
+            return mapOf(
+                ownerKey to DotNetPhysicalDeclaration.Class(
+                    ownerPath = ownerPath,
+                    physicalTypeParameterCount = 1,
+                    physicalTypeParameterVariances = listOf(
+                        DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                    ),
+                ),
+                constructorKey to DotNetPhysicalDeclaration.Function(
+                    ownerPath = ownerPath,
+                    methodName = ".ctor",
+                    isInstance = true,
+                    methodGenericParameterCount = 0,
+                ),
+                constructor.indexKey() to constructor,
             )
         }
 

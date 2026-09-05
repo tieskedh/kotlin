@@ -57,6 +57,7 @@ import org.jetbrains.kotlin.ir.expressions.IrWhileLoop
 import org.jetbrains.kotlin.ir.symbols.IrFunctionSymbol
 import org.jetbrains.kotlin.ir.symbols.IrFieldSymbol
 import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
+import org.jetbrains.kotlin.ir.symbols.IrValueParameterSymbol
 import org.jetbrains.kotlin.ir.symbols.IrVariableSymbol
 import org.jetbrains.kotlin.ir.types.isAny
 import org.jetbrains.kotlin.ir.types.isNothing
@@ -77,6 +78,7 @@ import org.jetbrains.kotlin.ir.util.isPublishedApi
 import org.jetbrains.kotlin.ir.util.isSubclassOf
 import org.jetbrains.kotlin.ir.util.isTrueConst
 import org.jetbrains.kotlin.ir.util.render
+import org.jetbrains.kotlin.types.Variance
 import java.util.ArrayDeque
 
 /** One final verifier-visible local selected while rendering one physical MethodDef. */
@@ -294,6 +296,13 @@ internal data class DotNetIlRawFieldDefObservation(
     }
 }
 
+/** One IR parameter and the exact verifier carrier used by its successfully rendered MethodDef. */
+internal data class DotNetIlRawMethodDefParameterObservation(
+    val physicalFunction: IrFunctionSymbol,
+    val physicalParameter: IrValueParameterSymbol,
+    val carrier: DotNetIlValueType,
+)
+
 /** Exact structured TypeDef rows consumed by the final successful class render. */
 internal data class DotNetIlRawTypeDefEmissionObservation(
     val physicalType: DotNetIlClassInfo,
@@ -303,6 +312,7 @@ internal data class DotNetIlRawTypeDefEmissionObservation(
     val genericParameters: List<DotNetIlRawTypeDefGenericParameterObservation>,
     val directSupertypes: List<DotNetIlRawTypeDefEdgeObservation>,
     val fieldDefinitions: List<DotNetIlRawFieldDefObservation> = emptyList(),
+    val methodDefParameters: List<DotNetIlRawMethodDefParameterObservation> = emptyList(),
 ) {
     init {
         require(physicalTypePath == physicalType.physicalPathComponents() &&
@@ -332,6 +342,33 @@ internal data class DotNetIlRawMethodImplObservation(
     val declarationFunction: IrSimpleFunctionSymbol,
     val declarationIdentity: DotNetGenericOwnerPhysicalMethodDefIdentity.Local?,
 )
+
+/** One already-authoritative declaration operand of an emitter-sealed MethodImpl row. */
+internal data class DotNetIlMethodImplDeclarationBinding(
+    val declarationFunction: IrSimpleFunction,
+    val declarationOwner: DotNetIlValueType,
+    val declarationInfo: DotNetIlFunctionInfo,
+    val declarationMethodName: String,
+)
+
+/**
+ * Emitter-sealed physical authority for one lowering-created MethodImpl body.
+ *
+ * A bridge's logical IR signature is sufficient to build its forwarding body, but it is not CLR
+ * MethodDef authority. The body header and every declaration operand are selected from the
+ * already-linked physical TypeDef/MethodDef graph before method codegen starts. Keeping that
+ * selection in one record prevents individual `.override` renderers from reconstructing owner
+ * constructions or generic binders from widened, enhanced, or erased Kotlin views.
+ */
+internal data class DotNetIlMethodImplBinding(
+    val bodyFunction: IrSimpleFunction,
+    val bodyInfo: DotNetIlFunctionInfo,
+    val declarations: List<DotNetIlMethodImplDeclarationBinding>,
+) {
+    init {
+        require(declarations.isNotEmpty()) { "an emitter-sealed MethodImpl requires a declaration" }
+    }
+}
 
 /** One independently observed local TypeDef after the final emitter owner map has been applied. */
 internal data class DotNetGenericOwnerObservedLocalTypeDef(
@@ -604,6 +641,13 @@ internal data class DotNetGenericOwnerPhysicalFieldDefObservation(
     val carrier: DotNetGenericOwnerObservedMethodCarrier,
 )
 
+/** Final-fixpoint MethodDef-parameter evidence normalized in its declaring TypeDef binder. */
+internal data class DotNetGenericOwnerPhysicalMethodDefParameterObservation(
+    val physicalFunction: IrFunctionSymbol,
+    val physicalParameter: IrValueParameterSymbol,
+    val carrier: DotNetGenericOwnerObservedMethodCarrier,
+)
+
 /** Final-fixpoint TypeDef plus its complete emitted direct-edge set. */
 internal data class DotNetGenericOwnerPhysicalTypeDefEmissionObservation(
     val physicalType: DotNetGenericOwnerObservedMethodDefOwner,
@@ -615,6 +659,7 @@ internal data class DotNetGenericOwnerPhysicalTypeDefEmissionObservation(
     val genericParameters: List<DotNetGenericOwnerPhysicalTypeDefGenericParameterObservation>,
     val directSupertypes: List<DotNetGenericOwnerPhysicalTypeDefEdgeObservation>,
     val fieldDefinitions: List<DotNetGenericOwnerPhysicalFieldDefObservation> = emptyList(),
+    val methodDefParameters: List<DotNetGenericOwnerPhysicalMethodDefParameterObservation> = emptyList(),
 ) {
     init {
         require(physicalTypePath.isNotEmpty() && physicalTypePath.all(String::isNotEmpty)) {
@@ -825,6 +870,7 @@ internal class DotNetIlMethodCodegen(
     private val typeMapper: DotNetIlTypeMapper,
     facadeClassInfoByFile: Map<IrFile, DotNetIlClassInfo> = emptyMap(),
     private val covariantReturnImplementations: Set<IrSimpleFunction> = emptySet(),
+    private val methodImplBinding: DotNetIlMethodImplBinding? = null,
     private val genericOwnerCallRouteTraceHook: DotNetGenericOwnerCallRouteTraceHook? = null,
     private val genericOwnerCapabilitySlots: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
     private val genericOwnerDirectForeignOverrideDispatch:
@@ -1271,10 +1317,16 @@ internal class DotNetIlMethodCodegen(
                 function.origin == DOTNET_GENERIC_INTERFACE_DEFAULT_ERASED_ADAPTER
             ) {
                 appendGenericInterfaceCanonicalBridgeOverride()
-            } else if (function.origin.dotNetGenericInterfaceBridgeMemberViewOrNull != null) {
-                appendGenericInterfaceTypedBridgeOverride()
-            } else if (function.origin == DOTNET_COVARIANT_RETURN_BRIDGE) {
-                appendCovariantReturnBridgeOverride()
+            } else if (methodImplBinding != null) {
+                appendSealedMethodImplOverrides(methodImplBinding)
+            } else if (
+                function.origin.dotNetGenericInterfaceBridgeMemberViewOrNull != null ||
+                function.origin == DOTNET_COVARIANT_RETURN_BRIDGE
+            ) {
+                error(
+                    "Internal .NET backend error: physical adapter " +
+                            "'${function.name}' reached codegen without emitter-sealed MethodImpl authority"
+                )
             } else if (function.origin == DOTNET_GENERIC_OWNER_CAPABILITY_DISPATCHER) {
                 appendGenericOwnerCapabilityOverride()
             } else {
@@ -1310,12 +1362,14 @@ internal class DotNetIlMethodCodegen(
         declarationInfo: DotNetIlFunctionInfo,
     ) {
         val body = function as? IrSimpleFunction ?: return
-        check(signature.methodGenericParameterCount ==
-                declarationInfo.signature.methodGenericParameterCount) {
-            "Internal .NET backend error: MethodImpl body '${body.name.asString()}' has generic " +
-                    "arity ${signature.methodGenericParameterCount}, but declaration " +
-                    "'${declaration.name.asString()}' has arity " +
-                    declarationInfo.signature.methodGenericParameterCount
+        val bodySignature = functionInfo.bindEffectiveMethodImplSignatureAt(
+            functionInfo.owner.dotNetOpenSelfType(),
+        )
+        val declarationSignature = declarationInfo.bindEffectiveMethodImplSignatureAt(declarationOwner)
+        check(bodySignature == declarationSignature) {
+            "Internal .NET backend error: MethodImpl body '${body.name.asString()}' has effective " +
+                    "physical signature $bodySignature, but declaration " +
+                    "'${declaration.name.asString()}' has $declarationSignature"
         }
         methodImplObservations?.add(
             DotNetIlRawMethodImplObservation(
@@ -1612,60 +1666,6 @@ internal class DotNetIlMethodCodegen(
         }
     }
 
-    /** Binds a forwarding bridge to the closed declared or exact capability slot. */
-    private fun StringBuilder.appendGenericInterfaceTypedBridgeOverride() {
-        val bridge = function as? IrSimpleFunction
-            ?: error("Internal .NET backend error: a typed generic interface bridge is not a simple function")
-        val overriddenFunctions = bridge.overriddenSymbols.map { overridden -> overridden.owner }
-        check(overriddenFunctions.isNotEmpty()) {
-            "Internal .NET backend error: a typed generic interface bridge has no slots"
-        }
-        val memberView = bridge.origin.dotNetGenericInterfaceBridgeMemberViewOrNull
-            ?: error("Internal .NET backend error: typed generic interface bridge has no physical view")
-        val bridgeClass = bridge.parent as? IrClass
-            ?: error("Internal .NET backend error: a typed generic interface bridge has no class owner")
-        for (overridden in overriddenFunctions) {
-            val interfaceClass = overridden.parent as? IrClass
-                ?: error("Internal .NET backend error: a typed generic interface slot has no interface owner")
-            val interfaceInfo = typeMapper.genericInterfaceInfoOrNull(interfaceClass)
-                ?: dotNetUnsupported("generic interface typed capability is unavailable")
-            val capabilityInfo = interfaceInfo.classInfo(memberView.physicalView)
-                ?: dotNetUnsupported("generic interface ${memberView.name.lowercase()} capability is unavailable")
-            val substitutor = AbstractIrTypeSubstitutor.forSuperClass(
-                interfaceClass.symbol,
-                bridgeClass.defaultType,
-            ) ?: error(
-                "Internal .NET backend error: '${bridgeClass.name}' is not a subtype of " +
-                        "generic interface '${interfaceClass.name}'"
-            )
-            val signatureMapper = typeMapper.genericInterfaceSignatureView(memberView)
-            val arguments = interfaceClass.typeParameters.map { parameter ->
-                val argumentType = substitutor.substitute(parameter.typeParameterDefaultType)
-                signatureMapper.toDotNetIlGenericArgumentType(argumentType)
-                    ?: dotNetUnsupported(
-                        "typed generic interface argument '${argumentType.render()}' is unavailable"
-                    )
-            }
-            val declarationOwner = DotNetIlValueType.GenericInstance(capabilityInfo, arguments)
-            val ownerToken = declarationOwner.nameInSignature
-            val overrideInfo = typeMapper.genericInterfaceCapabilityFunctionInfoOrNull(
-                overridden,
-                memberView,
-            ) ?: DotNetIlFunctionInfo(
-                capabilityInfo,
-                overridden.dotNetSignature(signatureMapper),
-            )
-            recordMethodImpl(declarationOwner, overridden, overrideInfo)
-            appendLine(
-                "    .override method " +
-                        overrideInfo.renderOverrideMethodReference(
-                            typeMapper.genericInterfaceTypedMethodName(overridden),
-                            ownerToken,
-                        )
-            )
-        }
-    }
-
     /** Binds one private generic-owner selector to its non-generic semantic interface slot. */
     private fun StringBuilder.appendGenericOwnerCapabilityOverride() {
         val dispatcher = function as? IrSimpleFunction
@@ -1701,51 +1701,55 @@ internal class DotNetIlMethodCodegen(
         )
     }
 
-    /** Binds one exact-return forwarding method to its wider ordinary class or interface slot. */
-    private fun StringBuilder.appendCovariantReturnBridgeOverride() {
+    /** Emits only MethodImpl rows which the emitter already sealed against physical MethodDefs. */
+    private fun StringBuilder.appendSealedMethodImplOverrides(binding: DotNetIlMethodImplBinding) {
         val bridge = function as? IrSimpleFunction
-            ?: error("Internal .NET backend error: a covariant-return bridge is not a simple function")
-        val overridden = bridge.overriddenSymbols.singleOrNull()?.owner
-            ?: error("Internal .NET backend error: a covariant-return bridge has no unique slot")
-        val overriddenOwner = overridden.parent as? IrClass
-            ?: error("Internal .NET backend error: a covariant-return slot has no class owner")
-        val bridgeOwner = bridge.parent as? IrClass
-            ?: error("Internal .NET backend error: a covariant-return bridge has no class owner")
-        val referencedInfo = availableFunctions[overridden]
-            ?: DotNetRuntimeTypes.exactCallableFunctionInfoOrNull(overridden, typeMapper)
-            ?: typeMapper.referencedFunctionInfoOrNull(overridden)
-            ?: dotNetUnsupported("covariant-return slot is unavailable")
-        val declarationOwner = if (referencedInfo.owner.typeParameterCount == 0) {
-            DotNetIlValueType.UserClass(referencedInfo.owner)
-        } else {
-            val substitutor = AbstractIrTypeSubstitutor.forSuperClass(
-                overriddenOwner.symbol,
-                bridgeOwner.defaultType,
-            ) ?: error(
-                "Internal .NET backend error: '${bridgeOwner.name}' is not a subtype of " +
-                        "covariant-return owner '${overriddenOwner.name}'"
-            )
-            val arguments = overriddenOwner.typeParameters.map { parameter ->
-                val argumentType = substitutor.substitute(parameter.typeParameterDefaultType)
-                typeMapper.toDotNetIlGenericArgumentType(argumentType)
-                    ?: dotNetUnsupported("covariant-return owner argument '${argumentType.render()}' is unavailable")
+            ?: error("Internal .NET backend error: a MethodImpl bridge is not a simple function")
+        check(binding.bodyFunction === bridge &&
+                binding.bodyInfo.owner.ilTypeRef == functionInfo.owner.ilTypeRef &&
+                binding.bodyInfo.signature == signature &&
+                binding.bodyInfo.physicalMethodName == functionInfo.physicalMethodName &&
+                binding.bodyInfo.genericOwnerPhysicalMethodIdentity ==
+                functionInfo.genericOwnerPhysicalMethodIdentity) {
+            "Internal .NET backend error: MethodImpl binding no longer matches " +
+                    "body '${bridge.name.asString()}'"
+        }
+        for (declaration in binding.declarations) {
+            val declarationInfo = declaration.declarationInfo
+            val ownerToken = when (val declarationOwner = declaration.declarationOwner) {
+                is DotNetIlValueType.UserClass -> {
+                    check(declarationOwner.classInfo.ilTypeRef == declarationInfo.owner.ilTypeRef &&
+                            declarationInfo.owner.typeParameterCount == 0) {
+                        "Internal .NET backend error: MethodImpl selected a different non-generic " +
+                                "declaration owner"
+                    }
+                    declarationOwner.classInfo.ilTypeRef
+                }
+                is DotNetIlValueType.GenericInstance -> {
+                    check(declarationOwner.classInfo.ilTypeRef == declarationInfo.owner.ilTypeRef &&
+                            declarationOwner.arguments.size == declarationInfo.owner.typeParameterCount) {
+                        "Internal .NET backend error: MethodImpl selected a different generic " +
+                                "declaration owner"
+                    }
+                    declarationOwner.nameInSignature
+                }
+                else -> error(
+                    "Internal .NET backend error: MethodImpl has a non-class declaration owner"
+                )
             }
-            DotNetIlValueType.GenericInstance(referencedInfo.owner, arguments)
+            recordMethodImpl(
+                declaration.declarationOwner,
+                declaration.declarationFunction,
+                declarationInfo,
+            )
+            appendLine(
+                "    .override method " +
+                        declarationInfo.renderOverrideMethodReference(
+                            declaration.declarationMethodName,
+                            ownerToken,
+                        )
+            )
         }
-        val ownerToken = if (referencedInfo.owner.typeParameterCount == 0) {
-            referencedInfo.owner.ilTypeRef
-        } else {
-            declarationOwner.nameInSignature
-        }
-        val physicalMethodName = referencedInfo.physicalMethodName ?: overridden.dotNetIlMethodName()
-        recordMethodImpl(declarationOwner, overridden, referencedInfo)
-        appendLine(
-            "    .override method " +
-                    referencedInfo.renderOverrideMethodReference(
-                        physicalMethodName,
-                        ownerToken,
-                    )
-        )
     }
 
     /**
@@ -1904,10 +1908,10 @@ internal class DotNetIlMethodCodegen(
     ) {
         check(function is IrSimpleFunction &&
                 function.origin == DOTNET_GENERIC_OWNER_CAPABILITY_DISPATCHER &&
-                signature.parameterTypes.size in 1..2 &&
+                signature.parameterTypes.isNotEmpty() &&
                 signature.returnType == DotNetIlReturnType.Value(DotNetIlValueType.Object)) {
             "Direct foreign override dispatch requires an object-returning capability dispatcher " +
-                    "with at most one explicit input"
+                    "with an instance receiver"
         }
         val typedInfo = checkNotNull(
             availableFunctions[dispatch.typedEntry]
@@ -1960,6 +1964,21 @@ internal class DotNetIlMethodCodegen(
         val methodInstantiation = function.typeParameters.indices.map { index ->
             DotNetIlValueType.TypeParameter(index, isMethodParameter = true)
         }
+        fun IrSimpleFunction.physicalGenericParameterConstraints():
+                List<Pair<Variance, List<DotNetIlValueType>>> = typeParameters.map { parameter ->
+            parameter.variance to parameter.dotNetConstraintTypes(typeMapper, forMetadata = true)
+        }
+        val dispatcherGenericParameters = function.physicalGenericParameterConstraints()
+        check(dispatch.typedEntry.physicalGenericParameterConstraints() == dispatcherGenericParameters &&
+                dispatch.semanticHook.physicalGenericParameterConstraints() == dispatcherGenericParameters &&
+                dispatch.foreignOverrideProbe.physicalGenericParameterConstraints() ==
+                dispatcherGenericParameters) {
+            "Direct foreign override dispatch requires identical emitted MethodSpec binders: " +
+                    "dispatcher=$dispatcherGenericParameters, " +
+                    "typed=${dispatch.typedEntry.physicalGenericParameterConstraints()}, " +
+                    "semantic=${dispatch.semanticHook.physicalGenericParameterConstraints()}, " +
+                    "probe=${dispatch.foreignOverrideProbe.physicalGenericParameterConstraints()}"
+        }
         fun DotNetIlFunctionInfo.reference(target: IrSimpleFunction): String = renderMethodReference(
             physicalMethodName ?: target.dotNetIlMethodName(),
             ownerToken = openOwnerToken(),
@@ -1971,7 +1990,11 @@ internal class DotNetIlMethodCodegen(
                 typedInfo.signature.parameterTypes.drop(1) == signature.parameterTypes.drop(1) &&
                 probeInfo.signature.parameterTypes.size == 1 &&
                 semanticInfo.signature.parameterTypes.size == signature.parameterTypes.size &&
+                semanticInfo.signature.parameterTypes.drop(1) == signature.parameterTypes.drop(1) &&
                 dispatch.foreignOverrideProbe.typeParameters.size == function.typeParameters.size &&
+                !typedInfo.signature.hasSplitNullableResult &&
+                !semanticInfo.signature.hasSplitNullableResult &&
+                !probeInfo.signature.hasSplitNullableResult &&
                 typedReturn != null &&
                 probeInfo.signature.returnType == DotNetIlReturnType.Value(DotNetIlValueType.Boolean) &&
                 semanticInfo.signature.returnType == DotNetIlReturnType.Value(DotNetIlValueType.Object)) {
@@ -1986,7 +2009,12 @@ internal class DotNetIlMethodCodegen(
         methodContext.emitBranch("brfalse", semanticLabel, pops = 1)
 
         methodContext.emit("ldarg.0", pushes = 1)
-        if (signature.parameterTypes.size == 2) methodContext.emit("ldarg.1", pushes = 1)
+        signature.parameterTypes.indices.drop(1).forEach { index ->
+            methodContext.emit(
+                if (index <= 3) "ldarg.$index" else "ldarg $index",
+                pushes = 1,
+            )
+        }
         methodContext.emit(
             typedInfo.renderCallInstruction(
                 typedInfo.physicalMethodName ?: dispatch.typedEntry.dotNetIlMethodName(),
@@ -2004,7 +2032,12 @@ internal class DotNetIlMethodCodegen(
 
         methodContext.emitLabel(semanticLabel)
         methodContext.emit("ldarg.0", pushes = 1)
-        if (signature.parameterTypes.size == 2) methodContext.emit("ldarg.1", pushes = 1)
+        signature.parameterTypes.indices.drop(1).forEach { index ->
+            methodContext.emit(
+                if (index <= 3) "ldarg.$index" else "ldarg $index",
+                pushes = 1,
+            )
+        }
         methodContext.emit(
             semanticInfo.renderCallInstruction(
                 semanticInfo.physicalMethodName ?: dispatch.semanticHook.dotNetIlMethodName(),
@@ -2031,7 +2064,7 @@ internal class DotNetIlMethodCodegen(
         check(typedInfo.owner == functionInfo.owner &&
                 typedEntry.typeParameters.size == function.typeParameters.size &&
                 function.typeParameters.size <= 1 &&
-                typedInfo.signature.parameterTypes.size in 1..2) {
+                typedInfo.signature.parameterTypes.isNotEmpty()) {
             "A generic-owner foreign override probe must target one supported local member"
         }
         val ownerToken = if (functionInfo.owner.typeParameterCount == 0) {
@@ -2323,12 +2356,17 @@ internal class DotNetIlMethodCodegen(
             retainedProducedStorage == null && exactArrayStorage == null &&
             exactGenericOwnerStorage == null &&
             localOpenNullableArrayStorage == null && initializer != null &&
-            !initializerContainsDotNetPhysicalCall && !variable.isVar
+            !variable.isVar
         ) {
             expressionCodegen.genericOwnerNestedConstructionCarrierTypeOrNull(
                 initializer,
                 variable.type,
-            )
+            )?.takeIf { candidate ->
+                // Final call-route authority exclusively admits constructed call-result carriers.
+                // Preserve only the already-produced object carrier of an open nested owner:
+                // keeping object in an object local cannot remint an exact CLR construction.
+                !initializerContainsDotNetPhysicalCall || candidate == DotNetIlValueType.Object
+            }
         } else {
             null
         }
@@ -2840,9 +2878,17 @@ internal class DotNetIlMethodCodegen(
         }
         val genericClassInfo = typeMapper.genericClassInfoOrNull(targetClass)
         val constructorTypeMapper = typeMapper
+        val recordedConstructorInfo =
+            constructorTypeMapper.externalGenericOwnerConstructorInfoOrNull(target)
         val classInfo = genericClassInfo?.classInfo ?: constructorTypeMapper.classInfoOrNull(targetClass)
             ?: dotNetUnsupported("delegating call to a constructor of unsupported class '${targetClass.name.asString()}'")
-        val parameterTypes = target.dotNetSignature(constructorTypeMapper).parameterTypes
+        require(recordedConstructorInfo == null ||
+                recordedConstructorInfo.owner.physicalPathComponents() == classInfo.physicalPathComponents()
+        ) {
+            "external constructor '${target.render()}' disagrees with its producer-recorded CLR owner"
+        }
+        val parameterTypes = recordedConstructorInfo?.signature?.parameterTypes
+            ?: target.dotNetSignature(constructorTypeMapper).parameterTypes
         if (genericClassInfo != null || targetClass.typeParameters.isEmpty()) {
             expressionCodegen.emitArguments(call.arguments, parameterTypes, "constructor of '${targetClass.name.asString()}'")
             methodContext.emit("call ${classInfo.renderConstructorReference(parameterTypes)}", pops = 1 + parameterTypes.size)

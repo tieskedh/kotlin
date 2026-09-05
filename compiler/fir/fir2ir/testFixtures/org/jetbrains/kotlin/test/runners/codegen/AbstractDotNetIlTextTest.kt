@@ -600,8 +600,12 @@ private class BackendCliDotNetFacade(
                 )
         }
         validateGenericOwnerHardestModelPrototype(
+            genericOwnerRehearsal,
             completedOutput.genericOwnerPrototypes,
             completedOutput.genericOwnerCallRoutes,
+            completedOutput.genericOwnerPhysicalStateEmissionSnapshots,
+            completedOutput.output,
+            testServices.moduleStructure.originalTestDataFiles.single(),
         )
         validateGenericOwnerRepresentativeArrayCopyPrototype(
             completedOutput.genericOwnerPrototypes,
@@ -626,6 +630,8 @@ private class BackendCliDotNetFacade(
             producesLibrary = loweredInput.configuration.dotNetProducesLibrary,
             target = loweredInput.configuration.dotNetTarget,
             producer = completedOutput.output,
+            declarations = completedOutput.declarations,
+            prototypes = completedOutput.genericOwnerPrototypes,
             testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
             directory = testServices.getOrCreateTempDirectory("generic-owner-exact-interface-inputs"),
         )
@@ -635,6 +641,7 @@ private class BackendCliDotNetFacade(
             target = loweredInput.configuration.dotNetTarget,
             producer = completedOutput.output,
             declarations = completedOutput.declarations,
+            prototypes = completedOutput.genericOwnerPrototypes,
             varianceShadows = completedOutput.genericInterfaceCompleteSurfaceVarianceShadows,
             testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
             directory = testServices.getOrCreateTempDirectory(
@@ -647,6 +654,7 @@ private class BackendCliDotNetFacade(
             target = loweredInput.configuration.dotNetTarget,
             producer = completedOutput.output,
             declarations = completedOutput.declarations,
+            prototypes = completedOutput.genericOwnerPrototypes,
             testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
             directory = testServices.getOrCreateTempDirectory("generic-owner-split-nullable-result"),
         )
@@ -786,14 +794,16 @@ private class BackendCliDotNetFacade(
             compilerOutputUsesReifiedOwners = genericOwnerRehearsal,
         )
         validateGenericOwnerOpenNullableArraySignaturePrototype(completedOutput.genericOwnerPrototypes)
-        physicalizeGenericOwnerHardestModelPrototype(
-            completedOutput.genericOwnerPrototypes,
-            completedOutput.genericOwnerCallRoutes,
-            loweredInput.configuration.dotNetTarget,
-            completedOutput.output,
-            testServices.moduleStructure.originalTestDataFiles.single(),
-            testServices.getOrCreateTempDirectory("generic-owner-snapshot-physicalizer"),
-        )
+        if (genericOwnerRehearsal) {
+            physicalizeGenericOwnerHardestModelPrototype(
+                completedOutput.genericOwnerPrototypes,
+                completedOutput.genericOwnerCallRoutes,
+                loweredInput.configuration.dotNetTarget,
+                completedOutput.output,
+                testServices.moduleStructure.originalTestDataFiles.single(),
+                testServices.getOrCreateTempDirectory("generic-owner-snapshot-physicalizer"),
+            )
+        }
         if (callRouteTraceExportPath != null && !loweredInput.configuration.dotNetProducesLibrary) {
             val traceExportDirectory = File(callRouteTraceExportPath)
             val traceKey = genericOwnerCallRouteTraceKey(traceExportDirectory)
@@ -1045,73 +1055,22 @@ private fun validateGenericOwnerPhysicalOperationRouteShadow(
         "The exact-final implicitly widened inline receiver",
     )
 
-    val widenedConstructedResultRoute = checkNotNull(snapshots.singleOrNull { candidate ->
+    val widenedConstructedResultRoutes = snapshots.filter { candidate ->
         candidate.ownerName.endsWith("InlineConstructedCallRoute") &&
                 candidate.physicalFunctionName == "sourceThroughWidenedLocal" &&
                 candidate.receiverVariableName == "widenedSourceAlias" &&
                 candidate.logicalMemberName == "source"
-    }) {
-        "The exact-origin logically widened call must publish one semantic route: $snapshots"
     }
-    check(widenedConstructedResultRoute.let { route ->
-        route.status == DotNetGenericOwnerPhysicalOperationRouteShadowStatus.UNAVAILABLE &&
-                route.logicalSelector ==
-                DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.BROAD_UNIVERSAL &&
-                route.requiredReceiverCarrier.kind ==
-                DotNetGenericOwnerPhysicalValueShadowCarrierKind.SEMANTIC_CAPABILITY &&
-                route.requiredReceiverCarrier.localOwnerName
-                    ?.endsWith("InlineConstructedSource") == true &&
-                route.predictedRouteKind == null && route.resultLayout == null &&
-                route.resultSlotDomain == null && route.actualRoute ==
-                DotNetGenericOwnerPhysicalOperationActualRouteSnapshot
-                    .GUARDED_SEMANTIC_CAPABILITY_WITH_NATURAL_FALLBACK &&
-                route.relation ==
-                DotNetGenericOwnerPhysicalOperationRouteShadowRelation
-                    .PREDICTION_UNAVAILABLE
+    check(widenedConstructedResultRoutes.none { route ->
+        route.predictedRouteKind ==
+                DotNetGenericOwnerPhysicalOperationRouteKindSnapshot.NATURAL_INTERFACE ||
+                route.actualRoute ==
+                DotNetGenericOwnerPhysicalOperationActualRouteSnapshot.DIRECT_NATURAL
     }) {
-        "The exact-origin logically widened constructed call must remain on the guarded " +
-                "semantic/producer-recorded fallback until a bound operation proves its " +
-                "result carrier: $widenedConstructedResultRoute"
+        "The exact-origin logically widened constructed call must not reacquire natural " +
+                "operation authority from its outer receiver: $widenedConstructedResultRoutes"
     }
 
-    val exactArgumentRoute = snapshots.single { candidate ->
-        candidate.ownerName.endsWith("InlineLookupRoute") &&
-                candidate.physicalFunctionName == "routeExactArgument" &&
-                candidate.receiverVariableName == "sourceNaturalAlias" &&
-                candidate.logicalMemberName == "lookup"
-    }
-    check(exactArgumentRoute.status ==
-            DotNetGenericOwnerPhysicalOperationRouteShadowStatus.BOUND &&
-            exactArgumentRoute.physicalFunctionName == "routeExactArgument" &&
-            exactArgumentRoute.logicalSelector ==
-            DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.EXACT_NATURAL &&
-            exactArgumentRoute.predictedRouteKind ==
-            DotNetGenericOwnerPhysicalOperationRouteKindSnapshot.NATURAL_INTERFACE &&
-            exactArgumentRoute.requiredReceiverCarrier.let { carrier ->
-                carrier.kind ==
-                        DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION &&
-                        carrier.localOwnerName?.endsWith("InlineLookup") == true &&
-                        carrier.localTypeDefView ==
-                        DotNetGenericOwnerPhysicalValueShadowTypeDefView.DECLARED &&
-                        carrier.ownerParameterIndices == listOf(0, 0) &&
-                        carrier.parameterBinderOwnerName?.endsWith("InlineLookupRoute") == true
-            } && exactArgumentRoute.resultLayout ==
-            DotNetGenericOwnerPhysicalOperationResultLayoutSnapshot.SPLIT_NULLABLE &&
-            exactArgumentRoute.resultSlotDomain ==
-            DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
-            exactArgumentRoute.resultCarrierKind ==
-            DotNetGenericOwnerPhysicalOperationResultCarrierKindSnapshot.OWNER_PARAMETER &&
-            exactArgumentRoute.resultCarrierParameterBinderOwnerName
-                ?.endsWith("InlineLookupRoute") == true &&
-            exactArgumentRoute.resultCarrierParameterIndex == 0 &&
-            exactArgumentRoute.actualRoute ==
-            DotNetGenericOwnerPhysicalOperationActualRouteSnapshot.DIRECT_NATURAL &&
-            exactArgumentRoute.relation ==
-            DotNetGenericOwnerPhysicalOperationRouteShadowRelation.MATCH &&
-            exactArgumentRoute.diagnostic == null) {
-        "An exact owner-dependent !K argument must preserve the natural !V+bool result route: " +
-                exactArgumentRoute
-    }
     val retainedArgumentSplitRoute = checkNotNull(snapshots.singleOrNull { candidate ->
         candidate.ownerName.endsWith("InlineArgumentSplitLocalRoute") &&
                 candidate.physicalFunctionName == "lookup" &&
@@ -1266,33 +1225,19 @@ private fun validateGenericOwnerPhysicalOperationRouteShadow(
         "Every split control-flow arm must publish its own exact natural operation: " +
                 controlFlowSplitRoutes
     }
-    val widenedArgumentRoute = checkNotNull(snapshots.singleOrNull { candidate ->
+    val widenedArgumentRoutes = snapshots.filter { candidate ->
         candidate.ownerName.endsWith("InlineLookupRoute") &&
                 candidate.physicalFunctionName == "routeWidenedResult" &&
                 candidate.logicalMemberName == "lookup"
-    }) {
-        "A logically widened multi-parameter view must remain explicit semantic evidence: $snapshots"
     }
-    check(widenedArgumentRoute.status ==
-            DotNetGenericOwnerPhysicalOperationRouteShadowStatus.UNAVAILABLE &&
-            widenedArgumentRoute.logicalSelector ==
-            DotNetGenericOwnerPhysicalOperationLogicalSelectorSnapshot.BROAD_UNIVERSAL &&
-            widenedArgumentRoute.predictedRouteKind == null &&
-            widenedArgumentRoute.requiredReceiverCarrier.let { carrier ->
-                carrier.kind ==
-                        DotNetGenericOwnerPhysicalValueShadowCarrierKind.SEMANTIC_CAPABILITY &&
-                        carrier.localOwnerName?.endsWith("InlineLookup") == true &&
-                        carrier.ownerParameterIndices.isEmpty()
-            } && widenedArgumentRoute.methodArgumentCarriers.isEmpty() &&
-            widenedArgumentRoute.resultLayout == null &&
-            widenedArgumentRoute.actualRoute ==
-            DotNetGenericOwnerPhysicalOperationActualRouteSnapshot
-                .GUARDED_SEMANTIC_CAPABILITY_WITH_NATURAL_FALLBACK &&
-            widenedArgumentRoute.relation ==
-            DotNetGenericOwnerPhysicalOperationRouteShadowRelation.PREDICTION_UNAVAILABLE &&
-            !widenedArgumentRoute.diagnostic.isNullOrEmpty()) {
-        "A logically widened multi-parameter view must never fabricate a natural construction: " +
-                widenedArgumentRoute
+    check(widenedArgumentRoutes.none { route ->
+        route.predictedRouteKind ==
+                DotNetGenericOwnerPhysicalOperationRouteKindSnapshot.NATURAL_INTERFACE ||
+                route.actualRoute ==
+                DotNetGenericOwnerPhysicalOperationActualRouteSnapshot.DIRECT_NATURAL
+    }) {
+        "A logically widened multi-parameter view must never fabricate natural operation " +
+                "authority: $widenedArgumentRoutes"
     }
 
     val exactMethodSpecRoute = checkNotNull(snapshots.singleOrNull { candidate ->
@@ -2130,7 +2075,7 @@ private fun validateGenericOwnerProducerSealedPublication(
     if (!genericOwnerRehearsal) {
         val genericOwnerEpochEntries = declarations.genericOwnerRehearsalEpochRecordIndexKeys()
         check(genericOwnerEpochEntries.isEmpty()) {
-            "The production erased epoch must not publish H/N/M/J/K generic-owner records: " +
+            "The production erased epoch must not publish generic-owner rehearsal records: " +
                     genericOwnerEpochEntries
         }
         if (probesSemanticEquivalence) {
@@ -2369,7 +2314,7 @@ private fun validateGenericOwnerProducerSealedPublication(
         assemblyFile = producer,
         sealedFamilies = objectiveDeclarations.map { entry -> entry.first },
         semanticEquivalenceCertificates = objectiveDeclarations.map { entry -> entry.second },
-        coreLibraryAssemblyName = target.coreLibraryAssemblyName,
+        producerTarget = target,
     )
     check(peValidation.stamp !== DotNetGenericOwnerPeValidationStamp.EMPTY) {
         "The real producer DLL did not yield a non-empty objective K/J validation stamp"
@@ -2699,6 +2644,12 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
             check(emittedIl.isFile && emittedIl.readText().let { ilText ->
                 "'InlineProducer`1'" !in ilText &&
                         "IInlineProducerKotlinSemantic" !in ilText &&
+                        "'InlineInvariantProducer`1'" !in ilText &&
+                        "IInlineInvariantProducerKotlinSemantic" !in ilText &&
+                        "'InlineProjectedSourceValue`1'" !in ilText &&
+                        "IInlineProjectedSourceValueKotlinSemantic" !in ilText &&
+                        "'InlineProjectedPropertySourceValue`1'" !in ilText &&
+                        "IInlineProjectedPropertySourceValueKotlinSemantic" !in ilText &&
                         "'InlineConstructedSource`1'" !in ilText &&
                         "IInlineConstructedSourceKotlinSemantic" !in ilText &&
                         "'InlineConstructedSourceValue`1'" !in ilText &&
@@ -2785,10 +2736,10 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
 
     if (probesCompilerAlias) {
         val lookupSourceAlias = comparisons.singleOrNull { comparison ->
-            comparison.prediction.ownerName.endsWith("InlineLookupRoute") &&
+                    comparison.prediction.ownerName.endsWith("InlineLookupRoute") &&
                     comparison.prediction.sourceFunctionName == "routeExactArgument" &&
                     comparison.prediction.functionRole ==
-                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER &&
+                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.TYPED_ENTRY &&
                     comparison.prediction.variableName == "sourceNaturalAlias"
         }
         check(lookupSourceAlias?.let { comparison ->
@@ -2841,6 +2792,40 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
             "The constructed-entry probe did not retain its emitted IL: ${constructedEntryIl.path}"
         }
         val constructedEntryIlText = constructedEntryIl.readText()
+        fun blockedProjectedOwnerIl(simpleName: String): String? {
+            val start = Regex("(?m)^\\.class\\b[^\\r\\n]*'$simpleName'(?=\\s|$)")
+                .find(constructedEntryIlText)?.range?.first ?: return null
+            val end = Regex("(?m)^\\.class\\b")
+                .find(constructedEntryIlText, startIndex = start + 1)?.range?.first
+                ?: constructedEntryIlText.length
+            return constructedEntryIlText.substring(start, end)
+        }
+        val projectedOwnerBodies = listOf(
+            blockedProjectedOwnerIl("InlineProjectedSourceValue"),
+            blockedProjectedOwnerIl("InlineProjectedPropertySourceValue"),
+        )
+        check(
+            projectedOwnerBodies.all { ownerBody ->
+                ownerBody != null &&
+                        Regex("""(?m)^\s*\.field\s+private\s+object\s+'nested'\s*$""")
+                            .findAll(ownerBody).count() == 1 &&
+                        "class 'InlineInvariantProducer`1'<object>" !in ownerBody
+            } &&
+                    "'InlineProjectedSourceValue`1'" !in constructedEntryIlText &&
+                    "'InlineProjectedPropertySourceValue`1'" !in constructedEntryIlText &&
+                    "stfld object 'InlineProjectedSourceValue'::'nested'" in
+                    constructedEntryIlText &&
+                    "ldfld object 'InlineProjectedSourceValue'::'nested'" in
+                    constructedEntryIlText &&
+                    "stfld object 'InlineProjectedPropertySourceValue'::'nested'" in
+                    constructedEntryIlText &&
+                    "ldfld object 'InlineProjectedPropertySourceValue'::'nested'" in
+                    constructedEntryIlText
+        ) {
+            "A use-site projected invariant constructor must keep its owner erased until the " +
+                    "semantic .ctor carrier has portable authority, with one authoritative " +
+                    "object field meanwhile: ${constructedEntryIl.path}; owners=$projectedOwnerBodies"
+        }
         val constructedEntryMethodStarts =
             Regex("(?m)^\\s*\\.method\\b").findAll(constructedEntryIlText)
             .map { match -> match.range.first }
@@ -2886,7 +2871,7 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
                     comparison.prediction.sourceFunctionName == "routeCallerMethodArgument" &&
                     comparison.prediction.physicalFunctionName == "routeCallerMethodArgument" &&
                     comparison.prediction.functionRole ==
-                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER &&
+                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.TYPED_ENTRY &&
                     comparison.prediction.variableName == "callerMarkerAlias"
         }
         check(callerMethodParameterAlias?.let { comparison ->
@@ -2985,7 +2970,7 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
                     comparison.prediction.physicalFunctionName ==
                     "routeCallerMethodArgumentAfterPrefixes" &&
                     comparison.prediction.functionRole ==
-                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER
+                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.TYPED_ENTRY
         }.associateBy { comparison -> comparison.prediction.variableName }
         val orderedSourceAlias = orderedPrefixComparisons["orderedSourceAlias"]
         val orderedMarkerAlias = orderedPrefixComparisons["orderedMarkerAlias"]
@@ -3113,7 +3098,7 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
                     comparison.prediction.sourceFunctionName == "privateCallerMethodArgument" &&
                     comparison.prediction.physicalFunctionName == "privateCallerMethodArgument" &&
                     comparison.prediction.functionRole ==
-                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER &&
+                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.TYPED_ENTRY &&
                     comparison.prediction.variableName == "privateCallerMarkerAlias"
         }
         check(privateCallerMethodParameterAlias?.let { comparison ->
@@ -3202,57 +3187,53 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
             comparison.prediction.ownerName.endsWith("InlineConstructedCallRoute") &&
                     comparison.prediction.sourceFunctionName == "sourceThroughLocal" &&
                     comparison.prediction.functionRole ==
-                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER &&
+                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.SEMANTIC_HOOK &&
                     comparison.prediction.variableName == "callResultNaturalAlias"
         }
         check(constructedCallResultAlias?.let { comparison ->
             val prediction = comparison.prediction
-            val carrier = prediction.initializerProducedCarrier
-            val guaranteed = prediction.guaranteedViews.singleOrNull()
-            val selected = prediction.selectedViewLineage.singleOrNull()
-            prediction.status == DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED &&
-                    prediction.unsupportedReason == null &&
+            val predictionRemainsConservative = when (prediction.status) {
+                DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED ->
                     prediction.initializerProducedLayout ==
-                    DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT &&
-                    prediction.storageLayout == DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT &&
-                    carrier.kind ==
-                    DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION &&
-                    carrier.localOwnerName?.endsWith("InlineProducer") == true &&
-                    carrier.localTypeDefView ==
-                    DotNetGenericOwnerPhysicalValueShadowTypeDefView.DECLARED &&
-                    carrier.ownerParameterIndices == listOf(0) &&
-                    carrier.parameterBinderOwnerName?.endsWith("InlineConstructedCallRoute") == true &&
-                    carrier.parameterBinderTypeDefView == null &&
-                    prediction.storageCarrier == carrier &&
-                    prediction.guaranteeState ==
-                    DotNetGenericOwnerPhysicalValueShadowGuaranteeState.KNOWN &&
-                    guaranteed?.carrier == carrier &&
-                    DotNetGenericOwnerPhysicalValueShadowEvidence.FROZEN_PARAMETER_OR_RESULT in
-                    guaranteed.evidence &&
-                    selected?.view == guaranteed &&
-                    prediction.initializerNullState ==
-                    DotNetGenericOwnerPhysicalValueShadowNullState.MAYBE_NULL &&
-                    prediction.contentsNullState ==
-                    DotNetGenericOwnerPhysicalValueShadowNullState.MAYBE_NULL &&
+                            DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT &&
+                            prediction.initializerProducedCarrier.kind ==
+                            DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT &&
+                            prediction.storageLayout ==
+                            DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT &&
+                            prediction.storageCarrier.kind ==
+                            DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT &&
+                            comparison.relation ==
+                            DotNetGenericOwnerPhysicalValuePlacementRelation.MATCH
+                DotNetGenericOwnerPhysicalValueShadowStatus.UNSUPPORTED ->
+                    comparison.relation ==
+                            DotNetGenericOwnerPhysicalValuePlacementRelation.PREDICTION_UNSUPPORTED
+            }
+            prediction.physicalFunctionName.startsWith(
+                "sourceThroughLocal__KotlinSemantic__",
+            ) &&
+                    prediction.guaranteedViews.none { view ->
+                        view.carrier.kind ==
+                                DotNetGenericOwnerPhysicalValueShadowCarrierKind
+                                    .LOCAL_OWNER_CONSTRUCTION &&
+                                view.carrier.localOwnerName?.endsWith("InlineProducer") == true
+                    } &&
+                    predictionRemainsConservative &&
                     comparison.continuity !=
                     DotNetGenericOwnerPhysicalValuePlacementContinuity.DIVERGED &&
                     comparison.actualPhysicalMethodOwnerName
                         ?.endsWith("InlineConstructedCallRoute") == true &&
-                    comparison.actualSelectionKind ==
-                    DotNetGenericOwnerPhysicalValueLocalSelectionKind
-                        .PHYSICAL_VALUE_RETAINED_PRODUCER &&
-                    comparison.actualStorageCarrier == carrier &&
-                    comparison.relation == DotNetGenericOwnerPhysicalValuePlacementRelation.MATCH
+                    comparison.actualStorageCarrier.kind ==
+                    DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT
         } == true) {
-            "The direct natural MethodDef result must retain its exact " +
-                    "InlineProducer<!T> " +
-                    "carrier: result=$constructedCallResultAlias, all=$comparisons"
+            "A constructed-interface result must remain object-carried in its semantic body " +
+                    "without an implementation-wide exact-result certificate: " +
+                    "result=$constructedCallResultAlias, all=$comparisons"
         }
         val widenedSourceAlias = comparisons.singleOrNull { comparison ->
             comparison.prediction.ownerName.endsWith("InlineConstructedCallRoute") &&
                     comparison.prediction.sourceFunctionName == "sourceThroughWidenedLocal" &&
                     comparison.prediction.functionRole ==
-                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER &&
+                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.TYPED_ENTRY &&
                     comparison.prediction.variableName == "widenedSourceAlias"
         }
         check(widenedSourceAlias?.let { comparison ->
@@ -3282,6 +3263,8 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
         val widenedCallResultAlias = comparisons.singleOrNull { comparison ->
             comparison.prediction.ownerName.endsWith("InlineConstructedCallRoute") &&
                     comparison.prediction.sourceFunctionName == "sourceThroughWidenedLocal" &&
+                    comparison.prediction.functionRole ==
+                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.SEMANTIC_HOOK &&
                     comparison.prediction.variableName == "widenedCallResultAlias"
         }
         check(widenedCallResultAlias?.let { comparison ->
@@ -3303,6 +3286,8 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
         val widenedCallResultCopyAlias = comparisons.singleOrNull { comparison ->
             comparison.prediction.ownerName.endsWith("InlineConstructedCallRoute") &&
                     comparison.prediction.sourceFunctionName == "sourceThroughWidenedLocal" &&
+                    comparison.prediction.functionRole ==
+                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.SEMANTIC_HOOK &&
                     comparison.prediction.variableName == "widenedCallResultCopyAlias"
         }
         check(widenedCallResultCopyAlias?.let { comparison ->
@@ -3325,6 +3310,8 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
         val genuinelyBroadCallResultAlias = comparisons.singleOrNull { comparison ->
             comparison.prediction.ownerName.endsWith("InlineConstructedCallRoute") &&
                     comparison.prediction.sourceFunctionName == "sourceThroughBroadEntry" &&
+                    comparison.prediction.functionRole ==
+                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.SEMANTIC_HOOK &&
                     comparison.prediction.variableName == "genuinelyBroadCallResultAlias"
         }
         check(genuinelyBroadCallResultAlias?.let { comparison ->
@@ -3338,15 +3325,14 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
                     "result=$genuinelyBroadCallResultAlias, all=$comparisons"
         }
 
-        val exactCallResultMethod = constructedEntryMethodWindows.singleOrNull { method ->
+        val semanticCallResultMethod = constructedEntryMethodWindows.singleOrNull { method ->
             val header = method.substringBefore('{')
-            "'sourceThroughLocal'(" in header && "'callResultNaturalAlias'" in method
+            "'sourceThroughLocal__KotlinSemantic__" in header &&
+                    "'callResultNaturalAlias'" in method
         }
-        val callResultSlot = exactCallResultMethod?.let { method ->
-            Regex(
-                """\[(\d+)]\s+class\s+'InlineProducer`1'<!0>\s+""" +
-                        """'callResultNaturalAlias'""",
-            ).find(method)?.groupValues?.get(1)?.toInt()
+        val callResultSlot = semanticCallResultMethod?.let { method ->
+            Regex("""\[(\d+)]\s+object\s+'callResultNaturalAlias'""")
+                .find(method)?.groupValues?.get(1)?.toInt()
         }
         val callResultStore = callResultSlot?.let { slot ->
             if (slot in 0..3) "stloc.$slot" else "stloc $slot"
@@ -3354,114 +3340,93 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
         val callResultLoad = callResultSlot?.let { slot ->
             if (slot in 0..3) "ldloc.$slot" else "ldloc $slot"
         }
-        val exactCallResultInstructions = exactCallResultMethod?.lineSequence()
+        val semanticCallResultInstructions = semanticCallResultMethod?.lineSequence()
             ?.map(String::trim)
             ?.filter { line -> line.isNotEmpty() && !line.startsWith("//") }
             ?.toList()
-        val exactConstructedSourceCalls = exactCallResultInstructions.orEmpty().filter { line ->
-            (line.startsWith("call ") || line.startsWith("callvirt ")) &&
-                    "::'source'()" in line
+        val semanticConstructedSourceCalls = semanticCallResultInstructions.orEmpty().filter { line ->
+            line.startsWith("callvirt instance object ") &&
+                    "KotlinSemantic" in line && "::'source__KotlinCapability__" in line
         }
-        val forbiddenCallResultAdaptation = listOf(
-            "box ",
-            "unbox.any",
-            "castclass",
-            "isinst",
-            "KotlinSemantic",
-            "InvokeRecordedMember",
-            "InvokeUniqueMember",
-            "GenericInterfaceDispatch",
-        ).filter { token -> token in exactCallResultMethod.orEmpty() }
-        check(exactCallResultMethod != null &&
-                Regex(
-                    """class\s+'InlineProducer`1'<!0>\s+""" +
-                            """'sourceThroughLocal'\(""",
-                ).containsMatchIn(exactCallResultMethod.substringBefore('{')) &&
+        val directNaturalConstructedSourceCalls = semanticCallResultInstructions.orEmpty().filter { line ->
+            (line.startsWith("call ") || line.startsWith("callvirt ")) &&
+                    "class 'InlineConstructedSource`1'<!0>::'source'()" in line
+        }
+        check(semanticCallResultMethod != null &&
+                Regex("""instance\s+object\s+'sourceThroughLocal__KotlinSemantic__""")
+                    .containsMatchIn(semanticCallResultMethod.substringBefore('{')) &&
                 callResultSlot != null && callResultStore != null && callResultLoad != null &&
-                Regex(
-                    """'sourceThroughLocal'\(class\s+'InlineConstructedSource`1'<!0>\s+'source'\)""",
-                ).containsMatchIn(exactCallResultMethod.substringBefore('{')) &&
-                exactCallResultInstructions != null &&
-                exactConstructedSourceCalls.singleOrNull()?.let { call ->
-                    Regex(
-                        """^callvirt\s+instance\s+class\s+'InlineProducer`1'<!0>\s+""" +
-                                """class\s+'InlineConstructedSource`1'<!0>::'source'\(\)$""",
-                    ).matches(call)
-                } == true &&
-                exactCallResultInstructions.windowed(2).any { instructions ->
-                    instructions == listOf(
-                        "ldarg.1",
-                        exactConstructedSourceCalls.single(),
-                    )
-                } &&
-                exactCallResultInstructions.windowed(2).any { instructions ->
-                    instructions == listOf(exactConstructedSourceCalls.single(), callResultStore)
-                } &&
-                exactCallResultInstructions.windowed(2).any { instructions ->
+                Regex("""\(object\s+'source'\)""")
+                    .containsMatchIn(semanticCallResultMethod.substringBefore('{')) &&
+                semanticCallResultInstructions != null &&
+                semanticConstructedSourceCalls.size == 1 &&
+                directNaturalConstructedSourceCalls.isEmpty() &&
+                semanticCallResultMethod.contains("GenericInterfaceDispatch'::'InvokeRecordedMember'") &&
+                semanticCallResultInstructions.windowed(2).any { instructions ->
                     instructions == listOf(callResultLoad, "ret")
                 } &&
-                exactCallResultInstructions.count { instruction -> instruction == callResultStore } == 1 &&
-                forbiddenCallResultAdaptation.isEmpty()
+                semanticCallResultInstructions.count { instruction -> instruction == callResultStore } == 1 &&
+                !Regex("""castclass\s+class\s+'InlineProducer`1'<!0>""")
+                    .containsMatchIn(semanticCallResultMethod)
         ) {
-            "The direct constructed result was not copied from its live natural MethodDef " +
-                    "result without adaptation: forbidden=$forbiddenCallResultAdaptation, " +
-                    "calls=$exactConstructedSourceCalls, method=$exactCallResultMethod"
+            "The semantic constructed result did not remain object-carried through its guarded " +
+                    "capability/foreign route: calls=$semanticConstructedSourceCalls, " +
+                    "direct=$directNaturalConstructedSourceCalls, method=$semanticCallResultMethod"
         }
         val pathCompleteCallResultAlias = comparisons.singleOrNull { comparison ->
             comparison.prediction.ownerName.endsWith("InlineConstructedCallRoute") &&
                     comparison.prediction.sourceFunctionName ==
                     "sourceThroughPathCompleteControlFlow" &&
                     comparison.prediction.functionRole ==
-                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER &&
+                    DotNetGenericOwnerPhysicalValueShadowFunctionRole.SEMANTIC_HOOK &&
                     comparison.prediction.variableName == "pathCompleteCallResultAlias"
         }
         check(pathCompleteCallResultAlias?.let { comparison ->
             val prediction = comparison.prediction
-            val carrier = prediction.initializerProducedCarrier
-            prediction.status == DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED &&
-                    prediction.unsupportedReason == null &&
+            val predictionRemainsConservative = when (prediction.status) {
+                DotNetGenericOwnerPhysicalValueShadowStatus.ANALYZED ->
                     prediction.initializerProducedLayout ==
-                    DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT &&
-                    prediction.storageLayout == DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT &&
-                    carrier.kind ==
-                    DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION &&
-                    carrier.localOwnerName?.endsWith("InlineProducer") == true &&
-                    carrier.localTypeDefView ==
-                    DotNetGenericOwnerPhysicalValueShadowTypeDefView.DECLARED &&
-                    carrier.ownerParameterIndices == listOf(0) &&
-                    carrier.parameterBinderOwnerName
-                        ?.endsWith("InlineConstructedCallRoute") == true &&
-                    prediction.storageCarrier == carrier &&
-                    prediction.guaranteeState ==
-                    DotNetGenericOwnerPhysicalValueShadowGuaranteeState.KNOWN &&
-                    prediction.guaranteedViews.singleOrNull()?.carrier == carrier &&
-                    prediction.initializerNullState ==
-                    DotNetGenericOwnerPhysicalValueShadowNullState.MAYBE_NULL &&
-                    prediction.contentsNullState ==
-                    DotNetGenericOwnerPhysicalValueShadowNullState.MAYBE_NULL &&
+                            DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT &&
+                            prediction.initializerProducedCarrier.kind ==
+                            DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT &&
+                            prediction.storageLayout ==
+                            DotNetGenericOwnerPhysicalValueLayoutKind.DIRECT &&
+                            prediction.storageCarrier.kind ==
+                            DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT &&
+                            comparison.relation ==
+                            DotNetGenericOwnerPhysicalValuePlacementRelation.MATCH
+                DotNetGenericOwnerPhysicalValueShadowStatus.UNSUPPORTED ->
+                    comparison.relation ==
+                            DotNetGenericOwnerPhysicalValuePlacementRelation.PREDICTION_UNSUPPORTED
+            }
+            prediction.physicalFunctionName.startsWith(
+                "sourceThroughPathCompleteControlFlow__KotlinSemantic__",
+            ) &&
+                    prediction.guaranteedViews.none { view ->
+                        view.carrier.kind ==
+                                DotNetGenericOwnerPhysicalValueShadowCarrierKind
+                                    .LOCAL_OWNER_CONSTRUCTION &&
+                                view.carrier.localOwnerName?.endsWith("InlineProducer") == true
+                    } &&
+                    predictionRemainsConservative &&
                     comparison.continuity !=
                     DotNetGenericOwnerPhysicalValuePlacementContinuity.DIVERGED &&
                     comparison.actualPhysicalMethodOwnerName
                         ?.endsWith("InlineConstructedCallRoute") == true &&
-                    comparison.actualSelectionKind ==
-                    DotNetGenericOwnerPhysicalValueLocalSelectionKind
-                        .PHYSICAL_VALUE_RETAINED_PRODUCER &&
-                    comparison.actualStorageCarrier == carrier &&
-                    comparison.relation == DotNetGenericOwnerPhysicalValuePlacementRelation.MATCH
+                    comparison.actualStorageCarrier.kind ==
+                    DotNetGenericOwnerPhysicalValueShadowCarrierKind.OBJECT
         } == true) {
-            "The path-complete result join must retain one exact InlineProducer<!T> carrier: " +
+            "A path-complete join of constructed semantic results must remain object-carried: " +
                     "result=$pathCompleteCallResultAlias, all=$comparisons"
         }
         val pathCompleteMethod = constructedEntryMethodWindows.singleOrNull { method ->
             val header = method.substringBefore('{')
-            "'sourceThroughPathCompleteControlFlow'(" in header &&
+            "'sourceThroughPathCompleteControlFlow__KotlinSemantic__" in header &&
                     "'pathCompleteCallResultAlias'" in method
         }
         val pathCompleteSlot = pathCompleteMethod?.let { method ->
-            Regex(
-                """\[(\d+)]\s+class\s+'InlineProducer`1'<!0>\s+""" +
-                        """'pathCompleteCallResultAlias'""",
-            ).find(method)?.groupValues?.get(1)?.toInt()
+            Regex("""\[(\d+)]\s+object\s+'pathCompleteCallResultAlias'""")
+                .find(method)?.groupValues?.get(1)?.toInt()
         }
         val pathCompleteStore = pathCompleteSlot?.let { slot ->
             if (slot in 0..3) "stloc.$slot" else "stloc $slot"
@@ -3493,54 +3458,23 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
             pathCompleteInstructions.indexOf("$label:").takeIf { index -> index >= 0 }
         }
         val pathCompleteSourceCalls = pathCompleteInstructions.orEmpty().filter { line ->
-            (line.startsWith("call ") || line.startsWith("callvirt ")) &&
-                    "::'source'()" in line
+            line.startsWith("callvirt instance object ") &&
+                    "KotlinSemantic" in line && "::'source__KotlinCapability__" in line
         }
-        val pathCompleteSourceCallIndices = pathCompleteInstructions?.indices?.filter { index ->
-            val line = pathCompleteInstructions[index]
-            (line.startsWith("call ") || line.startsWith("callvirt ")) &&
-                    "::'source'()" in line
-        }.orEmpty()
-        val pathCompleteJoinLabel = pathCompleteSourceCallIndices.firstOrNull()?.let { index ->
-            pathCompleteInstructions?.getOrNull(index + 1)?.let { instruction ->
-                Regex("^br(?:\\.s)?\\s+(\\S+)$")
-                    .matchEntire(instruction)
-                    ?.groupValues
-                    ?.get(1)
-            }
+        val pathCompleteForeignCalls = pathCompleteInstructions.orEmpty().filter { line ->
+            line.startsWith("call object ") &&
+                    "GenericInterfaceDispatch'::'InvokeRecordedMember'" in line
         }
-        val pathCompleteJoinLabelIndex = pathCompleteJoinLabel?.let { label ->
-            pathCompleteInstructions?.indexOf("$label:")?.takeIf { index -> index >= 0 }
+        val pathCompleteDirectCalls = pathCompleteInstructions.orEmpty().filter { line ->
+            (line.startsWith("call ") || line.startsWith("callvirt ")) &&
+                    "class 'InlineConstructedSource`1'<!0>::'source'()" in line
         }
         val pathCompleteStoreIndex = pathCompleteInstructions?.indexOf(pathCompleteStore)
             ?.takeIf { index -> index >= 0 }
-        val pathCompleteResultInstructions = if (
-            pathCompleteConditionBranchIndex != null && pathCompleteStoreIndex != null &&
-            pathCompleteConditionBranchIndex < pathCompleteStoreIndex
-        ) {
-            pathCompleteInstructions.subList(
-                pathCompleteConditionBranchIndex + 1,
-                pathCompleteStoreIndex + 1,
-            )
-        } else {
-            emptyList()
-        }
-        val forbiddenPathCompleteAdaptation = listOf(
-            "box ",
-            "unbox.any",
-            "castclass",
-            "isinst",
-            "KotlinSemantic",
-            "InvokeRecordedMember",
-            "InvokeUniqueMember",
-            "GenericInterfaceDispatch",
-        ).filter { token -> pathCompleteResultInstructions.any { line -> token in line } }
         check(pathCompleteMethod != null && pathCompleteSlot != null &&
                 pathCompleteStore != null && pathCompleteLoad != null &&
-                Regex(
-                    """class\s+'InlineProducer`1'<!0>\s+""" +
-                            """'sourceThroughPathCompleteControlFlow'\(""",
-                ).containsMatchIn(pathCompleteMethod.substringBefore('{')) &&
+                Regex("""instance\s+object\s+'sourceThroughPathCompleteControlFlow__KotlinSemantic__""")
+                    .containsMatchIn(pathCompleteMethod.substringBefore('{')) &&
                 pathCompleteConditionCalls.size == 1 &&
                 pathCompleteInstructions != null &&
                 pathCompleteInstructions.windowed(3).any { instructions ->
@@ -3550,36 +3484,24 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
                 } && pathCompleteConditionBranchIndex != null &&
                 pathCompleteFalseLabelIndex != null &&
                 pathCompleteSourceCalls.size == 2 &&
-                pathCompleteSourceCalls.all { call ->
-                    Regex(
-                        """^callvirt\s+instance\s+class\s+'InlineProducer`1'<!0>\s+""" +
-                                """class\s+'InlineConstructedSource`1'<!0>::'source'\(\)$""",
-                    ).matches(call)
-                } && pathCompleteSourceCallIndices.size == 2 &&
-                pathCompleteConditionBranchIndex < pathCompleteSourceCallIndices[0] &&
-                pathCompleteInstructions[pathCompleteSourceCallIndices[0] - 1] == "ldarg.1" &&
-                pathCompleteSourceCallIndices[0] < pathCompleteFalseLabelIndex &&
-                pathCompleteJoinLabelIndex != null &&
-                pathCompleteSourceCallIndices[0] + 1 < pathCompleteFalseLabelIndex &&
-                pathCompleteFalseLabelIndex < pathCompleteSourceCallIndices[1] &&
-                pathCompleteInstructions[pathCompleteSourceCallIndices[1] - 1] == "ldarg.2" &&
+                pathCompleteForeignCalls.size == 2 &&
+                pathCompleteDirectCalls.isEmpty() &&
                 pathCompleteStoreIndex != null &&
-                pathCompleteJoinLabelIndex == pathCompleteSourceCallIndices[1] + 1 &&
-                pathCompleteStoreIndex == pathCompleteJoinLabelIndex + 1 &&
                 pathCompleteInstructions.count { instruction ->
                     instruction == pathCompleteStore
                 } == 1 && pathCompleteInstructions.windowed(2).any { instructions ->
                     instructions == listOf(pathCompleteLoad, "ret")
-                } && forbiddenPathCompleteAdaptation.isEmpty()
+                } && !Regex("""castclass\s+class\s+'InlineProducer`1'<!0>""")
+                    .containsMatchIn(pathCompleteMethod)
         ) {
-            "The path-complete control-flow result did not join two natural MethodDef calls " +
-                    "into one exact local without adaptation: " +
-                    "forbidden=$forbiddenPathCompleteAdaptation, " +
+            "The path-complete control-flow result did not join two guarded semantic calls " +
+                    "into one object local: " +
                     "conditionCalls=$pathCompleteConditionCalls, " +
                     "conditionBranch=$pathCompleteConditionBranchIndex, " +
                     "falseLabel=$pathCompleteFalseLabelIndex, " +
-                    "joinLabel=$pathCompleteJoinLabelIndex, " +
-                    "calls=$pathCompleteSourceCalls, method=$pathCompleteMethod"
+                    "capabilityCalls=$pathCompleteSourceCalls, " +
+                    "foreignCalls=$pathCompleteForeignCalls, " +
+                    "direct=$pathCompleteDirectCalls, method=$pathCompleteMethod"
         }
         val widenedCallResultMethod = constructedEntryMethodWindows.singleOrNull { method ->
             val header = method.substringBefore('{')
@@ -4687,14 +4609,12 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
             "starAliasMatches" to "sourceStarAlias",
             "mutableAliasTracks" to "sourceMutableAlias",
         ).forEach { probe ->
-            val hostile = comparisons.singleOrNull { comparison ->
+            val hostile = comparisons.filter { comparison ->
                 comparison.prediction.ownerName.endsWith("InlineSelfView") &&
                         comparison.prediction.sourceFunctionName == probe.first &&
-                        comparison.prediction.functionRole ==
-                        DotNetGenericOwnerPhysicalValueShadowFunctionRole.OTHER &&
                         comparison.prediction.variableName == probe.second
             }
-            check(hostile?.let { comparison ->
+            check(hostile.isNotEmpty() && hostile.all { comparison ->
                 comparison.prediction.status ==
                         DotNetGenericOwnerPhysicalValueShadowStatus.UNSUPPORTED &&
                         !comparison.prediction.unsupportedReason.isNullOrEmpty() &&
@@ -4703,7 +4623,7 @@ private fun validateGenericOwnerPhysicalValuePlacementComparison(
                             .PHYSICAL_VALUE_RETAINED_PRODUCER &&
                         comparison.relation ==
                         DotNetGenericOwnerPhysicalValuePlacementRelation.PREDICTION_UNSUPPORTED
-            } == true) {
+            }) {
                 "A projected or mutable source value acquired exact placement " +
                         "authority: probe=$probe, comparison=$hostile, all=$comparisons"
             }
@@ -5126,6 +5046,7 @@ private fun validateGenericOwnerRepresentativeOctoTreePrototype(
     val nodeCarrier = node.logicalBindingKey?.let { logicalKey ->
         DotNetGenericOwnerPrototypeTypeSnapshot.logicalGenericClassifier(
             logicalClassifierKey = logicalKey,
+            logicalClassifierCategory = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
             arguments = listOf(DotNetGenericOwnerPrototypeTypeSnapshot.ownerParameter(0)),
         )
     }
@@ -5299,20 +5220,31 @@ private fun validateGenericOwnerRepresentativeOctoTreePrototype(
             "OctoTree.Branch.nodes getter lost its typed constructed vector or semantic array carrier: $nodesGetter"
         }
         val nodesType = checkNotNull(branch.states.single { state -> state.fieldName == "nodes" }.exactTypedCarrierType)
-        check(runCatching { nodesType.bindProducerTypes(emptyMap()) }.isFailure) {
+        check(runCatching { nodesType.bindProducerTypes(emptyMap(), emptyMap()) }.isFailure) {
             "OctoTree.Branch.nodes bound without a selected Node TypeDef path"
         }
         val nodePath = listOf("KotlinRepresentativeCandidate", "OctoTreeNode")
         val physicalOwnerPaths = mapOf(nodeKey to nodePath)
+        val physicalOwnerCategories = mapOf(
+            nodeKey to DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+        )
         val boundNodesGetter = nodesGetterSignatures.getValue(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
-        check(runCatching { boundNodesGetter.bindProducerTypes(emptyMap()) }.isFailure) {
+        check(runCatching { boundNodesGetter.bindProducerTypes(emptyMap(), emptyMap()) }.isFailure) {
             "OctoTree.Branch.nodes getter bound without a selected Node TypeDef path"
         }
-        check(boundNodesGetter.bindProducerTypes(physicalOwnerPaths).requireDirectOrVoidResultSlot().type ==
-                nodesType.bindProducerTypes(physicalOwnerPaths)) {
+        check(boundNodesGetter.bindProducerTypes(
+            physicalOwnerPaths,
+            physicalOwnerCategories,
+        ).requireDirectOrVoidResultSlot().type == nodesType.bindProducerTypes(
+            physicalOwnerPaths,
+            physicalOwnerCategories,
+        )) {
             "OctoTree.Branch.nodes getter did not bind the same recursive vector as its state"
         }
-        check(nodesType.bindProducerTypes(mapOf(nodeKey to nodePath)) ==
+        check(nodesType.bindProducerTypes(
+            mapOf(nodeKey to nodePath),
+            physicalOwnerCategories,
+        ) ==
                 DotNetGenericOwnerPhysicalTypeExpressionRecord.szArray(
                     DotNetGenericOwnerPhysicalTypeExpressionRecord.producerType(
                         typePath = nodePath,
@@ -5437,6 +5369,8 @@ private fun validateGenericOwnerRepresentativeOctoTreePrototype(
             state.fieldName == "nodes"
         }.exactTypedCarrierType).bindProducerTypes(physicalOwnerPathsByLogicalKey = mapOf(
             checkNotNull(node.logicalBindingKey) to decoded.requirePhysicalFamily(nodeKey).physicalOwnerPath,
+        ), physicalNamedTypeCategoriesByLogicalKey = mapOf(
+            checkNotNull(node.logicalBindingKey) to DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
         )) && nodesState.nullableReferenceFlags == listOf(
             DotNetNullableReferenceFlag.NON_NULL,
             DotNetNullableReferenceFlag.NULLABLE,
@@ -8045,8 +7979,12 @@ private fun validateGenericOwnerRepresentativeArrayCopyPrototype(
 }
 
 private fun validateGenericOwnerHardestModelPrototype(
+    genericOwnerRehearsal: Boolean,
     prototypes: List<DotNetGenericOwnerPrototypeSnapshot>,
     callRoutes: List<DotNetGenericOwnerCallRouteSnapshot>,
+    stateEmissions: List<DotNetGenericOwnerPhysicalStateEmissionSnapshot>,
+    emittedArtifact: File,
+    testDataFile: File,
 ) {
     fun DotNetGenericOwnerPrototypeSnapshot.hasSimpleName(name: String): Boolean =
         ownerName == name || ownerName.endsWith(".$name")
@@ -8072,6 +8010,169 @@ private fun validateGenericOwnerHardestModelPrototype(
         } == true) {
             "Expected $callerName -> $calleeOwnerName.$calleeName to be " +
                     "$receiverProvenances/$routeRequirement, found $matching"
+        }
+    }
+
+    if (GENERIC_OWNER_TARGET_INDEXED_STATE_PROVENANCE_PROBE_MARKER in testDataFile.readText()) {
+        fun requireState(
+            ownerName: String,
+            fieldName: String,
+        ): org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeStateSnapshot =
+            prototypes.single { prototype -> prototype.hasSimpleName(ownerName) }
+                .states.single { state -> state.fieldName == fieldName }
+
+        val dualKey = requireState("RehearsalCarrierDualStore", "key")
+        val dualValue = requireState("RehearsalCarrierDualStore", "value")
+        val dualKeyCarrier = dualKey.exactTypedCarrierType
+        val dualValueCarrier = dualValue.exactTypedCarrierType
+        check(dualKey.requirement ==
+                DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN &&
+                dualKeyCarrier?.kind ==
+                DotNetGenericOwnerPrototypeTypeKind.OWNER_TYPE_PARAMETER &&
+                dualKeyCarrier.parameterIndex == 0 &&
+                dualKey.writes.singleOrNull { write -> write.producerName == "<set-key>" }
+                    ?.provenance == DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED &&
+                dualKey.writes.filterNot { write -> write.producerName == "<set-key>" }.all { write ->
+                    write.provenance == DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED
+                } &&
+                dualValue.requirement ==
+                DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN &&
+                dualValueCarrier?.kind ==
+                DotNetGenericOwnerPrototypeTypeKind.OWNER_TYPE_PARAMETER &&
+                dualValueCarrier.parameterIndex == 1 &&
+                dualValue.writes.singleOrNull { write -> write.producerName == "<set-value>" }
+                    ?.provenance == DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED &&
+                dualValue.writes.filterNot { write -> write.producerName == "<set-value>" }.all { write ->
+                    write.provenance == DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED
+                }) {
+            "Independent K/V object-helper round trips must retain distinct !0/!1 evidence: " +
+                    "$dualKey / $dualValue"
+        }
+
+        val sameJoin = requireState("RehearsalCarrierSameJoinStore", "value")
+        check(sameJoin.requirement ==
+                DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN &&
+                sameJoin.writes.singleOrNull { write -> write.producerName == "<set-value>" }
+                    ?.provenance == DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED &&
+                sameJoin.writes.filterNot { write -> write.producerName == "<set-value>" }.all { write ->
+                    write.provenance == DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED
+                }) {
+            "A join of two values with the same exact carrier must stay typed: $sameJoin"
+        }
+
+        listOf(
+            "RehearsalCarrierCrossCastStore" to "key",
+            "RehearsalCarrierMixedJoinStore" to "key",
+            "RehearsalCarrierNestedOrderStore" to "pair",
+        ).forEach { entry ->
+            val ownerName = entry.first
+            val fieldName = entry.second
+            val offendingWriter = "<set-$fieldName>"
+            val state = requireState(ownerName, fieldName)
+            check(state.requirement ==
+                    DotNetGenericOwnerStateCarrierRequirement.TYPED_WRITE_VALUE_PROVENANCE_REQUIRED &&
+                    state.writes.singleOrNull { write ->
+                        write.producerName == offendingWriter
+                    }?.provenance == DotNetGenericOwnerWriteValueProvenance.UNRESOLVED &&
+                    state.writes.filterNot { write -> write.producerName == offendingWriter }
+                        .all { write ->
+                            write.provenance == DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED
+                        }) {
+                "$ownerName must not use a mismatched exact carrier as $fieldName evidence: $state"
+            }
+        }
+
+        val broad = requireState("RehearsalCarrierBroadCastStore", "value")
+        check(broad.requirement == DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED &&
+                broad.writes.singleOrNull { write -> write.producerName == "<set-value>" }
+                    ?.provenance == DotNetGenericOwnerWriteValueProvenance.SEMANTIC_OBJECT &&
+                broad.writes.filterNot { write -> write.producerName == "<set-value>" }
+                    .all { write ->
+                        write.provenance == DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED
+                    }) {
+            "A genuinely broad source must remain semantic after an unchecked cast: $broad"
+        }
+
+        val valueOperator = requireState("RehearsalCarrierValueOperatorStore", "value")
+        check(valueOperator.requirement == DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED &&
+                valueOperator.writes.singleOrNull { write -> write.producerName == "<set-value>" }
+                    ?.provenance == DotNetGenericOwnerWriteValueProvenance.SEMANTIC_OBJECT &&
+                valueOperator.writes.filterNot { write -> write.producerName == "<set-value>" }
+                    .all { write ->
+                        write.provenance == DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED
+                    }) {
+            "A value-producing type operator must not forward its operand's exact carrier: $valueOperator"
+        }
+
+        if (genericOwnerRehearsal) {
+            val metadata = DotNetClrMetadataReader.read(emittedArtifact)
+
+            fun requirePhysicalOwner(ownerName: String, arity: Int) {
+                val physicalTypes = metadata.typeDefinitions.filter { type ->
+                    type.metadataName.substringBefore('`') == ownerName
+                }
+                val physical = physicalTypes.singleOrNull()
+                val parameters = physical?.let { owner ->
+                    metadata.genericParameterDefinitions
+                        .filter { parameter -> parameter.owner == owner.handle }
+                        .sortedBy { parameter -> parameter.number }
+                }.orEmpty()
+                val expectedMetadataName = "$ownerName${if (arity == 0) "" else "`$arity"}"
+                check(physical != null &&
+                        !physical.isInterface &&
+                        physical.metadataName == expectedMetadataName &&
+                        parameters.map { parameter -> parameter.number } == (0 until arity).toList() &&
+                        parameters.all { parameter ->
+                            parameter.variance == DotNetClrGenericParameterVariance.INVARIANT
+                        }) {
+                    "$ownerName did not emit one admitted CLR-generic TypeDef/$arity: " +
+                            "${physicalTypes.map { type -> type.metadataName }} / $parameters"
+                }
+            }
+            requirePhysicalOwner("RehearsalCarrierDualStore", 2)
+            requirePhysicalOwner("RehearsalCarrierSameJoinStore", 1)
+            listOf(
+                "RehearsalCarrierCrossCastStore",
+                "RehearsalCarrierMixedJoinStore",
+                "RehearsalCarrierNestedOrderStore",
+            ).forEach { ownerName ->
+                requirePhysicalOwner(ownerName, 0)
+            }
+            listOf(
+                "RehearsalCarrierBroadCastStore",
+                "RehearsalCarrierValueOperatorStore",
+            ).forEach { ownerName ->
+                requirePhysicalOwner(ownerName, 1)
+            }
+            listOf(
+                "RehearsalCarrierCrossCastStore",
+                "RehearsalCarrierMixedJoinStore",
+                "RehearsalCarrierNestedOrderStore",
+                "RehearsalCarrierBroadCastStore",
+                "RehearsalCarrierValueOperatorStore",
+            ).forEach { ownerName ->
+                check(stateEmissions.none { emission ->
+                    (emission.ownerName == ownerName || emission.ownerName.endsWith(".$ownerName")) &&
+                            emission.carrierKind ==
+                            DotNetGenericOwnerPhysicalStateEmissionCarrierKind.OWNER_TYPE_PARAMETER
+                }) {
+                    "$ownerName must not publish owner-parameter FieldDef storage: $stateEmissions"
+                }
+            }
+            fun requireTypedEmission(ownerName: String, fieldName: String, index: Int) {
+                val emission = stateEmissions.singleOrNull { candidate ->
+                    (candidate.ownerName == ownerName || candidate.ownerName.endsWith(".$ownerName")) &&
+                            candidate.logicalFieldName == fieldName
+                }
+                check(emission?.carrierKind ==
+                        DotNetGenericOwnerPhysicalStateEmissionCarrierKind.OWNER_TYPE_PARAMETER &&
+                        emission.ownerParameterIndex == index) {
+                    "$ownerName.$fieldName did not seal as !$index FieldDef: $emission"
+                }
+            }
+            requireTypedEmission("RehearsalCarrierDualStore", "key", 0)
+            requireTypedEmission("RehearsalCarrierDualStore", "value", 1)
+            requireTypedEmission("RehearsalCarrierSameJoinStore", "value", 0)
         }
     }
 
@@ -8127,6 +8228,9 @@ private fun validateGenericOwnerHardestModelPrototype(
             setOf(DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION),
             DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY,
         )
+        val unsafeStoreDisposition = prototypes.single { prototype ->
+            prototype.hasSimpleName("HostileUnsafeStore")
+        }.disposition
         requireCallRoute(
             "labelStarUnsafeStore",
             "HostileUnsafeStore",
@@ -8135,7 +8239,13 @@ private fun validateGenericOwnerHardestModelPrototype(
                 DotNetGenericOwnerCallReceiverProvenance.SEMANTIC_VIEW,
                 DotNetGenericOwnerCallReceiverProvenance.UNRESOLVED,
             ),
-            DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY,
+            if (unsafeStoreDisposition ==
+                DotNetGenericOwnerCandidateDisposition.BLOCKED_UNSUPPORTED_FOREIGN_SEMANTIC_OVERRIDE
+            ) {
+                DotNetGenericOwnerCallRouteRequirement.PRODUCER_ERASED_OWNER
+            } else {
+                DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY
+            },
         )
     }
 
@@ -8165,6 +8275,24 @@ private fun validateGenericOwnerHardestModelPrototype(
         check(consumer.disposition ==
                 DotNetGenericOwnerCandidateDisposition.REQUIRES_EXTERNAL_OVERRIDE_BINDING_SCHEMA) {
             "A generic consumer subclass must remain blocked until the producer family binding schema is available: $consumer"
+        }
+        val baseEdge = consumer.directSupertypes.single { supertype ->
+            supertype.kind == DotNetGenericOwnerDirectSupertypeKind.BASE_CLASS
+        }
+        check(baseEdge.disposition ==
+                DotNetGenericOwnerPrototypeSupertypeDisposition.PENDING_EXTERNAL_PHYSICAL_EDGE &&
+                baseEdge.logicalClassifierKey != null &&
+                baseEdge.exactPhysicalType == null &&
+                baseEdge.pendingLogicalType?.let { type ->
+                    type.kind == DotNetGenericOwnerPrototypeTypeKind.LOGICAL_GENERIC_CLASSIFIER &&
+                            type.logicalClassifierKey == baseEdge.logicalClassifierKey &&
+                            type.arguments.singleOrNull()?.let { argument ->
+                                argument.kind == DotNetGenericOwnerPrototypeTypeKind.OWNER_TYPE_PARAMETER &&
+                                        argument.parameterIndex == 0
+                            } == true
+                } == true
+        ) {
+            "ConsumerUnsafeLeaf must retain its KLIB base TypeSpec without claiming a CLR TypeDef: $baseEdge"
         }
         mapOf(
             "writeUnsafe" to setOf(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY),
@@ -8257,11 +8385,28 @@ private fun validateGenericOwnerHardestModelPrototype(
     fun hasNestedNullableReferenceTransform(
         edge: org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeSupertypeSnapshot,
         nestedClassifierKey: String,
+        requiresExactPhysicalEdge: Boolean = true,
     ): Boolean {
-        val physicalType = edge.exactPhysicalType ?: return false
+        val physicalType = if (requiresExactPhysicalEdge) {
+            if (edge.disposition !=
+                DotNetGenericOwnerPrototypeSupertypeDisposition.EXACT_PHYSICAL_EDGE ||
+                edge.pendingLogicalType != null || edge.pendingNullableReferenceFlags != null
+            ) return false
+            edge.exactPhysicalType ?: return false
+        } else {
+            if (edge.disposition !=
+                DotNetGenericOwnerPrototypeSupertypeDisposition.PENDING_EXTERNAL_PHYSICAL_EDGE ||
+                edge.exactPhysicalType != null || edge.nullableReferenceFlags != null
+            ) return false
+            edge.pendingLogicalType ?: return false
+        }
+        val nullableReferenceFlags = if (requiresExactPhysicalEdge) {
+            edge.nullableReferenceFlags
+        } else {
+            edge.pendingNullableReferenceFlags
+        }
         val nestedType = physicalType.arguments.singleOrNull() ?: return false
-        return edge.disposition == DotNetGenericOwnerPrototypeSupertypeDisposition.EXACT_PHYSICAL_EDGE &&
-                edge.nullableReferenceFlags == listOf(
+        return nullableReferenceFlags == listOf(
                     DotNetNullableReferenceFlag.NON_NULL,
                     DotNetNullableReferenceFlag.NULLABLE,
                     DotNetNullableReferenceFlag.NON_NULL,
@@ -8290,6 +8435,7 @@ private fun validateGenericOwnerHardestModelPrototype(
                     checkNotNull(prototypes.single {
                         prototype -> prototype.hasSimpleName("HostileAbstractPropertyStorage")
                     }.logicalBindingKey),
+                    requiresExactPhysicalEdge = genericOwnerRehearsal,
                 )
     }
     check(nullableReferenceBase.directSupertypes.single().let { supertype ->
@@ -8327,9 +8473,11 @@ private fun validateGenericOwnerHardestModelPrototype(
             )) {
         "HostileUnsafeStore constructors must use compiler-derived owner/int carriers"
     }
-    check(unsafeStore.disposition ==
-            DotNetGenericOwnerCandidateDisposition.BLOCKED_OPEN_OUTPUT_STATE_COHERENCE) {
-        "HostileUnsafeStore must remain blocked until typed/semantic output overrides are coherent"
+    check(unsafeStore.disposition in setOf(
+        DotNetGenericOwnerCandidateDisposition.BLOCKED_OPEN_OUTPUT_STATE_COHERENCE,
+        DotNetGenericOwnerCandidateDisposition.BLOCKED_UNSUPPORTED_FOREIGN_SEMANTIC_OVERRIDE,
+    )) {
+        "HostileUnsafeStore must retain its strongest unresolved owner-level blocker"
     }
     val unsafeState = unsafeStore.states.single()
     check(unsafeState.requirement == DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED) {
@@ -8696,6 +8844,8 @@ private const val GENERIC_OWNER_SEMANTIC_EQUIVALENCE_CERTIFICATE_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_SEMANTIC_EQUIVALENCE_CERTIFICATE_PROBE"
 private const val GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE"
+private const val GENERIC_OWNER_TARGET_INDEXED_STATE_PROVENANCE_PROBE_MARKER =
+    "// DOTNET_GENERIC_OWNER_TARGET_INDEXED_STATE_PROVENANCE_PROBE"
 private const val GENERIC_OWNER_FOREIGN_OVERRIDE_SEPARATE_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_FOREIGN_OVERRIDE_SEPARATE_PROBE"
 private const val GENERIC_OWNER_EXACT_INTERFACE_INPUTS_CSHARP_PROBE_MARKER =
@@ -9869,6 +10019,17 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 }
             }
 
+            public sealed class RehearsalSeparateCSharpInheritedCapabilityLeaf :
+                RehearsalSeparateInheritedCapabilityMid<string>
+            {
+                public RehearsalSeparateCSharpInheritedCapabilityLeaf() : base("kotlin-mid") {}
+
+                public override string read()
+                {
+                    return "csharp-inherited-capability";
+                }
+            }
+
             public static class Program
             {
                 public static int Main()
@@ -9883,6 +10044,20 @@ private fun validateGenericOwnerForeignCSharpOverride(
                         throw new InvalidOperationException(
                             "separate Kotlin semantic dispatch bypassed the natural typed C# override: " +
                             widened);
+                    RehearsalSeparateCSharpInheritedCapabilityLeaf inheritedCapabilityLeaf =
+                        new RehearsalSeparateCSharpInheritedCapabilityLeaf();
+                    if (inheritedCapabilityLeaf.read() != "csharp-inherited-capability")
+                        throw new InvalidOperationException(
+                            "direct inherited-capability C# override was not invoked");
+                    object inheritedCapabilityBaseRead =
+                        new RehearsalSeparateInheritedCapabilityBaseReader().read(
+                            inheritedCapabilityLeaf);
+                    if (!object.Equals(
+                            inheritedCapabilityBaseRead,
+                            "csharp-inherited-capability"))
+                        throw new InvalidOperationException(
+                            "Kotlin base-slot dispatch bypassed the inherited typed C# override: " +
+                            inheritedCapabilityBaseRead);
                     RehearsalSeparateCSharpProducer producer =
                         new RehearsalSeparateCSharpProducer();
                     if (producer.produce() != "csharp-interface")
@@ -12523,18 +12698,28 @@ private fun validateGenericOwnerForeignCSharpOverride(
                     RehearsalSeparateCSharpDerivedOwnerRelativeMethodGenericProducer
                         derivedOwnerRelativeProducer =
                             new RehearsalSeparateCSharpDerivedOwnerRelativeMethodGenericProducer();
-                    if (derivedOwnerRelativeProducer.produceOwnerRelativeGeneric<int>(31) !=
-                            "Derived:Int32:31" ||
+                    string derivedOwnerRelativeDirect =
+                        derivedOwnerRelativeProducer.produceOwnerRelativeGeneric<int>(31);
+                    object derivedOwnerRelativeBroad = ownerRelativeReader.read(
+                        derivedOwnerRelativeProducer,
+                        "foreign-owner-relative");
+                    object derivedOwnerRelativeBroadValue = ownerRelativeReader.read(
+                        derivedOwnerRelativeProducer,
+                        33);
+                    bool derivedOwnerRelativeSame = ownerRelativeReader.same(
+                        derivedOwnerRelativeProducer,
+                        derivedOwnerRelativeProducer);
+                    if (derivedOwnerRelativeDirect != "Derived:Int32:31" ||
                         !object.Equals(
-                            ownerRelativeReader.read(
-                                derivedOwnerRelativeProducer,
-                                "foreign-owner-relative"),
+                            derivedOwnerRelativeBroad,
                             "Derived:String:foreign-owner-relative") ||
-                        !ownerRelativeReader.same(
-                            derivedOwnerRelativeProducer,
-                            derivedOwnerRelativeProducer))
+                        !object.Equals(derivedOwnerRelativeBroadValue, "Derived:Int32:33") ||
+                        !derivedOwnerRelativeSame)
                         throw new InvalidOperationException(
-                            "owner-relative capability bypassed the derived C# override");
+                            "owner-relative capability bypassed the derived C# override: direct=" +
+                            derivedOwnerRelativeDirect + ", broad=" + derivedOwnerRelativeBroad +
+                            ", broadValue=" + derivedOwnerRelativeBroadValue +
+                            ", same=" + derivedOwnerRelativeSame);
                     RehearsalSeparateCSharpDerivedLeafOwnerRelativeMethodGenericProducer
                         derivedLeafOwnerRelativeProducer =
                             new RehearsalSeparateCSharpDerivedLeafOwnerRelativeMethodGenericProducer();
@@ -12972,6 +13157,7 @@ private fun validateGenericOwnerForeignCSharpOverride(
             }
             """.trimIndent() else """
             using System;
+            using System.Reflection;
 
             public sealed class RehearsalCSharpOverrideStore : RehearsalForeignOverrideStore<string>
             {
@@ -12990,6 +13176,17 @@ private fun validateGenericOwnerForeignCSharpOverride(
                 public override string read()
                 {
                     return "csharp-after-kotlin";
+                }
+            }
+
+            public sealed class RehearsalCSharpDefaultOverrideConsumer :
+                RehearsalDefaultConsumer<object>
+            {
+                public object Observed;
+
+                public void consumeDefault(object value)
+                {
+                    Observed = value;
                 }
             }
 
@@ -13196,6 +13393,28 @@ private fun validateGenericOwnerForeignCSharpOverride(
             {
                 public static int Main()
                 {
+                    Type localErasedNestedResult = typeof(genericOwnerRehearsalStateCarriersKt)
+                        .Assembly.GetType("RehearsalLocalErasedNestedResult", true);
+                    ConstructorInfo[] localConstructors = localErasedNestedResult.GetConstructors(
+                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                    if (localErasedNestedResult.IsGenericType || localConstructors.Length != 1 ||
+                        localConstructors[0].GetParameters().Length != 2 ||
+                        localConstructors[0].GetParameters()[0].ParameterType != typeof(object) ||
+                        localConstructors[0].GetParameters()[1].ParameterType != typeof(object) ||
+                        localErasedNestedResult.GetMethod(
+                            "nestedResult",
+                            BindingFlags.Instance | BindingFlags.Public |
+                                BindingFlags.NonPublic).ReturnType != typeof(object) ||
+                        localErasedNestedResult.GetMethod(
+                            "scalarResult",
+                            BindingFlags.Instance | BindingFlags.Public |
+                                BindingFlags.NonPublic).ReturnType != typeof(object) ||
+                        localErasedNestedResult.GetMethod(
+                            "fixedResult",
+                            BindingFlags.Instance | BindingFlags.Public |
+                                BindingFlags.NonPublic).ReturnType != typeof(bool))
+                        throw new InvalidOperationException(
+                            "local erased nested-result control lost its exact MethodDef carriers");
                     RehearsalCSharpOverrideStore store = new RehearsalCSharpOverrideStore();
                     if (store.read() != "csharp-override")
                         throw new InvalidOperationException("direct typed C# override was not invoked");
@@ -13211,6 +13430,49 @@ private fun validateGenericOwnerForeignCSharpOverride(
                                 "csharp-after-kotlin"))
                         throw new InvalidOperationException(
                             "Kotlin semantic dispatch bypassed a C# override after a Kotlin override");
+                    RehearsalCSharpDefaultOverrideConsumer defaultConsumer =
+                        new RehearsalCSharpDefaultOverrideConsumer();
+                    defaultConsumer.consumeDefault("csharp-exact-default");
+                    if (!object.Equals(defaultConsumer.Observed, "csharp-exact-default"))
+                        throw new InvalidOperationException(
+                            "the natural interface default bypassed a C# override");
+                    MethodInfo defaultHelper = null;
+                    foreach (Type helperOwner in
+                            typeof(RehearsalDefaultConsumer<>).Assembly.GetTypes())
+                    {
+                        if (!helperOwner.Name.StartsWith("__KotlinDefaultImpls_"))
+                            continue;
+                        foreach (MethodInfo candidate in helperOwner.GetMethods(
+                                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
+                        {
+                            if (candidate.Name.StartsWith(
+                                    "consumeDefault__KotlinClassifierInput__"))
+                                throw new InvalidOperationException(
+                                    "ordinary interface default exposed an object-input helper twin");
+                            if (candidate.Name != "consumeDefault")
+                                continue;
+                            if (defaultHelper != null)
+                                throw new InvalidOperationException(
+                                    "ordinary interface default exposed multiple helpers");
+                            defaultHelper = candidate;
+                        }
+                    }
+                    if (defaultHelper == null)
+                        throw new InvalidOperationException(
+                            "ordinary interface default lost its exact helper");
+                    Type[] defaultHelperTypeParameters = defaultHelper.GetGenericArguments();
+                    ParameterInfo[] defaultHelperParameters = defaultHelper.GetParameters();
+                    if (defaultHelperTypeParameters.Length != 1 ||
+                            defaultHelperParameters.Length != 2 ||
+                            !defaultHelperParameters[0].ParameterType.IsGenericType ||
+                            defaultHelperParameters[0].ParameterType.GetGenericTypeDefinition() !=
+                                typeof(RehearsalDefaultConsumer<>) ||
+                            defaultHelperParameters[0].ParameterType.GetGenericArguments()[0] !=
+                                defaultHelperTypeParameters[0] ||
+                            defaultHelperParameters[1].ParameterType !=
+                                defaultHelperTypeParameters[0])
+                        throw new InvalidOperationException(
+                            "ordinary interface default helper lost its exact I<T>, T signature");
                     RehearsalCSharpInvariantProducer invariantProducer =
                         new RehearsalCSharpInvariantProducer();
                     if (invariantProducer.produceInvariant() != "csharp-invariant" ||
@@ -14285,16 +14547,18 @@ private fun validateGenericOwnerForeignCSharpOverride(
 }
 
 /**
- * Proves the first producer-recorded invariant exact generic-interface sibling through the
- * supported C# source-authoring path. Authored C# names only the natural Kotlin interface and
- * its ordinary typed members; the generator must add both compiler ABI views without exposing
- * either of their names to the user source.
+ * Proves the first producer-recorded invariant exact generic-interface sibling and its ordinary
+ * natural-only C# fallback. The obsolete split-sibling generator path must fail closed when its
+ * prospective exact closure would add Runtime interfaces that are absent from the authored
+ * natural surface; the complete-natural rehearsal owns the positive generator contract.
  */
 private fun validateGenericOwnerExactInterfaceInputsCSharp(
     genericOwnerRehearsal: Boolean,
     producesLibrary: Boolean,
     target: DotNetTarget,
     producer: File,
+    declarations: Map<String, DotNetPhysicalDeclaration>,
+    prototypes: List<DotNetGenericOwnerPrototypeSnapshot>,
     testDataFile: File,
     directory: File,
 ) {
@@ -14310,6 +14574,28 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
     producer.copyTo(directory.resolve(producer.name), overwrite = true)
     if (producesLibrary) {
         if (producer.name.equals("lib.dll", ignoreCase = true)) {
+            val publishedFamily = checkNotNull(declarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily>()
+                .singleOrNull { family ->
+                    family.ownerPath.lastOrNull()?.substringAfterLast('.') == "ExactInputFamily`1"
+                }) {
+                "The exact-interface producer has no unique published H family"
+            }
+            val semanticInputMember = checkNotNull(publishedFamily.contract.declaredMembers
+                .singleOrNull { member ->
+                    member.role ==
+                    DotNetPublishedGenericInterfaceMemberRole.BROAD_NESTED_SEMANTIC_INPUT
+                }) {
+                "The exact-interface H family has no broad nested semantic input"
+            }
+            val semanticInputFamily = declarations["G:${semanticInputMember.logicalMemberKey}"]
+                    as? DotNetPhysicalDeclaration.GenericOwnerMemberFamily
+            check(semanticInputFamily?.requiresSemanticResultCapability == false &&
+                    semanticInputFamily.semanticObjectParameterIndices == setOf(0) &&
+                    semanticInputFamily.semanticHookMethodName == null) {
+                "The exact-interface G family contradicts its capability-only H input policy: " +
+                        semanticInputFamily
+            }
             val resource = checkNotNull(
                 DotNetManagedResourceReader.read(
                     producer,
@@ -14341,12 +14627,19 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
                 "The exact-interface manifest has no unique family contract: " +
                         manifest.interfaces.map { contract -> contract.declaredOwnerPath }
             }
-            check(family.sourceAuthoringSupported && family.unsupportedReasons.isEmpty() &&
+            check(!family.sourceAuthoringSupported &&
+                    family.unsupportedReasons.singleOrNull()?.let { reason ->
+                        "kotlin.collections.Collection" in reason &&
+                                "Kotlin.Runtime" in reason &&
+                                "not supported" in reason
+                    } == true &&
                     family.exactOwnerPath?.lastOrNull()?.substringAfterLast('.') ==
-                        "ExactInputFamily__KotlinExact`1" &&
+                         "ExactInputFamily__KotlinExact`1" &&
                     family.exactOwnerPath != family.declaredOwnerPath &&
                     family.exactOwnerPath != family.canonicalOwnerPath) {
-                "The hostile input family did not publish one distinct exact authoring owner"
+                "The split Runtime-parent family did not publish one distinct exact owner and " +
+                        "fail closed for obsolete generator authoring: " +
+                        family
             }
             check(family.members.size == 5) {
                 "The exact-interface manifest copied, lost, or duplicated declared members"
@@ -14463,7 +14756,7 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
             using System;
             using generic.owner.exact.inputs;
 
-            public sealed partial class CSharpExactStringFamily :
+            public sealed class CSharpExactStringFamily :
                 ExactInputFamily<string>
             {
                 public string Value { get; }
@@ -14486,7 +14779,7 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
 
                 public Kotlin.Collections.Iterator GetIterator() => null;
 
-                public bool ContainsAll(Kotlin.Collections.Collection elements) => false;
+                public bool ContainsAll(object elements) => false;
 
                 public string nextExact() => Value;
 
@@ -14500,7 +14793,7 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
                 public bool hasExactValues() => true;
             }
 
-            public sealed partial class CSharpExactObjectFamily :
+            public sealed class CSharpExactObjectFamily :
                 ExactInputFamily<object>
             {
                 public object Value { get; }
@@ -14522,7 +14815,7 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
 
                 public Kotlin.Collections.Iterator GetIterator() => null;
 
-                public bool ContainsAll(Kotlin.Collections.Collection elements) => false;
+                public bool ContainsAll(object elements) => false;
 
                 public object nextExact() => Value;
 
@@ -14536,7 +14829,7 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
                 public bool hasExactValues() => true;
             }
 
-            public sealed partial class CSharpExactIntFamily :
+            public sealed class CSharpExactIntFamily :
                 ExactInputFamily<int>
             {
                 public int Value { get; }
@@ -14559,7 +14852,7 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
 
                 public Kotlin.Collections.Iterator GetIterator() => null;
 
-                public bool ContainsAll(Kotlin.Collections.Collection elements) => false;
+                public bool ContainsAll(object elements) => false;
 
                 public int nextExact() => Value;
 
@@ -14614,17 +14907,17 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
                     if (!object.Equals(reader.read(value), "csharp-exact") ||
                         !reader.contains(value, "csharp-exact") ||
                         reader.contains(value, 42) ||
-                        !ReaderAcceptsAll(reader, value, sameValue, "generated string exact input") ||
+                        !ReaderAcceptsAll(reader, value, sameValue, "natural string exact input") ||
                         !reader.same(value, value))
                         throw new InvalidOperationException(
-                            "Kotlin semantic dispatch bypassed the generated exact C# bridge");
+                            "Kotlin semantic dispatch bypassed the natural C# fallback");
 
                     var broad = new CSharpExactObjectFamily("object-value");
                     var different = new CSharpExactStringFamily("different");
                     if (broad.acceptsAll(different) ||
-                        ReaderAcceptsAll(reader, broad, different, "generated broad semantic input"))
+                        ReaderAcceptsAll(reader, broad, different, "natural broad semantic input"))
                         throw new InvalidOperationException(
-                            "the generated broad bridge changed nested-input semantics");
+                            "the natural fallback changed nested-input semantics");
                     var exactInt = new CSharpExactIntFamily(37);
                     if (!exactInt.acceptsAll(new CSharpExactIntFamily(37)) ||
                         !reader.contains(exactInt, 37) ||
@@ -14632,7 +14925,7 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
                         !object.Equals(reader.read(exactInt), 37) ||
                         reader.size(exactInt) != 1)
                         throw new InvalidOperationException(
-                            "the generated value-type exact bridge did not dispatch");
+                            "the natural value-type fallback did not dispatch");
 
                     var kotlinValue = new ExactInputValue<string>("kotlin-exact");
                     if (!kotlinValue.acceptsAll(
@@ -14718,7 +15011,7 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
 
                 public Kotlin.Collections.Iterator GetIterator() => null;
 
-                public bool ContainsAll(Kotlin.Collections.Collection elements) => false;
+                public bool ContainsAll(object elements) => false;
 
                 public string nextExact() => Value;
 
@@ -14767,7 +15060,7 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
 
                 public Kotlin.Collections.Iterator GetIterator() => null;
 
-                public bool ContainsAll(Kotlin.Collections.Collection elements) => false;
+                public bool ContainsAll(object elements) => false;
 
                 public string nextExact() => Value;
 
@@ -14816,13 +15109,25 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
     val generatedDirectory = directory.resolve("generated-${target.description}")
     val references = listOf(lib, middle, rawAssembly, runtime, stdlib)
     val authoringTooling = genericOwnerCSharpAuthoringTooling()
-    val compilation = when (target) {
+    val rejectedSource = directory.resolve("RejectedExactInterfaceInputsConsumer.cs").apply {
+        writeText(
+            source.readText().replace(
+                "public sealed class CSharpExact",
+                "public sealed partial class CSharpExact",
+            )
+        )
+    }
+    val rejectedConsumer = directory.resolve(
+        if (target == DotNetTarget.NET48) "RejectedExactInterfaceInputsConsumer.exe"
+        else "RejectedExactInterfaceInputsConsumer.dll"
+    )
+    val rejectedCompilation = when (target) {
         DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
             checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()) {
-                ".NET Framework C# compiler is required for the exact-interface authoring probe"
+                ".NET Framework C# compiler is required for the exact-interface rejection probe"
             },
-            source,
-            consumer,
+            rejectedSource,
+            rejectedConsumer,
             references = references,
             executable = true,
             warningsAsErrors = true,
@@ -14831,10 +15136,10 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
         )
         DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
             checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
-                "Modern Roslyn is required for the exact-interface authoring probe"
+                "Modern Roslyn is required for the exact-interface rejection probe"
             },
-            source,
-            consumer,
+            rejectedSource,
+            rejectedConsumer,
             references = references,
             executable = true,
             warningsAsErrors = true,
@@ -14842,20 +15147,44 @@ private fun validateGenericOwnerExactInterfaceInputsCSharp(
             generatedFilesDirectory = generatedDirectory,
         )
         DotNetTarget.NETSTANDARD_2_0 ->
+            error("netstandard2.0 has no executable exact-interface rejection probe")
+    }
+    check(rejectedCompilation.exitCode != 0 &&
+            "KDNCS007" in rejectedCompilation.output &&
+            "Collection" in rejectedCompilation.output) {
+        "The obsolete split-sibling generator path did not fail closed for its prospective " +
+                "Runtime exact closure:\n${rejectedCompilation.output}"
+    }
+    check(generatedDirectory.walkTopDown().none { file ->
+        file.isFile && file.name.endsWith(".KotlinInterfaceImplementation.g.cs")
+    }) {
+        "The rejected split-sibling contract still emitted generated implementation source"
+    }
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()) {
+                ".NET Framework C# compiler is required for the exact-interface fallback probe"
+            },
+            source,
+            consumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
+                "Modern Roslyn is required for the exact-interface fallback probe"
+            },
+            source,
+            consumer,
+            references = references,
+            executable = true,
+            warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 ->
             error("netstandard2.0 has no executable exact-interface authoring probe")
     }
     check(compilation.exitCode == 0) { compilation.output }
-    val generated = generatedDirectory.walkTopDown()
-        .filter { file ->
-            file.isFile && file.name.endsWith(".KotlinInterfaceImplementation.g.cs")
-        }
-        .joinToString("\n", transform = File::readText)
-    check("partial class CSharpExactStringFamily" in generated &&
-            "partial class CSharpExactObjectFamily" in generated &&
-            "partial class CSharpExactIntFamily" in generated &&
-            "ExactInputFamily__KotlinExact" in generated) {
-        "The C# authoring tool did not generate the invariant exact interface bridge:\n$generated"
-    }
     check("KotlinSemantic" !in source.readText() && "__KotlinExact" !in source.readText()) {
         "Authored C# source must not name either compiler-owned interface ABI"
     }
@@ -14879,13 +15208,94 @@ private fun validateGenericOwnerCompleteNaturalInterfaceCSharp(
     target: DotNetTarget,
     producer: File,
     declarations: Map<String, DotNetPhysicalDeclaration>,
+    prototypes: List<DotNetGenericOwnerPrototypeSnapshot>,
     varianceShadows: List<DotNetGenericInterfaceCompleteSurfaceVarianceShadowSnapshot>,
     testDataFile: File,
     directory: File,
 ) {
-    if (!genericOwnerRehearsal ||
-        GENERIC_OWNER_COMPLETE_NATURAL_INTERFACE_CSHARP_PROBE_MARKER !in testDataFile.readText()
-    ) {
+    if (GENERIC_OWNER_COMPLETE_NATURAL_INTERFACE_CSHARP_PROBE_MARKER !in
+        testDataFile.readText()
+    ) return
+    if (!genericOwnerRehearsal) {
+        check(varianceShadows.isEmpty()) {
+            "The production-erased complete-natural fixture published variance shadows: " +
+                    varianceShadows
+        }
+        val genericOwnerEpochEntries = declarations.genericOwnerRehearsalEpochRecordIndexKeys()
+        check(genericOwnerEpochEntries.isEmpty()) {
+            "The production-erased complete-natural fixture published generic-owner rehearsal " +
+                    "records: $genericOwnerEpochEntries"
+        }
+        check(declarations.values.none { declaration ->
+            declaration is DotNetPhysicalDeclaration.Class && declaration.genericOwnerAbi != null
+        }) {
+            "The production-erased complete-natural fixture published class generic-owner ABI: " +
+                    declarations.values.filterIsInstance<DotNetPhysicalDeclaration.Class>()
+                        .filter { declaration -> declaration.genericOwnerAbi != null }
+        }
+        val emittedIl = producer.resolveSibling("${producer.nameWithoutExtension}.il")
+        val forbiddenCandidateIdentities = listOf(
+            "'generic.owner.complete.natural.CompleteNaturalContract`1'",
+            "ICompleteNaturalContractKotlinSemantic",
+            "'generic.owner.complete.natural.CompleteInvariantContract`1'",
+            "ICompleteInvariantContractKotlinSemantic",
+            "'generic.owner.complete.natural.CompleteInvariantValue`1'",
+            "ICompleteInvariantValueKotlinSemantic",
+            "'generic.owner.complete.natural.CompleteInvariantResultOwner`1'",
+            "ICompleteInvariantResultOwnerKotlinSemantic",
+            "'generic.owner.complete.natural.CompleteNaturalResultStore`1'",
+            "ICompleteNaturalResultStoreKotlinSemantic",
+            "'generic.owner.complete.natural.CompleteBlockedSemanticConstructor`1'",
+            "ICompleteBlockedSemanticConstructorKotlinSemantic",
+            "'generic.owner.complete.natural.CompleteNestedCarrierBox`1'",
+            "ICompleteNestedCarrierBoxKotlinSemantic",
+            "'generic.owner.complete.natural.CompleteBlockedNestedCarrier`1'",
+            "ICompleteBlockedNestedCarrierKotlinSemantic",
+            "'generic.owner.complete.natural.CompleteUnsupportedOwnerInputResult`1'",
+            "ICompleteUnsupportedOwnerInputResultKotlinSemantic",
+            "'generic.owner.complete.natural.CompleteUnsupportedOwnerRelativeMethodResult`1'",
+            "ICompleteUnsupportedOwnerRelativeMethodResultKotlinSemantic",
+            "'generic.owner.complete.natural.FixedSemanticInputResult`1'",
+            "IFixedSemanticInputResultKotlinSemantic",
+            "'generic.owner.complete.natural.CompleteUnsupportedSemanticInputOnly`1'",
+            "ICompleteUnsupportedSemanticInputOnlyKotlinSemantic",
+            "'generic.owner.complete.natural.CompleteInheritedResultBase`1'",
+            "ICompleteInheritedResultBaseKotlinSemantic",
+            "'generic.owner.complete.natural.CompleteFixedDirectResult`1'",
+            "ICompleteFixedDirectResultKotlinSemantic",
+            "'generic.owner.complete.natural.CompleteFinalFixedSemanticInputResult`1'",
+            "ICompleteFinalFixedSemanticInputResultKotlinSemantic",
+            "'generic.owner.complete.natural.CompleteFinalSemanticInputOnly`1'",
+            "ICompleteFinalSemanticInputOnlyKotlinSemantic",
+            "'generic.owner.complete.natural.CompleteFinalSemanticInterfaceProperty`1'",
+            "ICompleteFinalSemanticInterfacePropertyKotlinSemantic",
+            "'generic.owner.complete.natural.CompleteFinalInvariantInputResult`1'",
+            "ICompleteFinalInvariantInputResultKotlinSemantic",
+            "'generic.owner.complete.natural.CompleteSemanticInputExactResult`1'",
+            "ICompleteSemanticInputExactResultKotlinSemantic",
+            "'generic.owner.complete.natural.CompleteNaturalChild`1'",
+            "ICompleteNaturalChildKotlinSemantic",
+            "'generic.owner.complete.natural.CompleteNaturalOuter`1'",
+            "ICompleteNaturalOuterKotlinSemantic",
+            "'generic.owner.complete.natural.CompleteWidenedOuter`1'",
+            "ICompleteWidenedOuterKotlinSemantic",
+            "'generic.owner.complete.natural.CompleteFixedInheritedResult`1'",
+            "ICompleteFixedInheritedResultKotlinSemantic",
+            "'generic.owner.complete.natural.CompleteFixedOuterResult`1'",
+            "ICompleteFixedOuterResultKotlinSemantic",
+            "'generic.owner.complete.natural.DownstreamFixedOuter`1'",
+            "IDownstreamFixedOuterKotlinSemantic",
+            "LocalUnsupportedForeignResult`1",
+            "ILocalUnsupportedForeignResultKotlinSemantic",
+        )
+        val emittedIlText = emittedIl.takeIf(File::isFile)?.readText().orEmpty()
+        val leakedIdentities = forbiddenCandidateIdentities.filter { identity ->
+            identity in emittedIlText
+        }
+        check(emittedIl.isFile && leakedIdentities.isEmpty()) {
+            "The production-erased complete-natural fixture leaked candidate identities " +
+                    "$leakedIdentities in ${emittedIl.path}"
+        }
         return
     }
     check(target != DotNetTarget.NETSTANDARD_2_0) {
@@ -14936,10 +15346,681 @@ private fun validateGenericOwnerCompleteNaturalInterfaceCSharp(
         return family
     }
 
+    fun requireFixedOuterSemanticResult(
+        ownerName: String,
+        requirePublishedAbi: Boolean = true,
+    ): DotNetGenericOwnerPrototypeSnapshot {
+        val owner = checkNotNull(prototypes.singleOrNull { prototype ->
+            prototype.ownerName.endsWith(ownerName)
+        }) {
+            "The complete-natural probe has no unique '$ownerName' prototype: $prototypes"
+        }
+        val member = owner.members.single { candidate -> candidate.sourceName == "nested" }
+        val supertype = owner.directSupertypes.singleOrNull()
+        val typedResult = member.exactPathUnboundSignatures
+            ?.get(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
+            ?.returnSlot?.type
+        val semanticResult = member.exactPathUnboundSignatures
+            ?.get(DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK)
+            ?.returnSlot?.type
+        check(owner.genericArity == 1 &&
+                owner.disposition ==
+                DotNetGenericOwnerCandidateDisposition.REQUIRES_MEMBER_PHYSICALIZATION_PROOF &&
+                supertype?.kind == DotNetGenericOwnerDirectSupertypeKind.INTERFACE &&
+                supertype.disposition ==
+                DotNetGenericOwnerPrototypeSupertypeDisposition.EXACT_PHYSICAL_EDGE &&
+                supertype.exactPhysicalType?.arguments?.singleOrNull()?.kind ==
+                DotNetGenericOwnerPrototypeTypeKind.OBJECT &&
+                member.returnSlotDomain ==
+                DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
+                member.roles.containsAll(setOf(
+                    DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                    DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+                    DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+                )) &&
+                member.semanticHookReasons.containsAll(setOf(
+                    DotNetGenericOwnerSemanticHookReason.INHERITED_SEMANTIC_OVERRIDE,
+                    DotNetGenericOwnerSemanticHookReason.SEMANTIC_INTERFACE_RESULT,
+                )) &&
+                typedResult?.kind == DotNetGenericOwnerPrototypeTypeKind.LOGICAL_GENERIC_CLASSIFIER &&
+                typedResult.arguments.singleOrNull()?.kind ==
+                DotNetGenericOwnerPrototypeTypeKind.OBJECT &&
+                semanticResult?.kind == DotNetGenericOwnerPrototypeTypeKind.OBJECT
+        ) {
+            "A fixed CompleteNaturalOuter<Any?> implementation lost its H-owned semantic-result " +
+                    "policy: $owner"
+        }
+        if (requirePublishedAbi) {
+            val physicalOwnerEntry = declarations.entries.singleOrNull { entry ->
+                val declaration = entry.value as? DotNetPhysicalDeclaration.Class
+                    ?: return@singleOrNull false
+                declaration.ownerPath.lastOrNull()?.substringAfterLast('.')
+                    ?.substringBefore('`') == ownerName
+            }
+            val physicalOwner = physicalOwnerEntry?.value as? DotNetPhysicalDeclaration.Class
+            val memberFamily = declarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerMemberFamily>()
+                .singleOrNull { family ->
+                    family.ownerLogicalKey == physicalOwnerEntry?.key &&
+                            family.logicalMemberKey == member.logicalBindingKey &&
+                            family.requiresSemanticResultCapability
+                }
+            check(physicalOwner?.let { declaration ->
+                declaration.physicalTypeParameterCount == 1 && declaration.genericOwnerAbi != null
+            } == true && memberFamily?.semanticHookMethodName != null) {
+                "The '$ownerName' producer did not publish its final semantic-result G policy: " +
+                        "owner=$physicalOwner, families=" +
+                        declarations.values.filterIsInstance<
+                                DotNetPhysicalDeclaration.GenericOwnerMemberFamily
+                                >().filter { family ->
+                            family.ownerLogicalKey == physicalOwnerEntry?.key
+                        }
+            }
+        }
+        return owner
+    }
+
     if (producesLibrary) {
         if (producer.name.equals("lib.dll", ignoreCase = true)) {
             requireInvariantVarianceShadow("CompleteNaturalContract")
             val family = requirePublishedFamily("CompleteNaturalContract")
+            val resultStoreOwner = checkNotNull(prototypes.singleOrNull { prototype ->
+                prototype.ownerName.endsWith("CompleteNaturalResultStore")
+            }) {
+                "The complete-natural probe has no result-store constructor prototype: $prototypes"
+            }
+            val resultStoreConstructor = resultStoreOwner.constructors.single()
+            check(resultStoreOwner.disposition ==
+                    DotNetGenericOwnerCandidateDisposition.REQUIRES_MEMBER_PHYSICALIZATION_PROOF &&
+                    resultStoreConstructor.parameterSlotDomains.isEmpty() &&
+                    resultStoreConstructor.semanticObjectParameterIndices.isEmpty() &&
+                    resultStoreConstructor.exactPathUnboundSignature?.parameterSlots?.isEmpty() == true
+            ) {
+                "The semantic-result owner did not retain its ordinary zero-argument constructor: " +
+                        resultStoreOwner
+            }
+            val blockedConstructorOwner = checkNotNull(prototypes.singleOrNull { prototype ->
+                prototype.ownerName.endsWith("CompleteBlockedSemanticConstructor")
+            }) {
+                "The complete-natural probe has no semantic-constructor authority negative: $prototypes"
+            }
+            val blockedConstructor = blockedConstructorOwner.constructors.single()
+            val blockedConstructorClassEntry = declarations.entries.singleOrNull { entry ->
+                val declaration = entry.value as? DotNetPhysicalDeclaration.Class
+                    ?: return@singleOrNull false
+                declaration.ownerPath.lastOrNull()?.substringAfterLast('.')
+                        ?.substringBefore('`') == "CompleteBlockedSemanticConstructor"
+            }
+            val blockedConstructorRecord =
+                blockedConstructorClassEntry?.value as? DotNetPhysicalDeclaration.Class
+            val blockedConstructorMethodDef = declarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerConstructorMethodDef>()
+                .singleOrNull { declaration ->
+                    declaration.logicalOwnerKey == blockedConstructorClassEntry?.key
+                }
+            val blockedConstructorFunction = blockedConstructorMethodDef?.let { methodDef ->
+                declarations[methodDef.logicalConstructorKey] as? DotNetPhysicalDeclaration.Function
+            }
+            val blockedConstructorIl =
+                producer.resolveSibling("${producer.nameWithoutExtension}.il")
+            val blockedConstructorIlText =
+                blockedConstructorIl.takeIf(File::isFile)?.readText().orEmpty()
+            val blockedConstructorOwnerStart = Regex(
+                "(?m)^\\.class\\b[^\\r\\n]*'generic\\.owner\\.complete\\.natural\\." +
+                        "CompleteBlockedSemanticConstructor'(?=\\s|$)",
+            ).find(blockedConstructorIlText)?.range?.first ?: -1
+            val blockedConstructorOwnerEnd = if (blockedConstructorOwnerStart >= 0) {
+                Regex("(?m)^\\.class\\b")
+                    .find(blockedConstructorIlText, startIndex = blockedConstructorOwnerStart + 1)
+                    ?.range?.first
+                    ?: blockedConstructorIlText.length
+            } else {
+                -1
+            }
+            val blockedConstructorOwnerIl = if (
+                blockedConstructorOwnerStart >= 0 &&
+                blockedConstructorOwnerEnd > blockedConstructorOwnerStart
+            ) {
+                blockedConstructorIlText.substring(
+                    blockedConstructorOwnerStart,
+                    blockedConstructorOwnerEnd,
+                )
+            } else {
+                null
+            }
+            check(blockedConstructorOwner.disposition ==
+                    DotNetGenericOwnerCandidateDisposition
+                        .BLOCKED_SEMANTIC_CONSTRUCTOR_CARRIER_AUTHORITY &&
+                    blockedConstructor.parameterSlotDomains == listOf(
+                        DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
+                    ) &&
+                    blockedConstructor.semanticObjectParameterIndices == setOf(0) &&
+                    blockedConstructor.exactPathUnboundSignature
+                        ?.parameterSlots?.singleOrNull()?.type?.kind ==
+                    DotNetGenericOwnerPrototypeTypeKind.OBJECT &&
+                    blockedConstructorRecord?.let { declaration ->
+                        declaration.physicalTypeParameterCount == 0 &&
+                                declaration.physicalTypeParameterVariances.isEmpty() &&
+                                declaration.genericOwnerAbi == null
+                    } == true &&
+                    blockedConstructorMethodDef?.let { methodDef ->
+                        methodDef.ownerPath == blockedConstructorRecord.ownerPath &&
+                                methodDef.visibility ==
+                                DotNetGenericOwnerPhysicalConstructorVisibility.PUBLIC &&
+                                methodDef.physicalMethod.signature.parameterSlots
+                                    .singleOrNull()?.let { parameter ->
+                                        parameter.domain ==
+                                        DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT &&
+                                                parameter.type.kind ==
+                                                DotNetGenericOwnerPhysicalTypeKind.OBJECT
+                                    } == true
+                    } == true &&
+                    blockedConstructorFunction?.let { function ->
+                        function.ownerPath == blockedConstructorRecord.ownerPath &&
+                                function.methodName == ".ctor" &&
+                                function.isInstance &&
+                                function.methodGenericParameterCount == 0
+                    } == true &&
+                    blockedConstructorOwnerIl?.let { ownerIl ->
+                        Regex(
+                            "(?m)^\\s*\\.method\\b[^\\r\\n]*instance void " +
+                                    "\\.ctor\\(object 'ignored'\\) cil managed\\s*$",
+                        ).containsMatchIn(ownerIl) &&
+                                "CompleteBlockedSemanticConstructor`1" !in ownerIl
+                    } == true
+            ) {
+                "A semantic constructor escaped without portable producer MethodDef authority: " +
+                        "prototype=$blockedConstructorOwner, record=$blockedConstructorRecord, " +
+                        "methodDef=$blockedConstructorMethodDef, " +
+                        "function=$blockedConstructorFunction, " +
+                        "il=$blockedConstructorOwnerIl"
+            }
+            val blockedNestedOwner = checkNotNull(prototypes.singleOrNull { prototype ->
+                prototype.ownerName.endsWith("CompleteBlockedNestedCarrier")
+            }) {
+                "The complete-natural probe has no nested-carrier authority negative: $prototypes"
+            }
+            val blockedNestedRecord = declarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.Class>()
+                .singleOrNull { declaration ->
+                    declaration.ownerPath.lastOrNull()?.substringAfterLast('.')
+                        ?.substringBefore('`') == "CompleteBlockedNestedCarrier"
+                }
+            check(blockedNestedOwner.disposition ==
+                    DotNetGenericOwnerCandidateDisposition
+                        .BLOCKED_UNBOUND_NESTED_GENERIC_OWNER_CARRIER &&
+                    blockedNestedRecord?.let { declaration ->
+                        declaration.physicalTypeParameterCount == 0 &&
+                                declaration.physicalTypeParameterVariances.isEmpty() &&
+                                declaration.genericOwnerAbi == null
+                    } == true
+            ) {
+                "A nested generic-class shell escaped without shared prototype/live carrier " +
+                        "authority: prototype=$blockedNestedOwner, record=$blockedNestedRecord"
+            }
+            val unsupportedOwner = checkNotNull(prototypes.singleOrNull { prototype ->
+                prototype.ownerName.endsWith("CompleteUnsupportedOwnerInputResult")
+            }) {
+                "The complete-natural probe has no owner-input semantic-result negative: $prototypes"
+            }
+            val unsupportedMember = unsupportedOwner.members.single { member ->
+                member.sourceName == "select"
+            }
+            check(unsupportedOwner.disposition ==
+                    DotNetGenericOwnerCandidateDisposition
+                        .BLOCKED_UNSUPPORTED_FOREIGN_SEMANTIC_OVERRIDE &&
+                    unsupportedMember.isOverridable &&
+                    unsupportedMember.parameterSlotDomains == listOf(
+                        DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
+                    ) &&
+                    DotNetGenericOwnerSemanticHookReason.SEMANTIC_INTERFACE_RESULT in
+                    unsupportedMember.semanticHookReasons
+            ) {
+                "An open owner-relative semantic-result family escaped its foreign-override " +
+                        "admission gate: $unsupportedOwner"
+            }
+            val unsupportedPhysicalOwners = declarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.Class>()
+                .filter { declaration ->
+                    declaration.ownerPath.lastOrNull()?.substringAfterLast('.')
+                        ?.substringBefore('`') == "CompleteUnsupportedOwnerInputResult"
+                }
+            val unsupportedPhysicalOwner = unsupportedPhysicalOwners.singleOrNull()
+            val unsupportedIl = producer.resolveSibling("${producer.nameWithoutExtension}.il")
+            val unsupportedIlText = unsupportedIl.takeIf(File::isFile)?.readText().orEmpty()
+            check(unsupportedIl.isFile && unsupportedPhysicalOwner?.let { declaration ->
+                declaration.physicalTypeParameterCount == 0 &&
+                        declaration.physicalTypeParameterVariances.isEmpty() &&
+                        declaration.genericOwnerAbi == null
+            } == true &&
+                    "CompleteUnsupportedOwnerInputResult`1" !in unsupportedIlText &&
+                    "ICompleteUnsupportedOwnerInputResultKotlinSemantic" !in unsupportedIlText
+            ) {
+                "The unsupported owner-input result family did not remain exclusively on the " +
+                        "erased epoch: declarations=$unsupportedPhysicalOwners, il=${unsupportedIl.path}"
+            }
+            val unsupportedRelativeMethodOwner = checkNotNull(prototypes.singleOrNull { prototype ->
+                prototype.ownerName.endsWith("CompleteUnsupportedOwnerRelativeMethodResult")
+            }) {
+                "The complete-natural probe has no owner-relative MethodSpec negative: $prototypes"
+            }
+            val unsupportedRelativeMethod = unsupportedRelativeMethodOwner.members.single { member ->
+                member.sourceName == "select"
+            }
+            check(unsupportedRelativeMethodOwner.disposition ==
+                    DotNetGenericOwnerCandidateDisposition
+                        .BLOCKED_UNSUPPORTED_FOREIGN_SEMANTIC_OVERRIDE &&
+                    unsupportedRelativeMethod.isOverridable &&
+                    unsupportedRelativeMethod.parameterSlotDomains == listOf(
+                        DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                    ) &&
+                    unsupportedRelativeMethod.semanticHookReasons.containsAll(setOf(
+                        DotNetGenericOwnerSemanticHookReason.OWNER_RELATIVE_METHOD_BOUND,
+                        DotNetGenericOwnerSemanticHookReason.SEMANTIC_INTERFACE_RESULT,
+                    ))
+            ) {
+                "An unconstrained capability MethodSpec was allowed to stand in for R : T: " +
+                        unsupportedRelativeMethodOwner
+            }
+            val unsupportedRelativeMethodPhysicalOwners = declarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.Class>()
+                .filter { declaration ->
+                    declaration.ownerPath.lastOrNull()?.substringAfterLast('.')
+                        ?.substringBefore('`') ==
+                            "CompleteUnsupportedOwnerRelativeMethodResult"
+                }
+            check(unsupportedRelativeMethodPhysicalOwners.singleOrNull()?.let { declaration ->
+                declaration.physicalTypeParameterCount == 0 &&
+                        declaration.physicalTypeParameterVariances.isEmpty() &&
+                        declaration.genericOwnerAbi == null
+            } == true &&
+                    "CompleteUnsupportedOwnerRelativeMethodResult`1" !in unsupportedIlText &&
+                    "ICompleteUnsupportedOwnerRelativeMethodResultKotlinSemantic" !in
+                    unsupportedIlText
+            ) {
+                "The unsupported owner-relative MethodSpec family did not remain exclusively " +
+                        "erased: declarations=$unsupportedRelativeMethodPhysicalOwners, " +
+                        "il=${unsupportedIl.path}"
+            }
+            val fixedSemanticInputOwner = checkNotNull(prototypes.singleOrNull { prototype ->
+                prototype.ownerName.substringAfterLast('.') == "FixedSemanticInputResult"
+            }) {
+                "The complete-natural probe has no fixed semantic-input result negative: $prototypes"
+            }
+            val fixedSemanticInputMember = fixedSemanticInputOwner.members.single { member ->
+                member.sourceName == "select"
+            }
+            check(fixedSemanticInputOwner.disposition ==
+                    DotNetGenericOwnerCandidateDisposition
+                        .BLOCKED_UNSUPPORTED_FOREIGN_SEMANTIC_OVERRIDE &&
+                    fixedSemanticInputMember.isOverridable &&
+                    fixedSemanticInputMember.parameterSlotDomains == listOf(
+                        DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                    ) &&
+                    fixedSemanticInputMember.returnSlotDomain ==
+                    DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
+                    DotNetGenericOwnerSemanticHookReason.SEMANTIC_INTERFACE_RESULT in
+                    fixedSemanticInputMember.semanticHookReasons
+            ) {
+                "A fixed semantic-interface input was mistaken for a declaration-independent " +
+                        "physical leaf: $fixedSemanticInputOwner"
+            }
+            val fixedSemanticPhysicalOwners = declarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.Class>()
+                .filter { declaration ->
+                    declaration.ownerPath.lastOrNull()?.substringAfterLast('.')
+                        ?.substringBefore('`') == "FixedSemanticInputResult"
+                }
+            check(fixedSemanticPhysicalOwners.singleOrNull()?.let { declaration ->
+                declaration.physicalTypeParameterCount == 0 &&
+                        declaration.physicalTypeParameterVariances.isEmpty() &&
+                        declaration.genericOwnerAbi == null
+            } == true &&
+                    "'generic.owner.complete.natural.FixedSemanticInputResult`1'" !in
+                    unsupportedIlText &&
+                    "IFixedSemanticInputResultKotlinSemantic" !in unsupportedIlText
+            ) {
+                "The fixed semantic-input result negative did not remain exclusively erased: " +
+                "declarations=$fixedSemanticPhysicalOwners, il=${unsupportedIl.path}"
+            }
+            val unsupportedSemanticInputOwner = checkNotNull(prototypes.singleOrNull { prototype ->
+                prototype.ownerName.substringAfterLast('.') ==
+                        "CompleteUnsupportedSemanticInputOnly"
+            }) {
+                "The complete-natural probe has no semantic-input-only open negative: $prototypes"
+            }
+            val unsupportedSemanticInputMember =
+                unsupportedSemanticInputOwner.members.single { member -> member.sourceName == "inspect" }
+            check(unsupportedSemanticInputOwner.disposition ==
+                    DotNetGenericOwnerCandidateDisposition
+                        .BLOCKED_UNSUPPORTED_FOREIGN_SEMANTIC_OVERRIDE &&
+                    unsupportedSemanticInputMember.isOverridable &&
+                    unsupportedSemanticInputMember.parameterSlotDomains == listOf(
+                        DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                    ) &&
+                    unsupportedSemanticInputMember.returnSlotDomain ==
+                    DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
+                    DotNetGenericOwnerSemanticHookReason.SEMANTIC_INTERFACE_INPUT in
+                    unsupportedSemanticInputMember.semanticHookReasons &&
+                    DotNetGenericOwnerSemanticHookReason.SEMANTIC_INTERFACE_RESULT !in
+                    unsupportedSemanticInputMember.semanticHookReasons
+            ) {
+                "An open semantic interface input escaped its ordinary-C# override gate: " +
+                        unsupportedSemanticInputOwner
+            }
+            val unsupportedSemanticInputPhysicalOwners = declarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.Class>()
+                .filter { declaration ->
+                    declaration.ownerPath.lastOrNull()?.substringAfterLast('.')
+                        ?.substringBefore('`') == "CompleteUnsupportedSemanticInputOnly"
+                }
+            check(unsupportedSemanticInputPhysicalOwners.singleOrNull()?.let { declaration ->
+                declaration.physicalTypeParameterCount == 0 &&
+                        declaration.physicalTypeParameterVariances.isEmpty() &&
+                        declaration.genericOwnerAbi == null
+            } == true &&
+                    "CompleteUnsupportedSemanticInputOnly`1" !in unsupportedIlText &&
+                    "ICompleteUnsupportedSemanticInputOnlyKotlinSemantic" !in unsupportedIlText
+            ) {
+                "The semantic-input-only open negative did not remain exclusively erased: " +
+                        "declarations=$unsupportedSemanticInputPhysicalOwners, " +
+                        "il=${unsupportedIl.path}"
+            }
+            val inheritedResultBase = checkNotNull(prototypes.singleOrNull { prototype ->
+                prototype.ownerName.endsWith("CompleteInheritedResultBase")
+            }) {
+                "The complete-natural probe has no inherited semantic-result base: $prototypes"
+            }
+            val inheritedBaseSelect = inheritedResultBase.members.single { member ->
+                member.sourceName == "select"
+            }
+            check(inheritedResultBase.genericArity == 1 &&
+                    inheritedBaseSelect.isOverridable &&
+                    inheritedBaseSelect.parameterSlotDomains.isEmpty() &&
+                    inheritedBaseSelect.returnSlotDomain ==
+                    DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
+                    inheritedBaseSelect.roles.containsAll(setOf(
+                        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                        DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+                        DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+                    )) &&
+                    DotNetGenericOwnerSemanticHookReason.SEMANTIC_INTERFACE_RESULT in
+                    inheritedBaseSelect.semanticHookReasons
+            ) {
+                "The open inherited-result base lost its declaration-stable semantic-result " +
+                        "policy: $inheritedResultBase"
+            }
+            val inheritedBasePhysicalOwners = declarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.Class>()
+                .filter { declaration ->
+                    declaration.ownerPath.lastOrNull()?.substringAfterLast('.')
+                        ?.substringBefore('`') == "CompleteInheritedResultBase"
+                }
+            check(inheritedBasePhysicalOwners.singleOrNull()?.let { declaration ->
+                declaration.physicalTypeParameterCount == 1 &&
+                        declaration.genericOwnerAbi != null
+            } == true) {
+                "The inherited semantic-result base did not publish one generic physical owner: " +
+                        inheritedBasePhysicalOwners
+            }
+            val fixedDirectResultOwner = checkNotNull(prototypes.singleOrNull { prototype ->
+                prototype.ownerName.endsWith("CompleteFixedDirectResult")
+            }) {
+                "The complete-natural probe has no direct fixed variant result owner: $prototypes"
+            }
+            val fixedDirectSelect = fixedDirectResultOwner.members.single { member ->
+                member.sourceName == "select"
+            }
+            val fixedDirectTypedResult = fixedDirectSelect.exactPathUnboundSignatures
+                ?.get(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
+                ?.returnSlot?.type
+            val fixedDirectSemanticResult = fixedDirectSelect.exactPathUnboundSignatures
+                ?.get(DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK)
+                ?.returnSlot?.type
+            check(fixedDirectResultOwner.genericArity == 1 &&
+                    fixedDirectSelect.returnSlotDomain ==
+                    DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
+                    fixedDirectSelect.roles.containsAll(setOf(
+                        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                        DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+                        DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+                    )) &&
+                    DotNetGenericOwnerSemanticHookReason.SEMANTIC_INTERFACE_RESULT in
+                    fixedDirectSelect.semanticHookReasons &&
+                    fixedDirectTypedResult?.kind ==
+                    DotNetGenericOwnerPrototypeTypeKind.LOGICAL_GENERIC_CLASSIFIER &&
+                    fixedDirectTypedResult.arguments.singleOrNull()?.kind ==
+                    DotNetGenericOwnerPrototypeTypeKind.OBJECT &&
+                    fixedDirectSemanticResult?.kind ==
+                    DotNetGenericOwnerPrototypeTypeKind.OBJECT
+            ) {
+                "A fixed Contract<Any?> result was treated as one exact CLR construction: " +
+                        fixedDirectResultOwner
+            }
+            val fixedDirectPhysicalOwner = declarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.Class>()
+                .singleOrNull { declaration ->
+                    declaration.ownerPath.lastOrNull()?.substringAfterLast('.')
+                        ?.substringBefore('`') == "CompleteFixedDirectResult"
+                }
+            check(fixedDirectPhysicalOwner?.let { declaration ->
+                declaration.physicalTypeParameterCount == 1 && declaration.genericOwnerAbi != null
+            } == true) {
+                "The direct fixed variant-result owner did not remain CLR-generic: " +
+                        fixedDirectPhysicalOwner
+            }
+            val finalFixedInputOwner = checkNotNull(prototypes.singleOrNull { prototype ->
+                prototype.ownerName.endsWith("CompleteFinalFixedSemanticInputResult")
+            }) {
+                "The complete-natural probe has no final fixed semantic-input owner: $prototypes"
+            }
+            val finalFixedInputSelect = finalFixedInputOwner.members.single { member ->
+                member.sourceName == "select"
+            }
+            val finalFixedTypedSignature = finalFixedInputSelect.exactPathUnboundSignatures
+                ?.get(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
+            val finalFixedSemanticSignature = finalFixedInputSelect.exactPathUnboundSignatures
+                ?.get(DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK)
+            check(finalFixedInputOwner.genericArity == 1 &&
+                    finalFixedInputOwner.disposition ==
+                    DotNetGenericOwnerCandidateDisposition.REQUIRES_MEMBER_PHYSICALIZATION_PROOF &&
+                    finalFixedInputSelect.parameterSlotDomains == listOf(
+                        DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                    ) &&
+                    finalFixedInputSelect.returnSlotDomain ==
+                    DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
+                    finalFixedInputSelect.semanticHookReasons.containsAll(setOf(
+                        DotNetGenericOwnerSemanticHookReason.SEMANTIC_INTERFACE_INPUT,
+                        DotNetGenericOwnerSemanticHookReason.SEMANTIC_INTERFACE_RESULT,
+                    )) &&
+                    finalFixedTypedSignature?.parameterSlots?.singleOrNull()?.type?.kind ==
+                    DotNetGenericOwnerPrototypeTypeKind.LOGICAL_GENERIC_CLASSIFIER &&
+                    finalFixedSemanticSignature?.parameterSlots?.singleOrNull()?.type?.kind ==
+                    DotNetGenericOwnerPrototypeTypeKind.OBJECT &&
+                    finalFixedSemanticSignature.returnSlot.type.kind ==
+                    DotNetGenericOwnerPrototypeTypeKind.OBJECT
+            ) {
+                "A final semantic-result family did not isolate its fixed variant input at the " +
+                "object-domain hook: $finalFixedInputOwner"
+            }
+            val finalSemanticInputOnlyOwner = checkNotNull(prototypes.singleOrNull { prototype ->
+                prototype.ownerName.endsWith("CompleteFinalSemanticInputOnly")
+            }) {
+                "The complete-natural probe has no final semantic-input-only owner: $prototypes"
+            }
+            val finalPairedSemanticInputMember =
+                finalSemanticInputOnlyOwner.members.single { member ->
+                    member.sourceName == "matchesPaired"
+                }
+            val finalPairedSemanticInputTyped =
+                finalPairedSemanticInputMember.exactPathUnboundSignatures
+                    ?.get(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
+            val finalPairedSemanticInputHook =
+                finalPairedSemanticInputMember.exactPathUnboundSignatures
+                    ?.get(DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK)
+            check(!finalPairedSemanticInputMember.isOverridable &&
+                    finalPairedSemanticInputMember.parameterSlotDomains == listOf(
+                        DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                        DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                    ) &&
+                    finalPairedSemanticInputMember.semanticObjectParameterIndices == setOf(0) &&
+                    finalPairedSemanticInputMember.semanticHookReasons == setOf(
+                        DotNetGenericOwnerSemanticHookReason.SEMANTIC_INTERFACE_INPUT,
+                    ) &&
+                    finalPairedSemanticInputMember.roles.containsAll(setOf(
+                        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                        DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+                        DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+                    )) &&
+                    finalPairedSemanticInputTyped?.parameterSlots?.map { slot ->
+                        slot.type.kind
+                    } == listOf(
+                        DotNetGenericOwnerPrototypeTypeKind.LOGICAL_GENERIC_CLASSIFIER,
+                        DotNetGenericOwnerPrototypeTypeKind.OBJECT,
+                    ) &&
+                    finalPairedSemanticInputHook?.parameterSlots?.map { slot ->
+                        slot.type.kind
+                    } == listOf(
+                        DotNetGenericOwnerPrototypeTypeKind.OBJECT,
+                        DotNetGenericOwnerPrototypeTypeKind.OBJECT,
+                    ) &&
+                    finalPairedSemanticInputTyped.returnSlot.type.kind ==
+                    DotNetGenericOwnerPrototypeTypeKind.BOOLEAN &&
+                    finalPairedSemanticInputHook.returnSlot.type.kind ==
+                    DotNetGenericOwnerPrototypeTypeKind.BOOLEAN &&
+                    finalPairedSemanticInputMember.exactMaskedDefaultDispatcher == null
+            ) {
+                "A final semantic interface input did not retain independent natural and " +
+                        "semantic body contracts: $finalSemanticInputOnlyOwner"
+            }
+            val finalSemanticInputOnlyMember =
+                finalSemanticInputOnlyOwner.members.single { member -> member.sourceName == "matches" }
+            val finalSemanticInputOnlyTyped = finalSemanticInputOnlyMember.exactPathUnboundSignatures
+                ?.get(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
+            val finalSemanticInputOnlyHook = finalSemanticInputOnlyMember.exactPathUnboundSignatures
+                ?.get(DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK)
+            val finalSemanticInputOnlyDefault =
+                finalSemanticInputOnlyMember.exactMaskedDefaultDispatcher
+            check(finalSemanticInputOnlyOwner.genericArity == 1 &&
+                    finalSemanticInputOnlyOwner.disposition ==
+                    DotNetGenericOwnerCandidateDisposition.REQUIRES_MEMBER_PHYSICALIZATION_PROOF &&
+                    !finalSemanticInputOnlyMember.isOverridable &&
+                    finalSemanticInputOnlyMember.parameterSlotDomains == listOf(
+                        DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                        DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                        DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                    ) &&
+                    finalSemanticInputOnlyMember.semanticHookReasons == setOf(
+                        DotNetGenericOwnerSemanticHookReason.SEMANTIC_INTERFACE_INPUT,
+                    ) &&
+                    finalSemanticInputOnlyTyped?.parameterSlots?.firstOrNull()?.type?.kind ==
+                    DotNetGenericOwnerPrototypeTypeKind.LOGICAL_GENERIC_CLASSIFIER &&
+                    finalSemanticInputOnlyHook?.parameterSlots?.firstOrNull()?.type?.kind ==
+                    DotNetGenericOwnerPrototypeTypeKind.OBJECT &&
+                    finalSemanticInputOnlyHook.returnSlot.type.kind ==
+                    DotNetGenericOwnerPrototypeTypeKind.BOOLEAN &&
+                    finalSemanticInputOnlyDefault?.returnSlot?.type?.kind ==
+                    DotNetGenericOwnerPrototypeTypeKind.BOOLEAN &&
+                    finalSemanticInputOnlyDefault.parameterSlotsAfterReceiver.take(3)
+                        .map { slot -> slot.type.kind } == listOf(
+                            DotNetGenericOwnerPrototypeTypeKind.OBJECT,
+                            DotNetGenericOwnerPrototypeTypeKind.OBJECT,
+                            DotNetGenericOwnerPrototypeTypeKind.INT32,
+                        ) &&
+                    finalSemanticInputOnlyDefault.parameterSlotsAfterReceiver.drop(3)
+                        .let { masks ->
+                            masks.isNotEmpty() && masks.all { slot ->
+                                slot.type.kind == DotNetGenericOwnerPrototypeTypeKind.INT32
+                            }
+                        }
+            ) {
+                "A final semantic interface input did not retain one object-domain path through " +
+                        "its masked default helper: $finalSemanticInputOnlyOwner"
+            }
+            val finalInvariantInputOwner = checkNotNull(prototypes.singleOrNull { prototype ->
+                prototype.ownerName.endsWith("CompleteFinalInvariantInputResult")
+            }) {
+                "The complete-natural probe has no final exact-invariant-input owner: $prototypes"
+            }
+            val finalInvariantInputSelect = finalInvariantInputOwner.members.single { member ->
+                member.sourceName == "select"
+            }
+            val finalInvariantTypedSignature = finalInvariantInputSelect.exactPathUnboundSignatures
+                ?.get(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
+            val finalInvariantSemanticSignature =
+                finalInvariantInputSelect.exactPathUnboundSignatures
+                    ?.get(DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK)
+            val finalInvariantTypedInput =
+                finalInvariantTypedSignature?.parameterSlots?.singleOrNull()?.type
+            val finalInvariantSemanticInput =
+                finalInvariantSemanticSignature?.parameterSlots?.singleOrNull()?.type
+            check(finalInvariantInputOwner.genericArity == 1 &&
+                    finalInvariantInputOwner.disposition ==
+                    DotNetGenericOwnerCandidateDisposition.REQUIRES_MEMBER_PHYSICALIZATION_PROOF &&
+                    finalInvariantInputSelect.parameterSlotDomains == listOf(
+                        DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                    ) &&
+                    finalInvariantInputSelect.returnSlotDomain ==
+                    DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
+                    DotNetGenericOwnerSemanticHookReason.SEMANTIC_INTERFACE_RESULT in
+                    finalInvariantInputSelect.semanticHookReasons &&
+                    finalInvariantTypedInput?.kind ==
+                    DotNetGenericOwnerPrototypeTypeKind.LOGICAL_GENERIC_CLASSIFIER &&
+                    finalInvariantTypedInput.arguments.singleOrNull()?.kind ==
+                    DotNetGenericOwnerPrototypeTypeKind.INT32 &&
+                    finalInvariantSemanticInput == finalInvariantTypedInput &&
+                    finalInvariantSemanticSignature.returnSlot.type.kind ==
+                    DotNetGenericOwnerPrototypeTypeKind.OBJECT
+            ) {
+                "A semantic result contaminated an unrelated exact invariant input: " +
+                        finalInvariantInputOwner
+            }
+            val invariantResultOwner = checkNotNull(prototypes.singleOrNull { prototype ->
+                prototype.ownerName.endsWith("CompleteInvariantResultOwner")
+            }) {
+                "The complete-natural probe has no invariant-interface result owner: $prototypes"
+            }
+            val invariantResultSelect = invariantResultOwner.members.single { member ->
+                member.sourceName == "select"
+            }
+            val invariantTypedResult = invariantResultSelect.exactPathUnboundSignatures
+                ?.get(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
+                ?.returnSlot?.type
+            val invariantSemanticResult = invariantResultSelect.exactPathUnboundSignatures
+                ?.get(DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK)
+                ?.returnSlot?.type
+            val invariantPhysicalOwnerEntry = declarations.entries.singleOrNull { entry ->
+                val declaration = entry.value as? DotNetPhysicalDeclaration.Class
+                    ?: return@singleOrNull false
+                declaration.ownerPath.lastOrNull()?.substringAfterLast('.')
+                    ?.substringBefore('`') == "CompleteInvariantResultOwner"
+            }
+            val invariantResultFamily = declarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerMemberFamily>()
+                .singleOrNull { physicalFamily ->
+                    physicalFamily.ownerLogicalKey == invariantPhysicalOwnerEntry?.key &&
+                            physicalFamily.logicalMemberKey == invariantResultSelect.logicalBindingKey
+                }
+            check(invariantResultSelect.roles.containsAll(setOf(
+                    DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                    DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+                    DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+                )) &&
+                    DotNetGenericOwnerSemanticHookReason.SEMANTIC_INTERFACE_RESULT in
+                    invariantResultSelect.semanticHookReasons &&
+                    invariantTypedResult?.kind ==
+                    DotNetGenericOwnerPrototypeTypeKind.LOGICAL_GENERIC_CLASSIFIER &&
+                    invariantTypedResult.arguments.singleOrNull()?.kind ==
+                    DotNetGenericOwnerPrototypeTypeKind.OWNER_TYPE_PARAMETER &&
+                    invariantSemanticResult?.kind == DotNetGenericOwnerPrototypeTypeKind.OBJECT &&
+                    invariantResultFamily?.requiresSemanticResultCapability == true &&
+                    invariantResultFamily.semanticHookMethodName != null &&
+                    invariantResultFamily.foreignOverrideProbeMethodName != null
+            ) {
+                "An invariant I<!T> result disagreed between the local family, G record, and " +
+                        "ordinary-C# override bridge: owner=$invariantResultOwner, " +
+                        "family=$invariantResultFamily"
+            }
             val producerMember = family.contract.declaredMembers.single { member ->
                 member.role == DotNetPublishedGenericInterfaceMemberRole.PRODUCER
             }
@@ -14988,6 +16069,50 @@ private fun validateGenericOwnerCompleteNaturalInterfaceCSharp(
                 "The complete-natural-interface producer has no emitted IL sibling: ${emittedIl.path}"
             }
             val ilText = emittedIl.readText().removePrefix("\uFEFF")
+            val pairedOwnerStart = Regex(
+                "(?m)^\\.class\\b[^\\r\\n]*'generic\\.owner\\.complete\\.natural\\." +
+                        "CompleteFinalSemanticInputOnly`1'",
+            ).find(ilText)?.range?.first ?: -1
+            val pairedOwnerEnd = if (pairedOwnerStart >= 0) {
+                Regex("(?m)^\\.class\\b")
+                    .find(ilText, startIndex = pairedOwnerStart + 1)?.range?.first
+                    ?: ilText.length
+            } else {
+                -1
+            }
+            val pairedOwnerIl = if (pairedOwnerStart >= 0 && pairedOwnerEnd > pairedOwnerStart) {
+                ilText.substring(pairedOwnerStart, pairedOwnerEnd)
+            } else {
+                null
+            }
+            val pairedMethodStarts = pairedOwnerIl?.let { ownerIl ->
+                Regex("(?m)^\\s*\\.method\\b").findAll(ownerIl)
+                    .map { match -> match.range.first }
+                    .toList()
+            }.orEmpty()
+            val pairedMethods = pairedOwnerIl?.let { ownerIl ->
+                pairedMethodStarts.mapIndexed { index, start ->
+                    ownerIl.substring(start, pairedMethodStarts.getOrElse(index + 1) { ownerIl.length })
+                }
+            }.orEmpty()
+            val pairedNaturalMethod = pairedMethods.singleOrNull { method ->
+                "'matchesPaired'(" in method.substringBefore('{')
+            }
+            val pairedSemanticMethod = pairedMethods.singleOrNull { method ->
+                "'matchesPaired__KotlinSemantic__" in method.substringBefore('{')
+            }
+            check(pairedNaturalMethod != null && pairedSemanticMethod != null &&
+                    "CompleteNaturalContract`1'<object>::'fetch'()" in pairedNaturalMethod &&
+                    "matchesPaired__KotlinSemantic__" !in pairedNaturalMethod &&
+                    "ICompleteNaturalContractKotlinSemantic" !in pairedNaturalMethod &&
+                    "::'InvokeRecordedMember'(" !in pairedNaturalMethod &&
+                    ("ICompleteNaturalContractKotlinSemantic" in pairedSemanticMethod ||
+                            "::'InvokeRecordedMember'(" in pairedSemanticMethod)
+            ) {
+                "A paired semantic-input family did not keep one direct natural body and one " +
+                        "object-domain semantic body: natural=$pairedNaturalMethod, " +
+                        "semantic=$pairedSemanticMethod"
+            }
             val readerStart = Regex(
                 """(?m)^\s*\.class\b[^\r\n]*\bCompleteNaturalReader\b"""
             ).find(ilText)?.range?.first ?: -1
@@ -15039,6 +16164,99 @@ private fun validateGenericOwnerCompleteNaturalInterfaceCSharp(
             ) {
                 "The nested-result owner did not publish one constructed-producer ABI member: $outerFamily"
             }
+            val outerMember = outerFamily.contract.declaredMembers.single()
+            val outerMemberFamily = declarations["G:${outerMember.logicalMemberKey}"]
+                    as? DotNetPhysicalDeclaration.GenericOwnerMemberFamily
+            check(outerMemberFamily?.requiresSemanticResultCapability == true &&
+                    outerMemberFamily.semanticObjectParameterIndices.isEmpty() &&
+                    outerMemberFamily.semanticHookMethodName == null) {
+                "The nested-result G family contradicts its capability-only H result policy: " +
+                        outerMemberFamily
+            }
+            requireFixedOuterSemanticResult("CompleteFixedOuterResult")
+            val fixedInheritedOwner = checkNotNull(prototypes.singleOrNull { prototype ->
+                prototype.ownerName.endsWith("CompleteFixedInheritedResult")
+            }) {
+                "The complete-natural probe has no fixed-substitution inherited-result child: $prototypes"
+            }
+            val fixedInheritedSelect = fixedInheritedOwner.members.single { member ->
+                member.sourceName == "select"
+            }
+            val fixedInheritedSupertype = fixedInheritedOwner.directSupertypes.singleOrNull()
+            val fixedInheritedTypedResult = fixedInheritedSelect.exactPathUnboundSignatures
+                ?.get(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
+                ?.returnSlot?.type
+            val fixedInheritedSemanticResult = fixedInheritedSelect.exactPathUnboundSignatures
+                ?.get(DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK)
+                ?.returnSlot?.type
+            val fixedInheritedBindings = fixedInheritedSelect.overrideBindings.associateBy { binding ->
+                binding.role
+            }
+            check(fixedInheritedOwner.genericArity == 1 &&
+                    fixedInheritedSupertype?.exactPhysicalType?.arguments?.singleOrNull()?.kind ==
+                    DotNetGenericOwnerPrototypeTypeKind.OBJECT &&
+                    fixedInheritedSelect.parameterSlotDomains.isEmpty() &&
+                    fixedInheritedSelect.returnSlotDomain ==
+                    DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
+                    fixedInheritedSelect.roles.containsAll(setOf(
+                        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                        DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+                        DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+                    )) &&
+                    fixedInheritedSelect.semanticHookReasons.containsAll(setOf(
+                        DotNetGenericOwnerSemanticHookReason.INHERITED_SEMANTIC_OVERRIDE,
+                        DotNetGenericOwnerSemanticHookReason.SEMANTIC_INTERFACE_RESULT,
+                    )) &&
+                    fixedInheritedTypedResult?.kind ==
+                    DotNetGenericOwnerPrototypeTypeKind.LOGICAL_GENERIC_CLASSIFIER &&
+                    fixedInheritedTypedResult.arguments.singleOrNull()?.kind ==
+                    DotNetGenericOwnerPrototypeTypeKind.OBJECT &&
+                    fixedInheritedSemanticResult?.kind == DotNetGenericOwnerPrototypeTypeKind.OBJECT &&
+                    fixedInheritedBindings.keys == setOf(
+                        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                        DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+                    ) &&
+                    fixedInheritedBindings.getValue(
+                        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY
+                    ).targetKind ==
+                    DotNetGenericOwnerOverrideTargetKind.EXTERNAL_LOGICAL_BINDING_REQUIRED &&
+                    fixedInheritedBindings.getValue(
+                        DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK
+                    ).targetKind ==
+                    DotNetGenericOwnerOverrideTargetKind.EXTERNAL_PHYSICAL_FAMILY_RECORD &&
+                    fixedInheritedBindings.values.all { binding ->
+                        binding.overriddenLogicalBindingKey != null
+                    }
+            ) {
+                "A fixed Base<Any?> substitution lost its inherited semantic-result policy or " +
+                        "captured the unrelated child binder: $fixedInheritedOwner"
+            }
+            val fixedInheritedPhysicalOwnerEntry = declarations.entries.singleOrNull { entry ->
+                val declaration = entry.value as? DotNetPhysicalDeclaration.Class
+                    ?: return@singleOrNull false
+                    declaration.ownerPath.lastOrNull()?.substringAfterLast('.')
+                        ?.substringBefore('`') == "CompleteFixedInheritedResult"
+            }
+            val fixedInheritedPhysicalOwner =
+                fixedInheritedPhysicalOwnerEntry?.value as? DotNetPhysicalDeclaration.Class
+            val fixedInheritedMemberFamily = declarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerMemberFamily>()
+                .singleOrNull { family ->
+                    family.ownerLogicalKey == fixedInheritedPhysicalOwnerEntry?.key &&
+                            family.logicalMemberKey == fixedInheritedSelect.logicalBindingKey
+                }
+            check(fixedInheritedPhysicalOwner?.let { declaration ->
+                declaration.physicalTypeParameterCount == 1 &&
+                        declaration.genericOwnerAbi != null
+            } == true &&
+                    fixedInheritedMemberFamily?.requiresSemanticResultCapability == true &&
+                    fixedInheritedMemberFamily.semanticHookMethodName != null &&
+                    fixedInheritedMemberFamily.foreignOverrideProbeMethodName != null
+            ) {
+                "The fixed-substitution inherited-result child did not publish its unrelated " +
+                        "generic owner, inherited G policy, or final closing probe: " +
+                        "owner=$fixedInheritedPhysicalOwner, family=$fixedInheritedMemberFamily"
+            }
             validateReifiedGenericInterfaceCSharpManifest(
                 producer,
                 expectedDeclaredOwner = "CompleteNaturalOuter`1",
@@ -15056,12 +16274,69 @@ private fun validateGenericOwnerCompleteNaturalInterfaceCSharp(
         "The complete-natural-interface consumer has no emitted IL sibling: ${emittedIl.path}"
     }
     val ilText = emittedIl.readText().removePrefix("\uFEFF")
+    requireFixedOuterSemanticResult("DownstreamFixedOuter", requirePublishedAbi = false)
+    val retainedLocalOwner = checkNotNull(prototypes.singleOrNull { prototype ->
+        prototype.ownerName.endsWith("LocalUnsupportedForeignResult")
+    }) {
+        "The complete-natural consumer has no retained local generic-owner prototype: $prototypes"
+    }
+    val retainedLocalSelect = retainedLocalOwner.members.single { member ->
+        member.sourceName == "select"
+    }
+    check(retainedLocalOwner.disposition ==
+            DotNetGenericOwnerCandidateDisposition.RETAINED_NON_ABI_IMPLEMENTATION_OWNER &&
+            retainedLocalSelect.logicalBindingKey == null &&
+            retainedLocalSelect.isOverridable &&
+            retainedLocalSelect.parameterSlotDomains == listOf(
+                DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
+            ) &&
+            retainedLocalSelect.returnSlotDomain ==
+            DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT &&
+            retainedLocalSelect.roles.containsAll(setOf(
+                DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+                DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+            )) &&
+            DotNetGenericOwnerSemanticHookReason.SEMANTIC_INTERFACE_RESULT in
+            retainedLocalSelect.semanticHookReasons
+    ) {
+        "A local/open generic owner was blocked by a foreign-only result-override contract: " +
+                retainedLocalOwner
+    }
     val methodStarts = Regex("(?m)^\\s*\\.method\\b").findAll(ilText)
         .map { match -> match.range.first }
         .toList()
     val methodWindows = methodStarts.mapIndexed { index, start ->
         ilText.substring(start, methodStarts.getOrElse(index + 1) { ilText.length })
     }
+    fun requireSemanticNestedResult(methodName: String) {
+        val method = methodWindows.singleOrNull { window ->
+            "'$methodName'(" in window.substringBefore('{')
+        }
+        check(method != null) {
+            "Cannot isolate the complete-natural-interface consumer $methodName MethodDef: " +
+                    emittedIl.path
+        }
+        check(Regex("""\[\d+]\s+object\s+'result'""").containsMatchIn(method) &&
+                method.lineSequence().map(String::trim).any { line ->
+                    line.startsWith("callvirt instance object ") &&
+                            "ICompleteNaturalOuterKotlinSemantic" in line &&
+                            "::'nested__KotlinCapability__" in line
+                } &&
+                "castclass class [lib]" +
+                "'generic.owner.complete.natural.CompleteNaturalContract`1'<object>" !in method &&
+                method.lineSequence().map(String::trim).none { line ->
+                    line.startsWith("callvirt instance class ") &&
+                            "CompleteNaturalOuter`1'<object>" in line && "::'nested'()" in line
+                }
+        ) {
+            "The '$methodName' semantic nested result was narrowed to a fabricated " +
+                    "CompleteNaturalContract<object> carrier:\n$method"
+        }
+    }
+    requireSemanticNestedResult("validateFixedOuterResult")
+    requireSemanticNestedResult("validateDownstreamFixedOuterResult")
+
     fun requireRecordedDownstreamFetch(methodName: String) {
         val method = methodWindows.singleOrNull { window ->
             "'$methodName'(" in window.substringBefore('{')
@@ -15112,6 +16387,38 @@ private fun validateGenericOwnerCompleteNaturalInterfaceCSharp(
     ) {
         "A producer-recorded natural MethodDef result was degraded to the semantic route: " +
                 "factory=$factoryFetchCall, calls=$calls"
+    }
+    val widenedOuterCalls = calls.filter { call ->
+        "CompleteWidenedOuter" in call && "::'nested" in call
+    }
+    check(widenedOuterCalls.singleOrNull()?.let { call ->
+        call.startsWith("callvirt instance object ") &&
+                "ICompleteWidenedOuterKotlinSemantic" in call &&
+                "::'nested__KotlinCapability__" in call && call.endsWith("(object)")
+    } == true &&
+            Regex("""\[\d+]\s+object\s+'widenedNested'""").containsMatchIn(boxMethod) &&
+            calls.none { call ->
+                "CompleteWidenedOuter`1'<object>::'nested'(" in call
+            }
+    ) {
+        "The external widened nested result did not use its producer-recorded object capability " +
+                "or fabricated a CompleteNaturalContract<object> call: $widenedOuterCalls"
+    }
+    val fixedInheritedCalls = calls.filter { call ->
+        "CompleteInheritedResultBase" in call && "::'select" in call
+    }
+    check(fixedInheritedCalls.singleOrNull()?.let { call ->
+        call.startsWith("callvirt instance object ") &&
+                "ICompleteInheritedResultBaseKotlinSemantic" in call &&
+                "::'select__KotlinCapability__" in call && call.endsWith("()")
+    } == true &&
+            Regex("""\[\d+]\s+object\s+'fixedInheritedResult'""").containsMatchIn(boxMethod) &&
+            calls.none { call ->
+                "CompleteInheritedResultBase`1'<object>::'select'()" in call
+            }
+    ) {
+        "The fixed-substitution inherited result did not preserve the producer's semantic-result " +
+                "policy across assemblies: $fixedInheritedCalls"
     }
 
     val lib = directory.resolve("lib.dll")
@@ -15247,6 +16554,40 @@ private fun validateGenericOwnerCompleteNaturalInterfaceCSharp(
                 }
             }
 
+            public sealed class OrdinaryObjectContract : CompleteNaturalContract<object>
+            {
+                private object value;
+
+                public OrdinaryObjectContract(object value)
+                {
+                    this.value = value;
+                }
+
+                public object fetch() => value;
+
+                public void accept(object value)
+                {
+                    this.value = value;
+                }
+            }
+
+            public sealed class OrdinaryInvariantIntContract : CompleteInvariantContract<int>
+            {
+                private int value;
+
+                public OrdinaryInvariantIntContract(int value)
+                {
+                    this.value = value;
+                }
+
+                public int fetch() => value;
+
+                public void accept(int value)
+                {
+                    this.value = value;
+                }
+            }
+
             public sealed class ExplicitForeignContract : CompleteNaturalContract<string>
             {
                 private string value;
@@ -15332,6 +16673,23 @@ private fun validateGenericOwnerCompleteNaturalInterfaceCSharp(
                 }
             }
 
+            public sealed class ReferenceInvariantContract : CompleteInvariantContract<string>
+            {
+                private string value;
+
+                public ReferenceInvariantContract(string value)
+                {
+                    this.value = value;
+                }
+
+                public string fetch() => value;
+
+                public void accept(string value)
+                {
+                    this.value = value;
+                }
+            }
+
             public sealed class ValueContract : CompleteNaturalContract<int>
             {
                 private int value;
@@ -15346,6 +16704,51 @@ private fun validateGenericOwnerCompleteNaturalInterfaceCSharp(
                 public void accept(int value)
                 {
                     this.value = value;
+                }
+            }
+
+            public sealed class ParameterizedResultStore : CompleteNaturalResultStore<string>
+            {
+                private readonly CompleteNaturalContract<string> value =
+                    new ReferenceContract("csharp-parameterized");
+
+                public ParameterizedResultStore() :
+                    base() {}
+
+                public CompleteNaturalContract<string> Value
+                {
+                    get { return value; }
+                }
+
+                public override CompleteNaturalContract<string> select(string label, int index)
+                {
+                    if (label != "kotlin" || index != 2)
+                        throw new InvalidOperationException("parameter forwarding changed");
+                    return value;
+                }
+
+                public override CompleteNaturalContract<string> selected
+                {
+                    get { return value; }
+                }
+            }
+
+            public sealed class InvariantResultStore : CompleteInvariantResultOwner<string>
+            {
+                private readonly CompleteInvariantContract<string> value =
+                    new ReferenceInvariantContract("csharp-invariant");
+
+                public InvariantResultStore() :
+                    base(new ReferenceInvariantContract("kotlin-base-invariant")) {}
+
+                public CompleteInvariantContract<string> Value
+                {
+                    get { return value; }
+                }
+
+                public override CompleteInvariantContract<string> select()
+                {
+                    return value;
                 }
             }
 
@@ -15504,13 +16907,17 @@ private fun validateGenericOwnerCompleteNaturalInterfaceCSharp(
                     Type[] applicationGenericInterfaces = Array.FindAll(
                         contract.Assembly.GetTypes(),
                         candidate => candidate.IsInterface && candidate.IsGenericTypeDefinition);
-                    if (applicationGenericInterfaces.Length != 1 ||
-                        applicationGenericInterfaces[0] != contract)
+                    Type invariantContract = typeof(CompleteInvariantContract<>);
+                    if (applicationGenericInterfaces.Length != 2 ||
+                        Array.IndexOf(applicationGenericInterfaces, contract) < 0 ||
+                        Array.IndexOf(applicationGenericInterfaces, invariantContract) < 0)
                         throw new InvalidOperationException(
-                            "the root library retained a second generic interface surface");
+                            "the root library retained an unexpected generic interface surface");
+                    AssertInvariantInterface(invariantContract);
                     Type[] exactSurfaces = Array.FindAll(
                         contract.Assembly.GetTypes(),
-                        IsCompleteNaturalExactSurface);
+                        candidate => candidate != invariantContract &&
+                            IsCompleteNaturalExactSurface(candidate));
                     if (exactSurfaces.Length != 1 || exactSurfaces[0] != contract)
                         throw new InvalidOperationException(
                             "the complete natural contract has a second structural exact surface");
@@ -15615,7 +17022,99 @@ private fun validateGenericOwnerCompleteNaturalInterfaceCSharp(
                         throw new InvalidOperationException(
                             "ordinary exact value implementation did not dispatch");
 
+                    OrdinaryObjectContract fixedSemanticInput =
+                        new OrdinaryObjectContract("fixed-semantic-input");
+                    CompleteFinalFixedSemanticInputResult<string> fixedSemanticOwner =
+                        new CompleteFinalFixedSemanticInputResult<string>();
+                    if (!Object.ReferenceEquals(
+                            fixedSemanticOwner.select(fixedSemanticInput),
+                            fixedSemanticInput))
+                        throw new InvalidOperationException(
+                            "a final semantic-result family rejected or wrapped its natural C# input");
+
+                    CompleteFinalSemanticInputOnly<string> semanticInputOnly =
+                        new CompleteFinalSemanticInputOnly<string>();
+                    if (!semanticInputOnly.matchesPaired(
+                            fixedSemanticInput,
+                            fixedSemanticInput))
+                        throw new InvalidOperationException(
+                            "a paired semantic-input family rejected its natural C# input");
+                    if (!semanticInputOnly.matches(
+                            fixedSemanticInput,
+                            fixedSemanticInput,
+                            73))
+                        throw new InvalidOperationException(
+                            "a final semantic-input family rejected its natural C# input");
+                    if (!contractsKt.completeFinalSemanticInputDefault(
+                            semanticInputOnly,
+                            fixedSemanticInput,
+                            fixedSemanticInput))
+                        throw new InvalidOperationException(
+                            "the masked default route rejected or wrapped a natural C# input");
+                    if (!contractsKt.completeFinalSemanticInputDefaultFromInt(
+                            semanticInputOnly,
+                            value))
+                        throw new InvalidOperationException(
+                            "Kotlin widening or masked default dispatch rejected a natural-only C# I<int>");
+
+                    OrdinaryInvariantIntContract exactInvariantInput =
+                        new OrdinaryInvariantIntContract(71);
+                    CompleteNaturalValue<int> incompatibleSemanticResult =
+                        new CompleteNaturalValue<int>(41);
+                    CompleteFinalInvariantInputResult<string> exactInvariantOwner =
+                        new CompleteFinalInvariantInputResult<string>(incompatibleSemanticResult);
+                    AssertInvalidCast(
+                        () => exactInvariantOwner.select(exactInvariantInput),
+                        "incompatible semantic result at the natural C# boundary");
+                    if (!Object.ReferenceEquals(
+                            contractsKt.completeFinalInvariantInputResult(
+                                exactInvariantOwner,
+                                exactInvariantInput),
+                            incompatibleSemanticResult))
+                        throw new InvalidOperationException(
+                            "Kotlin's semantic route rejected an exact invariant C# input");
+
                     CompleteNaturalReader reader = new CompleteNaturalReader();
+                    ParameterizedResultStore parameterized = new ParameterizedResultStore();
+                    InvariantResultStore invariantResult = new InvariantResultStore();
+                    if (!Object.ReferenceEquals(
+                            contractsKt.completeInvariantStarResultIdentity(invariantResult),
+                            invariantResult.Value) ||
+                        !Object.Equals(
+                            contractsKt.completeInvariantStarResultValue(invariantResult),
+                            "csharp-invariant"))
+                        throw new InvalidOperationException(
+                            "Kotlin's invariant semantic result bypassed a C# typed override");
+                    if (!Object.ReferenceEquals(
+                            contractsKt.completeWidenedParameterizedResultIdentity(parameterized),
+                            parameterized.Value))
+                        throw new InvalidOperationException(
+                            "Kotlin wrapped a parameterized C# result override");
+                    if (!Object.ReferenceEquals(
+                            contractsKt.completeWidenedDefaultResultIdentity(parameterized),
+                            parameterized.Value))
+                        throw new InvalidOperationException(
+                            "Kotlin's default entry wrapped a C# result override");
+                    if (!Object.ReferenceEquals(
+                            contractsKt.completeWidenedPropertyResultIdentity(parameterized),
+                            parameterized.Value))
+                        throw new InvalidOperationException(
+                            "Kotlin wrapped a C# property result override");
+                    if (!object.Equals(
+                            contractsKt.completeWidenedParameterizedResult(parameterized),
+                            "csharp-parameterized"))
+                        throw new InvalidOperationException(
+                            "Kotlin semantic dispatch bypassed a parameterized C# result override");
+                    if (!object.Equals(
+                            contractsKt.completeWidenedDefaultResult(parameterized),
+                            "csharp-parameterized"))
+                        throw new InvalidOperationException(
+                            "Kotlin's default entry bypassed a C# result override");
+                    if (!object.Equals(
+                            contractsKt.completeWidenedPropertyResult(parameterized),
+                            "csharp-parameterized"))
+                        throw new InvalidOperationException(
+                            "Kotlin semantic dispatch bypassed a C# property result override");
                     if (!reader.same(value, value) ||
                         !Object.Equals(reader.fetch(value), 23))
                         throw new InvalidOperationException(
@@ -15787,18 +17286,11 @@ private fun validateGenericOwnerCallableCompositionCSharp(
 
     val namespaceName = "generic.owner.callable.composition"
     val ownerName = "Lookup"
-    val genericOwnerRecords = declarations.filterValues { declaration ->
-        declaration is DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily ||
-                declaration is DotNetPhysicalDeclaration.GenericOwnerMemberFamily ||
-                declaration is DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef ||
-                declaration is DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef ||
-                declaration is DotNetPhysicalDeclaration.GenericOwnerSealedFamily ||
-                declaration is DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate
-    }
+    val genericOwnerRecords = declarations.genericOwnerRehearsalEpochRecordIndexKeys()
     if (!genericOwnerRehearsal) {
         check(genericOwnerRecords.isEmpty()) {
             "The production-erased callable-composition inverse published candidate records: " +
-                    genericOwnerRecords.keys.sorted()
+                    genericOwnerRecords
         }
         if (producer.name.equals("lib.dll", ignoreCase = true)) {
             val classRecord = declarations.values
@@ -16455,21 +17947,16 @@ private fun validateGenericOwnerSplitNullableResultCSharp(
     target: DotNetTarget,
     producer: File,
     declarations: Map<String, DotNetPhysicalDeclaration>,
+    prototypes: List<DotNetGenericOwnerPrototypeSnapshot>,
     testDataFile: File,
     directory: File,
 ) {
     if (GENERIC_OWNER_SPLIT_NULLABLE_CSHARP_PROBE_MARKER !in testDataFile.readText()) return
     if (!genericOwnerRehearsal) {
-        val genericOwnerEpochRecords = declarations.filterValues { declaration ->
-            declaration is DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily ||
-                    declaration is DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef ||
-                    declaration is DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef ||
-                    declaration is DotNetPhysicalDeclaration.GenericOwnerSealedFamily ||
-                    declaration is DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate
-        }
+        val genericOwnerEpochRecords = declarations.genericOwnerRehearsalEpochRecordIndexKeys()
         check(genericOwnerEpochRecords.isEmpty()) {
-            "The production-erased split-nullable inverse published H/N/M/J/K records: " +
-                    genericOwnerEpochRecords.keys.sorted()
+            "The production-erased split-nullable inverse published generic-owner rehearsal records: " +
+                    genericOwnerEpochRecords
         }
 
         val ownerName = when {
@@ -16579,6 +18066,66 @@ private fun validateGenericOwnerSplitNullableResultCSharp(
                 declarations.values
                     .filterIsInstance<DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily>()
                     .map { family -> family.ownerPath }
+    }
+
+    val blockedNestedOwnerName = when {
+        producer.name.equals("lib.dll", ignoreCase = true) -> "LocalNestedSplit"
+        producer.name.equals("middle.dll", ignoreCase = true) -> "ExternalNestedSplit"
+        else -> null
+    }
+    blockedNestedOwnerName?.let { ownerName ->
+        val owner = checkNotNull(prototypes.singleOrNull { prototype ->
+            prototype.ownerName.substringAfterLast('.') == ownerName
+        }) {
+            "The split-nullable probe has no unique inherited-layout negative '$ownerName': " +
+                    prototypes
+        }
+        val read = owner.members.single { member -> member.sourceName == "read" }
+        val ownerRecord = declarations.values
+            .filterIsInstance<DotNetPhysicalDeclaration.Class>()
+            .singleOrNull { declaration ->
+                declaration.ownerPath.lastOrNull()?.substringAfterLast('.')
+                    ?.substringBefore('`') == ownerName
+            }
+        val ownerLogicalKey = owner.logicalBindingKey
+        check(owner.disposition ==
+                DotNetGenericOwnerCandidateDisposition.BLOCKED_UNSUPPORTED_FOREIGN_SEMANTIC_OVERRIDE &&
+                read.isOverridable &&
+                read.parameterSlotDomains == listOf(
+                    DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                ) &&
+                read.returnSlotDomain ==
+                DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
+                DotNetGenericOwnerSemanticHookReason.SEMANTIC_INTERFACE_RESULT in
+                read.semanticHookReasons &&
+                ownerRecord?.let { declaration ->
+                    declaration.physicalTypeParameterCount == 0 &&
+                            declaration.physicalTypeParameterVariances.isEmpty() &&
+                            declaration.genericOwnerAbi == null
+                } == true &&
+                declarations.values.none { declaration ->
+                    when (declaration) {
+                        is DotNetPhysicalDeclaration.GenericOwnerMemberFamily ->
+                            declaration.ownerLogicalKey == ownerLogicalKey
+                        is DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef ->
+                            declaration.implementationOwnerKey == ownerLogicalKey
+                        is DotNetPhysicalDeclaration.GenericOwnerSealedFamily ->
+                            declaration.implementationOwnerKey == ownerLogicalKey
+                        else -> false
+                    }
+                }
+        ) {
+            "The '$ownerName' inherited split layout escaped direct-foreign-dispatch admission: " +
+                    "prototype=$owner, record=$ownerRecord"
+        }
+        val emittedIl = producer.resolveSibling("${producer.nameWithoutExtension}.il")
+        val emittedText = emittedIl.takeIf(File::isFile)?.readText().orEmpty()
+        check("$ownerName`1" !in emittedText &&
+                "I${ownerName}KotlinSemantic" !in emittedText &&
+                "${ownerName}__KotlinForeignOverrideProbe__" !in emittedText
+        ) {
+            "The blocked '$ownerName' emitted candidate generic/semantic dispatch identities"
+        }
     }
 
     if (producesLibrary) {
@@ -17358,6 +18905,7 @@ private fun validateGenericOwnerStateAuthorityCSharp(
     val typedOwnerName = "TypedStateOwner"
     val broadOwnerName = "BroadStateOwner"
     val lateBaseName = "LateStateBase"
+    val fixedHolderName = "FixedSemanticHolder"
     val typedChildName = "TypedStateChild"
     val broadChildName = "BroadStateChild"
     val lateChildName = "LateStateChild"
@@ -17582,21 +19130,32 @@ private fun validateGenericOwnerStateAuthorityCSharp(
         }
     }
 
+    if (producer.name.equals("lib.dll", ignoreCase = true)) {
+        val fixedSemanticPrototype = checkNotNull(prototypes.singleOrNull { candidate ->
+            candidate.ownerName == fixedHolderName || candidate.ownerName.endsWith(".$fixedHolderName")
+        }) {
+            "The state-authority producer has no unique '$fixedHolderName' prototype"
+        }
+        check(fixedSemanticPrototype.genericArity == 1 &&
+                fixedSemanticPrototype.disposition ==
+                DotNetGenericOwnerCandidateDisposition.BLOCKED_SEMANTIC_CONSTRUCTOR_CARRIER_AUTHORITY &&
+                fixedSemanticPrototype.constructors.singleOrNull()?.parameterSlotDomains ==
+                listOf(DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT) &&
+                fixedSemanticPrototype.states.singleOrNull()?.fieldName == "value") {
+            "A fixed variant interface constructor must fail closed until its object carrier " +
+                    "has portable producer MethodDef authority: $fixedSemanticPrototype"
+        }
+    }
+
     if (!genericOwnerRehearsal) {
         check(stateEmissions.isEmpty()) {
             "The production-erased state-authority inverse sealed candidate FieldDefs: " +
                     stateEmissions
         }
-        val genericOwnerEpochRecords = declarations.filterValues { declaration ->
-            declaration is DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily ||
-                    declaration is DotNetPhysicalDeclaration.GenericOwnerNaturalMethodDef ||
-                    declaration is DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef ||
-                    declaration is DotNetPhysicalDeclaration.GenericOwnerSealedFamily ||
-                    declaration is DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate
-        }
+        val genericOwnerEpochRecords = declarations.genericOwnerRehearsalEpochRecordIndexKeys()
         check(genericOwnerEpochRecords.isEmpty()) {
-            "The production-erased state-authority inverse published H/N/M/J/K records: " +
-                    genericOwnerEpochRecords.keys.sorted()
+            "The production-erased state-authority inverse published generic-owner rehearsal records: " +
+                    genericOwnerEpochRecords
         }
         val metadata = DotNetClrMetadataReader.read(producer)
         when {
@@ -17642,6 +19201,7 @@ private fun validateGenericOwnerStateAuthorityCSharp(
                         },
                     )
                 }
+                requirePhysicalClass(fixedHolderName, arity = 0)
             }
             producer.name.equals("middle.dll", ignoreCase = true) -> {
                 listOf(
@@ -17701,6 +19261,7 @@ private fun validateGenericOwnerStateAuthorityCSharp(
     val metadata = DotNetClrMetadataReader.read(producer)
     when {
         producer.name.equals("lib.dll", ignoreCase = true) -> {
+            requirePhysicalClass(fixedHolderName, arity = 0)
             val emissionsByOwner = stateEmissions.associateBy { emission ->
                 emission.ownerName.substringAfterLast('.')
             }
@@ -19634,8 +21195,9 @@ private fun validateGenericOwnerRuntimeMutableCollectionCSharp(
                     var field = typeof(RuntimeMutableCollectionValue<>).GetField(
                         "value",
                         BindingFlags.Instance | BindingFlags.NonPublic);
-                    if (field == null || !field.FieldType.IsGenericParameter)
-                        throw new InvalidOperationException("Kotlin value field did not retain !T");
+                    if (field == null || field.FieldType != typeof(object))
+                        throw new InvalidOperationException(
+                            "Kotlin value field did not retain semantic System.Object storage");
                     return 0;
                 }
             }
@@ -21638,6 +23200,10 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
             null
         }
         val exactDirectSupertypes = prototype.directSupertypes.mapNotNull { supertype ->
+            check(supertype.disposition !=
+                    DotNetGenericOwnerPrototypeSupertypeDisposition.PENDING_EXTERNAL_PHYSICAL_EDGE) {
+                "The hostile producer cannot publish an unresolved external direct supertype: $supertype"
+            }
             if (supertype.disposition != DotNetGenericOwnerPrototypeSupertypeDisposition.EXACT_PHYSICAL_EDGE) {
                 return@mapNotNull null
             }
@@ -21689,7 +23255,10 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
             }
             val signature = checkNotNull(constructor.exactPathUnboundSignature) {
                 "The hostile physical family requires a compiler-derived constructor signature"
-            }.bindProducerTypes(physicalOwnerPathsByLogicalKey)
+            }.bindProducerTypes(
+                physicalOwnerPathsByLogicalKey,
+                physicalNamedTypeCategoriesByLogicalKey,
+            )
             checkNotNull(constructor.delegatedOwnerName) {
                 "The hostile physical family requires an exact delegated constructor owner"
             }
@@ -21697,7 +23266,10 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
             val delegatedSignature = delegated?.let { pair ->
                 checkNotNull(pair.second.exactPathUnboundSignature) {
                     "The hostile physical family requires a compiler-derived delegated constructor signature"
-                }.bindProducerTypes(physicalOwnerPathsByLogicalKey)
+                }.bindProducerTypes(
+                    physicalOwnerPathsByLogicalKey,
+                    physicalNamedTypeCategoriesByLogicalKey,
+                )
             } ?: DotNetGenericOwnerPhysicalMethodSignatureRecord(
                 isInstance = true,
                 genericArity = 0,
@@ -21757,11 +23329,15 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
                 policy = member.policy,
                 roles = member.roles,
                 semanticHookReasons = member.semanticHookReasons,
+                semanticObjectParameterIndices = member.semanticObjectParameterIndices,
                 slots = member.roles.map { role ->
                     val methodName = genericOwnerPrototypePhysicalMethodName(member, role, memberOverrideRoots)
                     val signature = checkNotNull(member.exactPathUnboundSignatures?.get(role)) {
                         "The hostile physical family requires a compiler-derived signature for ${member.sourceName}/$role"
-                    }.bindProducerTypes(physicalOwnerPathsByLogicalKey)
+                    }.bindProducerTypes(
+                        physicalOwnerPathsByLogicalKey,
+                        physicalNamedTypeCategoriesByLogicalKey,
+                    )
                     val isCapability = role == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER
                     DotNetGenericOwnerPhysicalMemberSlotRecord(
                         role = role,
@@ -21821,7 +23397,10 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
                             ),
                             signature = checkNotNull(member.exactPathUnboundSignatures?.get(role)) {
                                 "The hostile physical family requires a compiler-derived direct-super signature"
-                            }.bindProducerTypes(physicalOwnerPathsByLogicalKey),
+                            }.bindProducerTypes(
+                                physicalOwnerPathsByLogicalKey,
+                                physicalNamedTypeCategoriesByLogicalKey,
+                            ),
                         )
                     }
                 },
@@ -21843,6 +23422,7 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
                             ownerPath,
                             prototype.genericArity,
                             physicalOwnerPathsByLogicalKey,
+                            physicalNamedTypeCategoriesByLogicalKey,
                         ),
                     )
                 } else {
@@ -22004,7 +23584,10 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
                         DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN ->
                             checkNotNull(state.exactTypedCarrierType) {
                                 "The hostile typed state lacks an exact compiler-derived carrier: $state"
-                            }.bindProducerTypes(physicalOwnerPathsByLogicalKey)
+                            }.bindProducerTypes(
+                                physicalOwnerPathsByLogicalKey,
+                                physicalNamedTypeCategoriesByLogicalKey,
+                            )
                         DotNetGenericOwnerStateCarrierRequirement.COMPLETE_ACCESS_GRAPH_REQUIRED,
                         DotNetGenericOwnerStateCarrierRequirement.TYPED_WRITE_VALUE_PROVENANCE_REQUIRED,
                         -> error("The hostile physical family cannot publish unresolved state storage")
@@ -22129,6 +23712,10 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
             physicalSimpleNames.getValue(prototype.ownerName),
         )
     }
+    val physicalNamedTypeCategoriesByLogicalKey =
+        physicalOwnerPathsByLogicalKey.keys.associateWith {
+            DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS
+        }
     val prototypesByLogicalKey = selectedPrototypes.associateBy { prototype ->
         checkNotNull(prototype.logicalBindingKey)
     }
@@ -22188,7 +23775,10 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
             }
             val signature = checkNotNull(constructor.exactPathUnboundSignature) {
                 "The OctoTree physical family requires an exact constructor signature"
-            }.bindProducerTypes(physicalOwnerPathsByLogicalKey)
+            }.bindProducerTypes(
+                physicalOwnerPathsByLogicalKey,
+                physicalNamedTypeCategoriesByLogicalKey,
+            )
             val delegatesToCoreAny =
                 constructor.delegatedOwnerName == "kotlin.Any" || constructor.delegatedOwnerName == "Any"
             val delegated = if (delegatesToCoreAny) {
@@ -22223,7 +23813,10 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
                 )
             }
             val delegatedSignature = delegated?.second?.exactPathUnboundSignature
-                ?.bindProducerTypes(physicalOwnerPathsByLogicalKey)
+                ?.bindProducerTypes(
+                    physicalOwnerPathsByLogicalKey,
+                    physicalNamedTypeCategoriesByLogicalKey,
+                )
                 ?: DotNetGenericOwnerPhysicalMethodSignatureRecord(
                     isInstance = true,
                     genericArity = 0,
@@ -22272,10 +23865,14 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
                 policy = member.policy,
                 roles = member.roles,
                 semanticHookReasons = member.semanticHookReasons,
+                semanticObjectParameterIndices = member.semanticObjectParameterIndices,
                 slots = member.roles.map { role ->
                     val signature = checkNotNull(member.exactPathUnboundSignatures?.get(role)) {
                         "The OctoTree physical family lacks ${member.sourceName}/$role signature evidence"
-                    }.bindProducerTypes(physicalOwnerPathsByLogicalKey)
+                    }.bindProducerTypes(
+                        physicalOwnerPathsByLogicalKey,
+                        physicalNamedTypeCategoriesByLogicalKey,
+                    )
                     val isCapability = role == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER
                     val methodName = genericOwnerPrototypePhysicalMethodName(member, role, memberOverrideRoots)
                     DotNetGenericOwnerPhysicalMemberSlotRecord(
@@ -22336,7 +23933,10 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
                             ),
                             signature = checkNotNull(targetMember.exactPathUnboundSignatures?.get(role)) {
                                 "The OctoTree direct-super target lacks its exact role signature"
-                            }.bindProducerTypes(physicalOwnerPathsByLogicalKey),
+                            }.bindProducerTypes(
+                                physicalOwnerPathsByLogicalKey,
+                                physicalNamedTypeCategoriesByLogicalKey,
+                            ),
                         )
                     }
                 },
@@ -22355,6 +23955,7 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
                             ownerPath,
                             prototype.genericArity,
                             physicalOwnerPathsByLogicalKey,
+                            physicalNamedTypeCategoriesByLogicalKey,
                         ),
                     )
                 },
@@ -22377,7 +23978,10 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
             }
             val signature = checkNotNull(member.exactPathUnboundSignatures)
                 .getValue(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
-                .bindProducerTypes(physicalOwnerPathsByLogicalKey)
+                .bindProducerTypes(
+                    physicalOwnerPathsByLogicalKey,
+                    physicalNamedTypeCategoriesByLogicalKey,
+                )
             DotNetGenericOwnerPhysicalImplementationMethodRecord(
                 physicalMethod = DotNetGenericOwnerPhysicalMethodIdentityRecord(
                     physicalOwnerPath = ownerPath,
@@ -22400,7 +24004,10 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
                 DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE ->
                     checkNotNull(state.exactTypedCarrierType) {
                         "The OctoTree declaration-independent state lacks an exact compiler-derived carrier"
-                    }.bindProducerTypes(physicalOwnerPathsByLogicalKey)
+                    }.bindProducerTypes(
+                        physicalOwnerPathsByLogicalKey,
+                        physicalNamedTypeCategoriesByLogicalKey,
+                    )
                 DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED ->
                     DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType()
                 DotNetGenericOwnerStateCarrierRequirement.VOLATILE_OBJECT_STORAGE_REQUIRED ->
@@ -22408,7 +24015,10 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
                 DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN ->
                     checkNotNull(state.exactTypedCarrierType) {
                         "The OctoTree typed state lacks an exact compiler-derived carrier"
-                    }.bindProducerTypes(physicalOwnerPathsByLogicalKey)
+                    }.bindProducerTypes(
+                        physicalOwnerPathsByLogicalKey,
+                        physicalNamedTypeCategoriesByLogicalKey,
+                    )
                 DotNetGenericOwnerStateCarrierRequirement.COMPLETE_ACCESS_GRAPH_REQUIRED,
                 DotNetGenericOwnerStateCarrierRequirement.TYPED_WRITE_VALUE_PROVENANCE_REQUIRED,
                 -> error("The OctoTree physical family cannot publish unresolved state storage")
@@ -22471,7 +24081,10 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
                     }
                     val signature = source.exactPathUnboundSignatures
                         ?.get(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
-                        ?.bindProducerTypes(physicalOwnerPathsByLogicalKey)
+                        ?.bindProducerTypes(
+                            physicalOwnerPathsByLogicalKey,
+                            physicalNamedTypeCategoriesByLogicalKey,
+                        )
                         ?: return@mapNotNull null
                     val matchesCarrier = when (operation) {
                         DotNetGenericOwnerPhysicalStateAccessOperation.READ ->
@@ -22524,7 +24137,10 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
                             source.roles == setOf(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY) &&
                             source.exactPathUnboundSignatures
                                 ?.get(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
-                                ?.bindProducerTypes(physicalOwnerPathsByLogicalKey)
+                                ?.bindProducerTypes(
+                                    physicalOwnerPathsByLogicalKey,
+                                    physicalNamedTypeCategoriesByLogicalKey,
+                                )
                                 ?.let { signature ->
                                     when (operation) {
                                         DotNetGenericOwnerPhysicalStateAccessOperation.READ ->
@@ -22676,6 +24292,10 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
             )
         }
         val directSupertypes = prototype.directSupertypes.mapNotNull { supertype ->
+            check(supertype.disposition !=
+                    DotNetGenericOwnerPrototypeSupertypeDisposition.PENDING_EXTERNAL_PHYSICAL_EDGE) {
+                "The OctoTree producer cannot publish an unresolved external direct supertype: $supertype"
+            }
             if (supertype.disposition != DotNetGenericOwnerPrototypeSupertypeDisposition.EXACT_PHYSICAL_EDGE) {
                 return@mapNotNull null
             }
@@ -22690,7 +24310,10 @@ private fun createGenericOwnerRepresentativeOctoTreePhysicalFamilyArtifact(
                         category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
                     )
                 } else {
-                    prototypeType.bindProducerTypes(physicalOwnerPathsByLogicalKey)
+                    prototypeType.bindProducerTypes(
+                        physicalOwnerPathsByLogicalKey,
+                        physicalNamedTypeCategoriesByLogicalKey,
+                    )
                 },
                 nullableReferenceFlags = checkNotNull(supertype.nullableReferenceFlags).toMutableList().apply {
                     this[0] = DotNetNullableReferenceFlag.OBLIVIOUS
@@ -25468,9 +27091,8 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
     val resolvedRouteCounts = resolvedCallRoutes.groupingBy { route -> route.routeRequirement }.eachCount()
     check(resolvedRouteCounts == mapOf(
         DotNetGenericOwnerCallRouteRequirement.PRODUCER_ERASED_OWNER to 24,
-        DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY to 13,
-        DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY to 13,
-        DotNetGenericOwnerCallRouteRequirement.SEMANTIC_RESULT_CAPABILITY to 5,
+        DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY to 11,
+        DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY to 20,
     )) {
         "The compiler-derived hostile static call-route census changed: $resolvedRouteCounts"
     }
@@ -25482,26 +27104,28 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
     check(resolvedCallRoutes.map { route -> route.routeRequirement }.toSet().containsAll(setOf(
         DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY,
         DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY,
-        DotNetGenericOwnerCallRouteRequirement.SEMANTIC_RESULT_CAPABILITY,
         DotNetGenericOwnerCallRouteRequirement.PRODUCER_ERASED_OWNER,
-    ))) {
-        "The separate hostile corpus did not exercise every external call route: $resolvedCallRoutes"
+    )) && resolvedCallRoutes.none { route ->
+        route.routeRequirement == DotNetGenericOwnerCallRouteRequirement.SEMANTIC_RESULT_CAPABILITY
+    }) {
+        "The separate hostile corpus lost a required route or resurrected result-only semantic " +
+                "routing after exact-getter preservation and unsafe-owner demotion: $resolvedCallRoutes"
     }
     check(resolvedCallRoutes.filter { route ->
         route.calleeOwnerName.endsWith("HostileUnsafeStore") && route.calleeName.contains("exposed")
     }
         .groupingBy { route -> route.routeRequirement }.eachCount() == mapOf(
-        DotNetGenericOwnerCallRouteRequirement.SEMANTIC_RESULT_CAPABILITY to 1,
-        DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY to 3,
+        DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY to 4,
     )) {
-        "The broad property calls did not split exact and widened routes correctly: $resolvedCallRoutes"
+        "The blocked unsafe property did not use its same-object capability consistently: " +
+                resolvedCallRoutes
     }
     check(resolvedCallRoutes.filter { route ->
         (route.calleeOwnerName.endsWith("HostileAbstractProperty") ||
                 route.calleeOwnerName.endsWith("HostileAbstractPropertyStorage")) &&
                 route.calleeName.contains("exposed")
     }.groupingBy { route -> route.routeRequirement }.eachCount() == mapOf(
-        DotNetGenericOwnerCallRouteRequirement.SEMANTIC_RESULT_CAPABILITY to 2,
+        DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY to 2,
         DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY to 3,
     )) {
         "The abstract broad-property calls did not split exact and widened routes correctly: " +
@@ -25510,10 +27134,10 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
     check(resolvedCallRoutes.filter { route ->
         route.calleeOwnerName.endsWith("HostileUnsafeStore") && route.calleeName == "collide"
     }.groupingBy { route -> route.routeRequirement }.eachCount() == mapOf(
-        DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY to 2,
-        DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY to 2,
+        DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY to 4,
     )) {
-        "The broad overload calls did not retain distinct exact and semantic routes: $resolvedCallRoutes"
+        "The blocked unsafe overloads did not retain distinct capability-bound routes: " +
+                resolvedCallRoutes
     }
     check(resolvedCallRoutes.singleOrNull { route ->
         route.callerName.endsWith("consumerLabelStarUnsafeStore") && route.calleeName == "label"
@@ -25800,6 +27424,35 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
         consumer.physicalizeExternalSubclass(mismatchedConstructorArtifact, listOf("MismatchedConsumer"))
     }.isFailure) {
         "Kotlin subclass physicalization inferred a constructor from matching slot domains alone"
+    }
+    val delegatedConstructorOwner = artifact.owners.single { owner ->
+        owner.constructors.any { constructor ->
+            constructor.logicalConstructorKey == delegatedConstructorKey
+        }
+    }
+    val unrelatedConstructor = artifact.owners.first { owner ->
+        owner.logicalOwnerKey != delegatedConstructorOwner.logicalOwnerKey &&
+                owner.genericArity == delegatedConstructorOwner.genericArity &&
+                owner.constructors.isNotEmpty()
+    }.constructors.first()
+    val mismatchedLogicalBaseConsumer = consumer.copy(
+        constructors = consumer.constructors.map { constructor ->
+            if (constructor.delegatesToThis) constructor else constructor.copy(
+                delegatedConstructorLogicalBindingKey = unrelatedConstructor.logicalConstructorKey,
+            )
+        },
+    )
+    val mismatchedLogicalBaseFailure = runCatching {
+        mismatchedLogicalBaseConsumer.physicalizeExternalSubclass(
+            artifact,
+            listOf("MismatchedLogicalBaseConsumer"),
+        )
+    }.exceptionOrNull()
+    check(mismatchedLogicalBaseFailure?.message?.contains(
+        "delegated constructor belongs to a different logical base owner",
+    ) == true) {
+        "Kotlin subclass physicalization joined an opaque constructor key to the wrong logical base: " +
+                "$mismatchedLogicalBaseFailure"
     }
     val transformedConstructorConsumer = consumer.copy(
         constructors = consumer.constructors.map { constructor ->
@@ -29865,16 +31518,26 @@ private fun compileModernSnapshotCSharp(
 }
 
 private fun runSnapshotCompiler(arguments: List<String>, directory: File): SnapshotCSharpCompilation {
-    val process = ProcessBuilder(arguments)
-        .directory(directory)
-        .redirectErrorStream(true)
-        .start()
-    check(process.waitFor(3, TimeUnit.MINUTES)) {
-        process.destroyForcibly()
-        "C# snapshot physicalizer timed out"
+    val compilerLog = File.createTempFile("dotnet-csharp-compiler-", ".log", directory)
+    try {
+        val process = ProcessBuilder(arguments)
+            .directory(directory)
+            .redirectErrorStream(true)
+            .redirectOutput(compilerLog)
+            .start()
+        val completed = process.waitFor(3, TimeUnit.MINUTES)
+        if (!completed) {
+            process.destroyForcibly()
+            process.waitFor()
+            error(
+                "C# snapshot physicalizer timed out:\n" +
+                        compilerLog.readText(),
+            )
+        }
+        return SnapshotCSharpCompilation(process.exitValue(), compilerLog.readText())
+    } finally {
+        compilerLog.delete()
     }
-    val output = process.inputStream.bufferedReader().use { it.readText() }
-    return SnapshotCSharpCompilation(process.exitValue(), output)
 }
 
 private fun executeSnapshotConsumer(target: DotNetTarget, assembly: File, directory: File) {

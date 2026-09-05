@@ -13,7 +13,6 @@ import org.jetbrains.kotlin.ir.declarations.IrConstructor
 import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrFunction
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
-import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.expressions.IrGetValue
 import org.jetbrains.kotlin.ir.expressions.IrSetField
@@ -62,6 +61,15 @@ private var IrField.dotNetBoundGenericOwnerStateInitializer:
 internal fun DotNetLocalGenericOwnerPhysicalAuthority.markBoundGenericOwnerStateWrites(
     module: IrModuleFragment,
 ) {
+    val typedWriteValuesByField = stateFamilies()
+        .flatMap(DotNetLocalGenericOwnerPhysicalStateFamilyInput::states)
+        .filter { state ->
+            state.requirement == DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN
+        }
+        .associate { state ->
+            state.field to state.typedWriterParameters
+                .mapTo(linkedSetOf()) { input -> input.parameter }
+        }
     val writesByField = stateFamilies()
         .flatMap(DotNetLocalGenericOwnerPhysicalStateFamilyInput::states)
         .associate { state -> state.field to mutableListOf<DotNetBoundGenericOwnerStateWriteLineage>() }
@@ -96,18 +104,10 @@ internal fun DotNetLocalGenericOwnerPhysicalAuthority.markBoundGenericOwnerState
                 val typedValue = if (state.requirement ==
                     DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN
                 ) {
-                    val function = producer as? IrFunction
-                        ?: error("Internal .NET backend error: BOUND typed state write has no function producer")
                     val value = expression.value as? IrGetValue
                         ?: error("Internal .NET backend error: BOUND typed state lost its exact input")
-                    val parameter = function.parameters.singleOrNull { candidate ->
-                        candidate.symbol == value.symbol
-                    } ?: error(
-                        "Internal .NET backend error: BOUND typed state write is not sourced by its exact producer parameter",
-                    )
-                    check(parameter.kind != IrParameterKind.DispatchReceiver &&
-                            parameter.type == state.field.owner.type && value.type == state.field.owner.type) {
-                        "Internal .NET backend error: BOUND typed state write changed its exact owner-parameter domain"
+                    check(value.symbol in typedWriteValuesByField.getValue(expression.symbol)) {
+                        "Internal .NET backend error: BOUND typed state write lacks physical parameter authority"
                     }
                     value.symbol
                 } else {

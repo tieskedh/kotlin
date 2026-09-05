@@ -8,6 +8,7 @@ package org.jetbrains.kotlin.backend.dotnet.lower
 import org.jetbrains.kotlin.backend.common.ModuleLoweringPass
 import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberBodyPlacement
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
 import org.jetbrains.kotlin.backend.dotnet.DotNetLoweredCovariantReturnBridge
 import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeTypes
@@ -328,9 +329,10 @@ internal class DotNetCovariantReturnBridgeLowering(
                     }
                     !slotType.hasSameClrCarrierAs(targetType)
                 }
+        val hasDifferentReturnCarrier = !slotReturnType.hasSameClrCarrierAs(targetReturnType)
         if (!needsInheritedFinalInterfaceForwarder &&
             !hasDifferentParameterCarrier &&
-            slotReturnType.hasSameClrCarrierAs(targetReturnType)
+            !hasDifferentReturnCarrier
         ) return
         if (context.covariantReturnBridges.any { existing ->
                 existing.owner == owner && existing.inheritedMember == slot && existing.target == target
@@ -338,7 +340,39 @@ internal class DotNetCovariantReturnBridgeLowering(
         ) {
             return
         }
-        val bridge = createBridge(owner, slot, target)
+        // A carrier-widening MethodImpl is itself a semantic entry. When the natural member is
+        // only a checked wrapper over an object-domain body, forwarding through that wrapper
+        // would narrow a valid widened Kotlin value before the operation reaches its authority.
+        // This is an operation-routing decision only: [slot] and [target] remain the MethodImpl
+        // declaration and logical implementation identities recorded for emission.
+        val bodyForwardTarget = if (
+            (hasDifferentParameterCarrier || hasDifferentReturnCarrier) &&
+            context.genericOwnerMemberBodyPlacements[target] ==
+            DotNetGenericOwnerMemberBodyPlacement.SEMANTIC_BODY_WITH_NATURAL_WRAPPER
+        ) {
+            val semanticHook = checkNotNull(context.genericOwnerSemanticHooks[target]) {
+                "Internal .NET backend error: a carrier-widening MethodImpl for " +
+                        "'${owner.name}.${target.name}' cannot reach its authoritative semantic operation"
+            }
+            val dispatcher = context.genericOwnerCapabilityDispatchers[target]
+            if (dispatcher != null &&
+                dispatcher in context.genericOwnerDirectForeignOverrideDispatches
+            ) {
+                // The private dispatcher is directly callable only on its declaring class. An
+                // inherited implementation reaches the same dispatcher through the public
+                // capability slot and therefore retains its foreign typed-override probe.
+                dispatcher.takeIf { candidate -> candidate.parent === owner }
+                    ?: checkNotNull(context.genericOwnerCapabilitySlots[target]) {
+                        "Internal .NET backend error: a foreign-aware semantic MethodImpl for " +
+                                "'${owner.name}.${target.name}' lacks its capability slot"
+                    }
+            } else {
+                semanticHook
+            }
+        } else {
+            target
+        }
+        val bridge = createBridge(owner, slot, target, bodyForwardTarget)
         context.covariantReturnBridges += DotNetLoweredCovariantReturnBridge(
             owner = owner,
             inheritedMember = slot,
@@ -579,6 +613,7 @@ internal class DotNetCovariantReturnBridgeLowering(
         owner: IrClass,
         slot: IrSimpleFunction,
         target: IrSimpleFunction,
+        bodyForwardTarget: IrSimpleFunction,
     ): IrSimpleFunction {
         val slotOwner = slot.parent as? IrClass
             ?: error("Internal .NET backend error: physical override slot has no class owner")
@@ -687,9 +722,18 @@ internal class DotNetCovariantReturnBridgeLowering(
                 addValueParameter(slotParameter.name.asString(), bridgeParameterType)
             }
             body = context.createIrBuilder(symbol).irBlockBody {
-                val targetOwner = target.parent as? IrClass
+                val targetOwner = bodyForwardTarget.parent as? IrClass
                     ?: error("Internal .NET backend error: covariant-return target has no class owner")
-                val targetMethodSubstitution = target.typeParameters.zip(bridgeTypeParameters)
+                val forwardParameters = bodyForwardTarget.parameters.dropWhile { parameter ->
+                    parameter.kind == IrParameterKind.DispatchReceiver
+                }
+                check(forwardParameters.size == this@bridge.parameters.size - 1) {
+                    "Internal .NET backend error: covariant-return body target parameter count mismatch"
+                }
+                check(bodyForwardTarget.typeParameters.size == bridgeTypeParameters.size) {
+                    "Internal .NET backend error: covariant-return body target generic arity mismatch"
+                }
+                val targetMethodSubstitution = bodyForwardTarget.typeParameters.zip(bridgeTypeParameters)
                     .associate { pair ->
                         pair.first.symbol to pair.second.symbol.defaultType
                     }
@@ -701,9 +745,9 @@ internal class DotNetCovariantReturnBridgeLowering(
                     return targetMethodSubstitutor.substitute(ownerSubstituted)
                 }
 
-                val targetReturnType = targetType(target.returnType)
-                val targetParameterTypes = targetParameters.map { parameter -> targetType(parameter.type) }
-                val call = irCall(target.symbol, targetReturnType).apply {
+                val targetReturnType = targetType(bodyForwardTarget.returnType)
+                val targetParameterTypes = forwardParameters.map { parameter -> targetType(parameter.type) }
+                val call = irCall(bodyForwardTarget.symbol, targetReturnType).apply {
                     arguments[0] = irGet(this@bridge.parameters[0])
                     bridgeTypeParameters.forEachIndexed { index, parameter ->
                         typeArguments[index] = parameter.symbol.defaultType

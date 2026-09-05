@@ -2,6 +2,7 @@
 // The ordinary field must become true !T storage, while the volatile sibling must use the
 // same owner's single object-domain field so every closed value/reference construction is legal.
 // DOTNET_GENERIC_OWNER_FOREIGN_OVERRIDE_PROBE
+// DOTNET_GENERIC_OWNER_TARGET_INDEXED_STATE_PROVENANCE_PROBE
 
 private class RehearsalStateCarriers<T>(initial: T) {
     private var typed: T = initial
@@ -21,6 +22,106 @@ private class RehearsalStateCarriers<T>(initial: T) {
     }
 
     fun observe(): T = published
+}
+
+// Typed-write provenance is target-indexed, not one undifferentiated "generic" bit. Both
+// parameters may independently survive an object-shaped private helper, but neither may be used
+// as physical evidence for the other parameter or for a differently ordered nested construction.
+public class RehearsalCarrierDualStore<K, V>(initialKey: K, initialValue: V) {
+    private var key: K = initialKey
+    private var value: V = initialValue
+
+    @Suppress("UNCHECKED_CAST")
+    private fun installKey(candidate: Any?) {
+        key = candidate as K
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun installValue(candidate: Any?) {
+        value = candidate as V
+    }
+
+    fun writeKey(next: K) = installKey(next)
+
+    fun writeValue(next: V) = installValue(next)
+
+    fun readKey(): K = key
+
+    fun readValue(): V = value
+}
+
+public class RehearsalCarrierCrossCastStore<K, V>(initial: K) {
+    private var key: K = initial
+
+    @Suppress("UNCHECKED_CAST")
+    private fun installKey(candidate: Any?) {
+        key = candidate as K
+    }
+
+    fun writeWrong(next: V) = installKey(next)
+
+    fun read(): K = key
+}
+
+public class RehearsalCarrierSameJoinStore<T>(initial: T) {
+    private var value: T = initial
+
+    @Suppress("UNCHECKED_CAST")
+    private fun install(candidate: Any?) {
+        value = candidate as T
+    }
+
+    fun choose(first: T, second: T, useFirst: Boolean) {
+        val candidate: Any? = if (useFirst) first else second
+        install(candidate)
+    }
+
+    fun read(): T = value
+}
+
+public class RehearsalCarrierMixedJoinStore<K, V>(initial: K) {
+    private var key: K = initial
+
+    @Suppress("UNCHECKED_CAST")
+    private fun install(candidate: Any?) {
+        key = candidate as K
+    }
+
+    fun choose(key: K, value: V, useKey: Boolean) {
+        val candidate: Any? = if (useKey) key else value
+        install(candidate)
+    }
+}
+
+public class RehearsalCarrierBroadCastStore<T>(initial: T) {
+    private var value: T = initial
+
+    @Suppress("UNCHECKED_CAST")
+    fun install(candidate: Any?) {
+        value = candidate as T
+    }
+}
+
+public class RehearsalCarrierValueOperatorStore<T>(initial: T) {
+    private var value: T = initial
+
+    @Suppress("UNCHECKED_CAST")
+    private fun install(candidate: Any?) {
+        value = candidate as T
+    }
+
+    fun poison(candidate: T) = install(candidate is String)
+}
+
+public class RehearsalCarrierNestedOrderStore<K, V>(initial: Array<Array<K>>) {
+    private var pair: Array<Array<K>> = initial
+
+    @Suppress("UNCHECKED_CAST")
+    private fun install(candidate: Any?) {
+        pair = candidate as Array<Array<K>>
+    }
+
+    fun writeWrong(candidate: Array<Array<V>>) = install(candidate)
 }
 
 // A private default accessor over producer-proven state must retain the exact CLR carrier even
@@ -177,8 +278,9 @@ public interface RehearsalInvariantPropertyCellWithMember<T> {
     public fun touchPropertyCell()
 }
 
-// The runtime fallback resolves by the producer-recorded CLR member name, so an overloaded
-// producer/consumer pair remains on the erased production ABI until overload selection is proven.
+// Exact overload identity is proven for bounded producer-only families. The mixed invariant
+// producer/consumer composition remains erased until its projected, foreign, and separate-
+// compilation routes have their own proof.
 public interface RehearsalInvariantOverloaded<T> {
     public fun exchange(): T
 
@@ -193,6 +295,20 @@ public interface RehearsalInvariantNullableCell<T> {
 
 private class RehearsalProducerValue<T>(private val value: T) : RehearsalProducer<T> {
     override fun produce(): T = value
+}
+
+// This owner is intentionally non-generic in the candidate CLR surface: its potentially
+// reparameterized nested constructor/result need object, while its ordinary scalar T result still
+// requires normal checked recovery and its fixed Boolean result must remain bool.
+private class RehearsalLocalErasedNestedResult<T>(
+    private val nestedValue: RehearsalProducer<T>,
+    private val scalarValue: T,
+) {
+    fun nestedResult(): RehearsalProducer<T> = nestedValue
+
+    fun scalarResult(): T = scalarValue
+
+    fun fixedResult(): Boolean = true
 }
 
 // InlineClassDeclarationLowering deep-copies this init body after generic-owner publication. The
@@ -223,6 +339,10 @@ private class RehearsalDefaultConsumerValue : RehearsalDefaultConsumer<Any?>
 private class RehearsalDefaultConsumerOverrideValue : RehearsalDefaultConsumer<Any?> {
     override fun consumeDefault(value: Any?) {
         rehearsalDefaultConsumerOverrideObserved = value
+    }
+
+    fun consumeInterfaceDefault(value: Any?) {
+        super<RehearsalDefaultConsumer>.consumeDefault(value)
     }
 }
 
@@ -463,6 +583,25 @@ public fun rehearsalProjectedInvariantPropertyCellChildBox(
 ): RehearsalNestedBox<RehearsalInvariantPropertyCellChild<out Any?>> = RehearsalNestedBox(cell)
 
 fun box(): String {
+    val dualCarrier = RehearsalCarrierDualStore("key", 1)
+    dualCarrier.writeKey("next-key")
+    dualCarrier.writeValue(2)
+    if (dualCarrier.readKey() != "next-key" || dualCarrier.readValue() != 2) {
+        return "fail: target-indexed dual carrier"
+    }
+    val sameJoinCarrier = RehearsalCarrierSameJoinStore("initial")
+    sameJoinCarrier.choose("left", "right", useFirst = false)
+    if (sameJoinCarrier.read() != "right") return "fail: same-target carrier join"
+    val crossCarrier = RehearsalCarrierCrossCastStore<String, String>("initial")
+    crossCarrier.writeWrong("cross")
+    if (crossCarrier.read() != "cross") return "fail: erased cross-carrier semantics"
+    val mixedJoinCarrier = RehearsalCarrierMixedJoinStore<String, String>("initial")
+    mixedJoinCarrier.choose("key", "value", useKey = true)
+    val broadCarrier = RehearsalCarrierBroadCastStore<Any?>(null)
+    broadCarrier.install("broad")
+    RehearsalCarrierValueOperatorStore<Any?>(null).poison("value")
+    RehearsalCarrierNestedOrderStore<String, Int>(arrayOf(arrayOf("key")))
+
     val ints = RehearsalStateCarriers(1)
     ints.writeTyped(2)
     ints.publish(3)
@@ -508,6 +647,33 @@ fun box(): String {
     val broadProducer: RehearsalProducer<Any?> = intProducer
     if (rehearsalBroadProduce(broadProducer) != 41) return "fail: broad value producer"
     if (broadProducer !== intProducer) return "fail: producer identity"
+    val localExactResultControl = RehearsalLocalErasedNestedResult(intProducer, 43)
+    if (localExactResultControl.scalarResult() + 1 != 44 ||
+        !localExactResultControl.fixedResult()
+    ) {
+        return "fail: local erased scalar/fixed result"
+    }
+    val localBroadNestedResult = try {
+        RehearsalLocalErasedNestedResult<Any?>(broadProducer, "broad")
+    } catch (_: ClassCastException) {
+        return "fail: local semantic nested constructor materialized a CLR construction"
+    }
+    try {
+        if (localBroadNestedResult.nestedResult() !== intProducer) {
+            return "fail: local semantic nested direct result identity"
+        }
+    } catch (_: ClassCastException) {
+        return "fail: local semantic nested identity materialized a CLR construction"
+    }
+    try {
+        if (localBroadNestedResult.nestedResult().produce() != 41 ||
+            !localBroadNestedResult.fixedResult()
+        ) {
+            return "fail: local semantic nested member use"
+        }
+    } catch (_: ClassCastException) {
+        return "fail: local semantic nested member materialized a CLR construction"
+    }
     val lateRoutedValue = RehearsalLateRoutedValue(broadProducer)
     if (lateRoutedValue.read() != 41) return "fail: late-routed value-class producer"
 
@@ -527,8 +693,9 @@ fun box(): String {
     ) {
         return "fail: narrowed default consumer"
     }
+    val overridingDefaultConsumerValue = RehearsalDefaultConsumerOverrideValue()
     val overridingDefaultConsumer: RehearsalDefaultConsumer<Any?> =
-        RehearsalDefaultConsumerOverrideValue()
+        overridingDefaultConsumerValue
     overridingDefaultConsumer.consumeDefault("default-override-reference")
     val narrowedOverridingDefaultConsumer: RehearsalDefaultConsumer<Int> =
         overridingDefaultConsumer
@@ -537,6 +704,12 @@ fun box(): String {
         narrowedOverridingDefaultConsumer !== overridingDefaultConsumer
     ) {
         return "fail: narrowed overriding default consumer"
+    }
+    overridingDefaultConsumerValue.consumeInterfaceDefault("qualified-default")
+    if (rehearsalDefaultConsumerObserved != "qualified-default" ||
+        rehearsalDefaultConsumerOverrideObserved != 62
+    ) {
+        return "fail: qualified interface default"
     }
 
     val invariantInt: RehearsalInvariantProducer<Int> = RehearsalInvariantProducerValue(47)

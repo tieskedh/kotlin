@@ -4,6 +4,10 @@
 
 private fun <T> MutableIterator<T>.matches(candidate: Any?): Boolean = next() == candidate
 
+// A is fixed by the exact receiver. B is deliberately independent even when the caller maps both
+// method parameters to the same owner T; exactness of A must never be reused as evidence for B.
+private fun <A, B> MutableIterator<A>.selectIndependent(value: B): B = value
+
 private fun <T> MutableList<T>.removeMatching(predicate: (T) -> Boolean): Boolean {
     var changed = false
     var index = 0
@@ -35,6 +39,26 @@ private class ReceiverIterator<out T>(private val value: T) :
     }
 
     fun accepts(candidate: @UnsafeVariance T): Boolean = matches(candidate)
+}
+
+private class IndependentHelperOwner<out T>(private val exact: T) :
+    MutableIterator<@UnsafeVariance T> {
+    private var consumed: Boolean = false
+
+    override fun hasNext(): Boolean = !consumed
+
+    override fun next(): T {
+        if (consumed) throw NoSuchElementException()
+        consumed = true
+        return exact
+    }
+
+    override fun remove() {
+        throw UnsupportedOperationException()
+    }
+
+    fun passIndependent(value: @UnsafeVariance T): T =
+        selectIndependent<T, T>(value)
 }
 
 // Repeat MutableList<T> so this user-module proof owns the natural Runtime interface edge even
@@ -98,6 +122,17 @@ fun box(): String {
 
     if (!ReceiverIterator("typed").accepts("typed")) return "exact reference helper"
     if (ReceiverIterator("typed").accepts("other")) return "exact reference miss"
+
+    val exactIndependent = IndependentHelperOwner(41)
+    if (exactIndependent.passIndependent(42) != 42) return "exact independent helper"
+    val widenedIndependent: IndependentHelperOwner<Any?> = exactIndependent
+    if (widenedIndependent !== exactIndependent) return "independent helper owner identity"
+    val independentResult = try {
+        widenedIndependent.passIndependent("semantic")
+    } catch (_: ClassCastException) {
+        return "independent helper narrowed B to exact A"
+    }
+    if (independentResult != "semantic") return "semantic independent helper"
 
     val ints = ReceiverIterator(42)
     val widened: ReceiverIterator<Any?> = ints

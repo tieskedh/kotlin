@@ -41,6 +41,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalComple
 import org.jetbrains.kotlin.backend.dotnet.dotNetPhysicalValueStableName
 import org.jetbrains.kotlin.backend.dotnet.isDotNetParameterlessDirectResultPlacementCall
 import org.jetbrains.kotlin.backend.dotnet.selectDotNetGenericOwnerPhysicalMethodOwnerViewOrError
+import org.jetbrains.kotlin.backend.dotnet.requiresSemanticOperation
 import org.jetbrains.kotlin.backend.dotnet.unknownPhysicalValueCarrierSnapshot
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.declarations.IrClass
@@ -674,9 +675,10 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
     }
 
     /**
-     * A semantic-result policy remains logical authority even when a natural receiver happens to
-     * be available. Ordinary semantic-capability selection may instead be an imprecise legacy
-     * value-flow fallback; a complete BOUND exact operation is stronger positive evidence.
+     * A declaration's semantic input/result policy remains logical authority even when a natural
+     * receiver happens to be available. Ordinary semantic-capability selection may instead be an
+     * imprecise legacy value-flow fallback; a complete BOUND exact operation is stronger positive
+     * evidence only when the operation contract itself has no object-domain boundary.
      */
     private fun mayReplaceConservativeSemanticTarget(
         call: IrCall,
@@ -685,6 +687,32 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
         if (call.superQualifierSymbol != null ||
             call !in context.genericOwnerCapabilityCallTargets
         ) return false
+        val selectedCapability = context.genericOwnerCapabilityCallTargets.getValue(call)
+        val plannedSource = context.genericOwnerCapabilitySlots.entries
+            .singleOrNull { entry -> entry.value === selectedCapability }
+            ?.key
+            ?: context.genericOwnerDefaultCapabilitySlots.entries
+                .singleOrNull { entry -> entry.value === selectedCapability }
+                ?.key
+        plannedSource?.let { source ->
+            val owner = source.parent as? IrClass ?: return false
+            if (context.publishedGenericInterfaceMemberContracts[source]
+                    ?.role
+                    ?.requiresSemanticOperation == true
+            ) {
+                return false
+            }
+            context.genericOwnerArchitecturePlans[owner]
+                ?.memberFamilies
+                ?.get(source)
+                ?.let { family ->
+                    if (family.requiresSemanticResultCapability ||
+                        family.requiresSemanticInterfaceInputCapability
+                    ) {
+                        return false
+                    }
+                }
+        }
         val source = (route.method.identity as?
                 DotNetGenericOwnerPhysicalMethodDefIdentity.Local)
             ?.function
@@ -694,15 +722,17 @@ internal class DotNetGenericOwnerPhysicalOperationRouteShadowAnalysis(
         context.genericOwnerArchitecturePlans[owner]
             ?.memberFamilies
             ?.get(source)
-            ?.let { family -> return !family.requiresSemanticResultCapability }
+            ?.let { family ->
+                return !family.requiresSemanticResultCapability &&
+                        !family.requiresSemanticInterfaceInputCapability
+            }
 
-        // Published generic interfaces do not own generic-class architecture plans. Their
-        // materialized capability slot is nevertheless explicit policy authority: a slot marked
-        // for foreign/object result dispatch is the semantic-result route, while an unmarked slot
-        // (such as K -> V?) may yield to a fully proven exact natural operation.
-        if (context.publishedGenericInterfaceFamilies[owner] == null) return false
-        val semanticSlot = context.genericOwnerCapabilitySlots[source] ?: return false
-        return semanticSlot !in context.genericOwnerForeignDispatchDeclarations
+        // Published generic interfaces do not own generic-class architecture plans. Their H
+        // member role is nevertheless declaration authority for both semantic results and
+        // semantic inputs; an exact receiver cannot narrow either independent value position.
+        val memberRole = context.publishedGenericInterfaceMemberContracts[source]?.role
+            ?: return false
+        return !memberRole.requiresSemanticOperation
     }
 
     private fun selectLogicalReceiver(

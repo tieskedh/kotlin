@@ -190,6 +190,7 @@ object DotNetBackend {
             return collectDotNetMetadataLinkageKeys(
                 irModuleFragment,
                 scope,
+                includeGenericOwnerConstructors = configuration.dotNetGenericOwnerRehearsal,
             ) { function ->
                 preLoweringIntrinsics.getIntrinsic(function.symbol)?.excludesDeclarationFromCodegen == true ||
                         (function.isInline && function.typeParameters.any { typeParameter -> typeParameter.isReified })
@@ -801,7 +802,13 @@ object DotNetBackend {
             return result(ilTarget)
         }
         genericOwnerPrototypes = context.genericOwnerArchitecturePlans.values
-            .map { plan -> plan.toPrototypeSnapshot(preLoweringDeclarationKeys) }
+            .map { plan ->
+                plan.toPrototypeSnapshot(
+                    preLoweringDeclarationKeys,
+                    context.reifiedGenericInterfaces,
+                    context.externalDeclarationsForLowering(),
+                )
+            }
             .sortedBy(DotNetGenericOwnerPrototypeSnapshot::ownerName)
         localPhysicalAuthorityForEmissionComparison = context.localGenericOwnerPhysicalAuthority
         if (!configuration.dotNetGenericOwnerRehearsal) {
@@ -1409,7 +1416,10 @@ data class DotNetBackendOutput(
             "the production erased epoch cannot publish sealed generic-owner state FieldDefs"
         }
         require(genericOwnerRehearsal || declarations.genericOwnerRehearsalEpochRecords().isEmpty()) {
-            "the production erased epoch cannot publish generic-owner rehearsal ABI records (H/N/M/J/K)"
+            "the production erased epoch cannot publish generic-owner rehearsal ABI records (" +
+                    DotNetGenericOwnerRehearsalEpochRecordKind.entries.joinToString("/") { kind ->
+                        kind.wireTag
+                    } + ")"
         }
     }
 }

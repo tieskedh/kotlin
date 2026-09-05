@@ -14,6 +14,17 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-physical-authority-consolidation-2026-09-05.md`](generic-owner-physical-authority-consolidation-2026-09-05.md)
+  records the schema-22 declaration/value/operation/state consolidation, the
+  disposition of earlier bounded recognizers, final authority and production-
+  isolation corrections, the 15-fixture candidate/inverse matrix, and the
+  fresh production-erased aggregate.
+- [`generic-owner-nested-variant-result-correction-2026-09-03.md`](generic-owner-nested-variant-result-correction-2026-09-03.md)
+  is an intermediate snapshot which corrects the earlier exact-outer/implied-
+  exact-nested result assumption and records the negative-only pristine Kotlin-
+  variance hazard index, same-object hostile execution, semantic-result
+  fallback, and the positive producer-result certificate still open at that
+  point.
 - [`generic-owner-ordered-prefix-methodspec-result-2026-09-03.md`](generic-owner-ordered-prefix-methodspec-result-2026-09-03.md)
   records the exact-root ordered receiver/input prefix container for one caller
   `!!R` MethodSpec result, independent prefix placement, pending outer

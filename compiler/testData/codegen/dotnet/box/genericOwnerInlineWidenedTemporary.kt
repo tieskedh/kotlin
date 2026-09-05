@@ -11,9 +11,34 @@ interface InlineProducer<out T> {
     fun produce(): T
 }
 
+interface InlineInvariantProducer<T> {
+    fun produce(): T
+}
+
+private class InlineInvariantValue<T>(private val value: T) : InlineInvariantProducer<T> {
+    override fun produce(): T = value
+}
+
+private class InlineProjectedSourceValue<T>(
+    private val nested: InlineInvariantProducer<out T>,
+) {
+    fun source(): InlineInvariantProducer<out T> = nested
+}
+
+class InlineProjectedPropertySourceValue<T>(
+    private val nested: InlineInvariantProducer<out T>,
+) {
+    val source: InlineInvariantProducer<out T>
+        get() = nested
+}
+
 interface InlineConstructedSource<out T> {
     fun source(): InlineProducer<T>
 }
+
+private value class InlineSemanticSourceCarrier(
+    val source: InlineConstructedSource<Any?>,
+)
 
 interface InlineLookup<K, out V> {
     fun lookup(key: K): V?
@@ -154,8 +179,13 @@ private class InlineMethodSpecSplitLocalRoute<T> : InlineLookup<T, T> {
     }
 }
 
-private class InlineSplitLocalRoute<T>(private val value: T?) : InlineSplitLocalProducer<T> {
-    override fun read(): T? = value
+private class InlineSplitLocalRoute<T>(value: T?) : InlineSplitLocalProducer<T> {
+    // This fixture proves split-result call routing, not bare `T?` field storage. Keep the
+    // incidental state out of that independently unsupported representation problem.
+    private val value: Any? = value
+
+    @Suppress("UNCHECKED_CAST")
+    override fun read(): T? = value as T?
 
     override fun readThroughLocal(returnFirst: Boolean): T? {
         val sourceNaturalAlias: InlineSplitLocalProducer<T> = this
@@ -446,6 +476,32 @@ fun box(): String {
     )
     if (stringCallResult !== inlineStringProducer || stringCallResult.produce() != "call result") {
         return "reference constructed call-result route"
+    }
+    val widenedExactIntProducer: InlineProducer<Any?> = inlineIntProducer
+    val nestedSemanticIntSource = InlineConstructedSourceValue<Any?>(widenedExactIntProducer)
+    val semanticSourceCarrier = InlineSemanticSourceCarrier(nestedSemanticIntSource)
+    if (semanticSourceCarrier.source !== nestedSemanticIntSource) {
+        return "semantic source value-class carrier"
+    }
+    val nestedSemanticIntResult = InlineConstructedCallRoute<Any?>().sourceThroughLocal(
+        nestedSemanticIntSource,
+    )
+    if (nestedSemanticIntResult !== inlineIntProducer || nestedSemanticIntResult.produce() != 63) {
+        return "nested semantic constructed call-result route"
+    }
+    val invariantIntProducer = InlineInvariantValue(65)
+    val projectedInvariantProducer: InlineInvariantProducer<out Any?> = invariantIntProducer
+    val projectedInvariantResult =
+        InlineProjectedSourceValue<Any?>(projectedInvariantProducer).source()
+    if (projectedInvariantResult !== invariantIntProducer || projectedInvariantResult.produce() != 65) {
+        return "use-site projected invariant result route"
+    }
+    val projectedInvariantPropertyResult =
+        InlineProjectedPropertySourceValue<Any?>(projectedInvariantProducer).source
+    if (projectedInvariantPropertyResult !== invariantIntProducer ||
+        projectedInvariantPropertyResult.produce() != 65
+    ) {
+        return "use-site projected invariant property result route"
     }
     val secondInlineIntProducer = InlineSecondView(64)
     val secondInlineIntSource = InlineConstructedSourceValue(secondInlineIntProducer)

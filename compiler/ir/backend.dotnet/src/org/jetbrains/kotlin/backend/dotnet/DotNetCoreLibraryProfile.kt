@@ -145,6 +145,25 @@ internal val DotNetTarget.coreLibrary: DotNetCoreLibraryProfile
         DotNetTarget.NET10_0 -> DotNetCoreLibraryProfile.NET10_0
     }
 
+/**
+ * Whether an objective producer PE may use [assemblyName] for an architecture-record
+ * `CORE_LIBRARY` type.
+ *
+ * This is deliberately narrower than general AssemblyRef equivalence. Modern .NET ILAsm can
+ * canonicalize core TypeRefs written against the net10 `mscorlib` compatibility facade to their
+ * `System.Runtime` definition when that facade is also referenced. The .NET Framework and
+ * netstandard profiles have no corresponding writer normalization in the supported toolchain.
+ * Explicit assembly-scoped and retained foreign identities must not use this policy.
+ */
+internal fun DotNetTarget.acceptsCoreLibraryPeAssemblyName(assemblyName: String): Boolean = when (this) {
+    DotNetTarget.NET48 -> assemblyName.equals(DotNetTarget.NET48.coreLibraryAssemblyName, ignoreCase = true)
+    DotNetTarget.NETSTANDARD_2_0 ->
+        assemblyName.equals(DotNetTarget.NETSTANDARD_2_0.coreLibraryAssemblyName, ignoreCase = true)
+    DotNetTarget.NET10_0 ->
+        assemblyName.equals(DotNetTarget.NET10_0.coreLibraryAssemblyName, ignoreCase = true) ||
+                assemblyName.equals("System.Runtime", ignoreCase = true)
+}
+
 /** ECMA-335 SerString length prefix, including the multi-byte form needed by strong-name keys. */
 private fun serializedCustomAttributeString(value: String): List<Int> {
     val bytes = value.toByteArray(Charsets.UTF_8).map { it.toInt() and 0xff }

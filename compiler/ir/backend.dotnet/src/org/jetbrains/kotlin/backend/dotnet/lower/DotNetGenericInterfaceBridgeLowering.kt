@@ -533,7 +533,11 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                         externalDeclarations,
                     )
                 ) {
-                    val exactBridge = createTypedBridge(plan, DotNetGenericInterfaceMemberView.EXACT)
+                    val exactBridge = createTypedBridge(
+                        plan,
+                        DotNetGenericInterfaceMemberView.EXACT,
+                        semanticOperationTarget = capabilitySlot,
+                    )
                     if (plan.implementingClass in context.preLoweringDeclarationKeys) {
                         context.genericInterfaceViewBridges += DotNetLoweredGenericInterfaceViewBridge(
                             owner = plan.implementingClass,
@@ -551,8 +555,18 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                 isMappedKotlinGenericInterface,
                 isErasedKotlinCarrier,
             )
+            val canonicalBridgeOwnsSemanticInput =
+                context.configuration.dotNetGenericOwnerRehearsal &&
+                        (plan.producerProvenSemanticOperationOrNull() != null ||
+                                (plan.target.parent as? IrClass)?.let(isErasedKotlinCarrier) == true)
             val typedBridges = plan.typedViews.associateWith { view ->
-                createTypedBridge(plan, view)
+                createTypedBridge(
+                    plan,
+                    view,
+                    semanticOperationTarget = canonicalBridge.takeIf {
+                        canonicalBridgeOwnsSemanticInput
+                    },
+                )
             }
             // A final bridge forwards through the target's virtual class slot, so a producer-
             // visible complete bundle remains authoritative when inherited from either an
@@ -1287,10 +1301,25 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
         // forwarding it back through the typed source entry would reintroduce an early
         // `Collection<object> -> Collection<!T>` cast for widened nested inputs. Exact/declared
         // bridges below continue to target the natural source member.
-        val canonicalTarget = context.genericOwnerSemanticHooks[plan.target]
-            ?: context.genericOwnerFunctionInputEntries[plan.target]
-            ?: plan.target
+        val canonicalTarget = if (context.configuration.dotNetGenericOwnerRehearsal) {
+            plan.producerProvenSemanticOperationOrNull()
+        } else {
+            context.genericOwnerSemanticHooks[plan.target]
+                ?: context.genericOwnerFunctionInputEntries[plan.target]
+        } ?: plan.target
         val canonicalType = canonicalBridgeTypeTransform(plan, isErasedKotlinCarrier)
+        val rawTargetOwner = canonicalTarget.parent as? IrClass
+        val physicalPassthroughParameterIndices = if (
+            context.configuration.dotNetGenericOwnerRehearsal &&
+            canonicalTarget === plan.target &&
+            rawTargetOwner?.let(isErasedKotlinCarrier) == true
+        ) {
+            setOfNotNull(
+                DotNetRuntimeTypes.genericInterfaceRelativeGenericInputParameterIndex(plan.slot)
+            )
+        } else {
+            emptySet()
+        }
 
         return createForwardingBridge(
             irClass = plan.implementingClass,
@@ -1302,6 +1331,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
             bridgeTypeTransform = canonicalType,
             ownerConstraintTypeTransform = plan.typedSubstitutor::substitute,
             isErasedKotlinCarrier = isErasedKotlinCarrier,
+            physicalPassthroughParameterIndices = physicalPassthroughParameterIndices,
             specialMethodInfo = specialBridgeMethods.findSpecialWithOverride(
                 plan.slot,
                 includeSelf = true,
@@ -1319,10 +1349,16 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
     private fun createTypedBridge(
         plan: BridgePlan,
         memberView: DotNetGenericInterfaceMemberView,
+        semanticOperationTarget: IrSimpleFunction? = null,
     ): IrSimpleFunction {
         DotNetRuntimeTypes.genericInterfaceRelativeGenericInputParameterIndex(plan.slot)
             ?.let { inputIndex ->
-                return createRelativeGenericInputTypedBridge(plan, memberView, inputIndex)
+                return createRelativeGenericInputTypedBridge(
+                    plan,
+                    memberView,
+                    inputIndex,
+                    semanticOperationTarget,
+                )
             }
         val viewName = memberView.name.lowercase()
             .replaceFirstChar(Char::uppercaseChar)
@@ -1342,6 +1378,27 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
     }
 
     /**
+     * Resolves the physical operation behind a logical implementation selector.
+     *
+     * Fake overrides own no MethodDef. A locally materialized family is keyed by its declaring
+     * source, while a separately compiled family is represented by an un-emitted stub bound to
+     * the producer's recorded semantic MethodDef. Looking through the fake override here lets all
+     * bridge views share that authority without deriving a CLR member from the logical signature.
+     */
+    private fun BridgePlan.producerProvenSemanticOperationOrNull(): IrSimpleFunction? {
+        val declaringSource = if (target.isFakeOverride) {
+            target.resolveFakeOverride() ?: target.resolveFakeOverrideMaybeAbstract() ?: target
+        } else {
+            target
+        }
+        return sequenceOf(target, declaringSource).firstNotNullOfOrNull { source ->
+            context.genericOwnerSemanticHooks[source]
+                ?: context.externalGenericOwnerSemanticHooks[source]
+                ?: context.genericOwnerFunctionInputEntries[source]
+        }
+    }
+
+    /**
      * Materializes the CLR-only `<U : T>(..., Collection<U>, ...)` slot used by an invariant
      * natural interface for one nested covariant Kotlin input. The logical Kotlin member
      * deliberately has no method type parameter. Its producer-proven semantic hook owns the one
@@ -1353,6 +1410,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
         plan: BridgePlan,
         memberView: DotNetGenericInterfaceMemberView,
         inputIndex: Int,
+        semanticOperationTarget: IrSimpleFunction?,
     ): IrSimpleFunction {
         if (memberView != DotNetGenericInterfaceMemberView.DECLARED ||
             plan.slot.typeParameters.isNotEmpty() ||
@@ -1369,10 +1427,11 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
             ?: dotNetUnsupported(
                 "relative collection input '${plan.slot.name}' has no selected parameter"
             )
-        val semanticTarget = context.genericOwnerSemanticHooks[plan.target]
+        val semanticTarget = semanticOperationTarget
+            ?: plan.producerProvenSemanticOperationOrNull()
             ?: dotNetUnsupported(
                 "relative collection input '${plan.implementingClass.name}.${plan.target.name}' " +
-                        "requires a producer-proven semantic hook"
+                        "requires a producer-proven semantic operation"
             )
         val semanticParameters = semanticTarget.parameters.filter { parameter ->
             parameter.kind == IrParameterKind.Regular
@@ -1383,11 +1442,20 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                         "changed its semantic parameter count"
             )
         }
+        val isCanonicalSemanticOperation =
+            semanticTarget.origin == DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE &&
+                    semanticTarget.overriddenSymbols.singleOrNull() == plan.slot.symbol
+        // An owner-generic semantic hook receives object. A Runtime implementation can instead
+        // inherit a producer-owned erased MethodDef (AbstractMutableCollection is the motivating
+        // shape); its freshly created canonical bridge already names that exact physical input.
+        // Accept only this same-slot bridge, never an arbitrary logical Collection<X> signature.
         val semanticParameter = semanticParameters.getOrNull(inputIndex)
-            ?.takeIf { parameter -> parameter.type.isNullableAny() }
+            ?.takeIf { parameter ->
+                parameter.type.isNullableAny() || isCanonicalSemanticOperation
+            }
             ?: dotNetUnsupported(
                 "relative collection input '${plan.implementingClass.name}.${plan.target.name}' " +
-                        "does not have an object-domain semantic input at the selected position"
+                        "does not have a producer-proven semantic or canonical input at the selected position"
             )
         slotParameters.forEachIndexed { index, parameter ->
             if (index != inputIndex &&
@@ -1484,6 +1552,12 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                     arguments[0] = irGet(this@bridge.parameters[0])
                     this@bridge.parameters.drop(1).forEachIndexed { index, parameter ->
                         arguments[index + 1] = if (index == inputIndex) {
+                            // The relative natural slot supplies Collection<U>, whereas a
+                            // producer-recorded canonical operation can physically require the
+                            // same object's arity-zero semantic capability. Keep the logical
+                            // type on the cast: final call-boundary authority selects the actual
+                            // capability token, so this becomes Collection<U> -> Collection and
+                            // can never fabricate Collection<object>.
                             irImplicitCast(irGet(parameter), semanticParameter.type)
                         } else {
                             irGet(parameter)
@@ -1571,6 +1645,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
         bridgeTypeTransform: (IrType) -> IrType,
         ownerConstraintTypeTransform: (IrType) -> IrType,
         isErasedKotlinCarrier: (IrClass) -> Boolean = { false },
+        physicalPassthroughParameterIndices: Set<Int> = emptySet(),
         specialMethodInfo: SpecialMethodWithDefaultInfo? = null,
     ): IrSimpleFunction {
         val targetParameters = target.parameters.dropWhile { it.kind == IrParameterKind.DispatchReceiver }
@@ -1686,7 +1761,10 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                     }
                     for (index in targetParameters.indices) {
                         val bridgeArgument = irGet(this@bridge.parameters[index + 1])
-                        arguments[index + 1] = if (bridgeArgument.type == targetParameterTypes[index]) {
+                        arguments[index + 1] = if (
+                            index in physicalPassthroughParameterIndices ||
+                            bridgeArgument.type == targetParameterTypes[index]
+                        ) {
                             bridgeArgument
                         } else if (hasOwnerBoundMethodArguments) {
                             // The physical slot erased R : T. Adapt through object so CLR emits

@@ -88,6 +88,8 @@ fun box(): String {
     if (!reader.same(wide, exact)) return "identity"
     if (reader.read(wide) != 37) return "constructed result"
     if (!exact.acceptsAll(ExactInputValue(37))) return "exact nested input"
+    val exactObjectReceiver = ExactInputValue<Any?>(37)
+    if (!exactObjectReceiver.acceptsAll(wide)) return "exact receiver semantic nested input"
     if (reader.acceptsAll(wide, ExactInputValue("wrong"))) return "semantic nested input"
     if (!reader.contains(wide, 37) || reader.contains(wide, "wrong")) {
         return "fixed barrier input"

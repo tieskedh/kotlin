@@ -18,6 +18,14 @@ public class RehearsalSeparateReader {
     public fun read(store: RehearsalSeparateStore<Any?>): Any? = store.read()
 }
 
+public open class RehearsalSeparateInheritedCapabilityBase {
+    public open fun read(): Any? = "kotlin-base"
+}
+
+public class RehearsalSeparateInheritedCapabilityBaseReader {
+    public fun read(base: RehearsalSeparateInheritedCapabilityBase): Any? = base.read()
+}
+
 // The producer-selected non-generic class capability must retain every universally valid erased
 // Kotlin superinterface so a later consumer can lower a for-loop without reconstructing C<T>.
 public class RehearsalSeparateLateRoutedIterator<out T>(private val value: T) : Iterator<T> {
@@ -911,6 +919,15 @@ public open class RehearsalSeparateKotlinOverrideStore<T>(initial: T) :
     public override fun read(): T = super.read()
 }
 
+public open class RehearsalSeparateInheritedCapabilityMid<out T>(private var value: T) :
+    RehearsalSeparateInheritedCapabilityBase() {
+    public override fun read(): T = value
+
+    public fun write(value: @UnsafeVariance T) {
+        this.value = value
+    }
+}
+
 public interface RehearsalSeparateChildProducer<out T> :
     RehearsalSeparateProducer<T>,
     RehearsalSeparateSecondaryProducer<T> {
@@ -1251,35 +1268,74 @@ fun box(): String {
     if (broadProducer !== exactProducer) return "fail: separate producer identity"
     val exactGeneralCursor: RehearsalSeparateGeneralCursor<Int> =
         RehearsalSeparateGeneralCursorValue(33)
-    val broadGeneralCursor: RehearsalSeparateGeneralCursor<Any?> = exactGeneralCursor
-    if (!exactGeneralCursor.hasGeneralNext() || exactGeneralCursor.nextGeneral() != 33 ||
-        RehearsalSeparateGeneralCursorReader().read(broadGeneralCursor) != 33 ||
-        !RehearsalSeparateGeneralCursorReader().same(broadGeneralCursor, exactGeneralCursor)
-    ) {
-        return "fail: separate mixed general cursor family"
+    val broadGeneralCursor: RehearsalSeparateGeneralCursor<Any?> = try {
+        exactGeneralCursor
+    } catch (_: ClassCastException) {
+        return "fail: separate mixed general cursor widening materialized a CLR construction"
+    }
+    try {
+        if (!exactGeneralCursor.hasGeneralNext() || exactGeneralCursor.nextGeneral() != 33 ||
+            RehearsalSeparateGeneralCursorReader().read(broadGeneralCursor) != 33 ||
+            !RehearsalSeparateGeneralCursorReader().same(broadGeneralCursor, exactGeneralCursor)
+        ) {
+            return "fail: separate mixed general cursor family"
+        }
+    } catch (_: ClassCastException) {
+        return "fail: separate mixed general cursor operation materialized a CLR construction"
     }
     val exactGeneralIterable: RehearsalSeparateGeneralIterable<Int> =
         RehearsalSeparateGeneralIterableValue(exactGeneralCursor)
-    val broadGeneralIterable: RehearsalSeparateGeneralIterable<Any?> = exactGeneralIterable
-    if (exactGeneralIterable.generalIterator() !== exactGeneralCursor ||
-        RehearsalSeparateGeneralIterableReader().read(broadGeneralIterable) != 33 ||
-        !RehearsalSeparateGeneralIterableReader().returnsSameCursor(
-            broadGeneralIterable,
-            exactGeneralCursor,
-        )
-    ) {
-        return "fail: separate constructed general iterable result"
+    val broadGeneralIterable: RehearsalSeparateGeneralIterable<Any?> = try {
+        exactGeneralIterable
+    } catch (_: ClassCastException) {
+        return "fail: separate general iterable widening materialized a CLR construction"
     }
-    val semanticNestedGeneralIterable =
+    try {
+        if (exactGeneralIterable.generalIterator() !== exactGeneralCursor ||
+            RehearsalSeparateGeneralIterableReader().read(broadGeneralIterable) != 33 ||
+            !RehearsalSeparateGeneralIterableReader().returnsSameCursor(
+                broadGeneralIterable,
+                exactGeneralCursor,
+            )
+        ) {
+            return "fail: separate constructed general iterable result"
+        }
+    } catch (_: ClassCastException) {
+        return "fail: separate general iterable operation materialized a CLR construction"
+    }
+    val semanticNestedGeneralIterable = try {
         RehearsalSeparateGeneralIterableValue<Any?>(broadGeneralCursor)
-    if (semanticNestedGeneralIterable.generalIterator() !== exactGeneralCursor ||
-        RehearsalSeparateGeneralIterableReader().read(semanticNestedGeneralIterable) != 33 ||
-        !RehearsalSeparateGeneralIterableReader().returnsSameCursor(
-            semanticNestedGeneralIterable,
-            exactGeneralCursor,
-        )
-    ) {
-        return "fail: separate semantic nested general iterable state"
+    } catch (_: ClassCastException) {
+        return "fail: separate semantic nested constructor materialized a CLR construction"
+    }
+    try {
+        if (semanticNestedGeneralIterable.generalIterator() !== exactGeneralCursor ||
+            RehearsalSeparateGeneralCursorReader().read(
+                semanticNestedGeneralIterable.generalIterator(),
+            ) != 33
+        ) {
+            return "fail: separate semantic nested direct result identity"
+        }
+    } catch (_: ClassCastException) {
+        return "fail: separate semantic nested direct result materialized a CLR construction"
+    }
+    try {
+        if (RehearsalSeparateGeneralIterableReader().read(semanticNestedGeneralIterable) != 33) {
+            return "fail: separate semantic nested reader result"
+        }
+    } catch (_: ClassCastException) {
+        return "fail: separate semantic nested reader materialized a CLR construction"
+    }
+    try {
+        if (!RehearsalSeparateGeneralIterableReader().returnsSameCursor(
+                semanticNestedGeneralIterable,
+                exactGeneralCursor,
+            )
+        ) {
+            return "fail: separate semantic nested reader identity"
+        }
+    } catch (_: ClassCastException) {
+        return "fail: separate semantic nested identity reader materialized a CLR construction"
     }
     val readOnlyPropertyChild: RehearsalSeparateReadOnlyPropertyChild<String> =
         RehearsalSeparateReadOnlyPropertyChildValue(
