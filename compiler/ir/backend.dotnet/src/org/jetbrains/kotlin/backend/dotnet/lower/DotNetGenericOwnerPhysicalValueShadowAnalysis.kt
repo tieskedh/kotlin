@@ -7,6 +7,7 @@ package org.jetbrains.kotlin.backend.dotnet.lower
 
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerArchitecturePlan
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerAuthenticatedPhysicalView
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallReceiverProvenance
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallRoutePlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallRouteRequirement
@@ -32,6 +33,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerSymbolicCarrierRefe
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerGuaranteedViews
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalAuthority
 import org.jetbrains.kotlin.backend.dotnet.DotNetLocalGenericOwnerPhysicalCallableEntryKind
+import org.jetbrains.kotlin.backend.dotnet.bindExactLocalGenericOwnerDependentCarrierOrError
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowCarrierKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowCarrierSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueShadowFunctionRole
@@ -81,6 +83,7 @@ import org.jetbrains.kotlin.ir.expressions.IrComposite
 import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.expressions.IrConstructorCall
 import org.jetbrains.kotlin.ir.expressions.IrGetValue
+import org.jetbrains.kotlin.ir.expressions.IrGetField
 import org.jetbrains.kotlin.ir.expressions.IrSetValue
 import org.jetbrains.kotlin.ir.expressions.IrReturn
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperator
@@ -117,6 +120,11 @@ private data class DotNetGenericOwnerPhysicalEntryPrototypeParameters(
             IrValueSymbol,
             DotNetGenericOwnerPhysicalCarrier,
             >,
+)
+
+private data class DotNetGenericOwnerExactConstructorInputCarrier(
+    val carrier: DotNetGenericOwnerPhysicalCarrier,
+    val view: DotNetGenericOwnerPhysicalView?,
 )
 
 /**
@@ -611,7 +619,8 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                     transferIdentityPreservingReferenceOperatorOrNull(expression, storage, forceNonNull = true)
                 else -> null
             }
-            is IrConstructorCall -> evaluateConstructorResultOrNull(expression)
+            is IrConstructorCall -> evaluateConstructorResultOrNull(expression, storage)
+            is IrGetField -> evaluateFieldReadOrNull(expression, storage)
             is IrCall -> evaluateCallResultOrNull(expression, storage)
             is IrWhen -> evaluateWhenResultOrNull(expression, storage)
             is IrBlock -> evaluateContainerOrNull(expression.statements, storage)
@@ -820,20 +829,70 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
             return binder.definition == definition && parameter.index == index
         }
 
+        /**
+         * Produces one exact allocation only from already admitted declaration authority and
+         * independently proven inputs.
+         *
+         * The result type of [expression] is structural input to the constructor-use resolver,
+         * never physical evidence by itself. The target TypeDef must already occur in the current
+         * declaration epoch, the exact constructor must occur in its admitted architecture plan,
+         * and every parameter which determines an owner-dependent class argument must receive a
+         * value whose produced carrier or authenticated recorded view proves the substituted
+         * parameter carrier. A phantom class parameter needs no artificial argument proof: the
+         * already-bound `newobj C<!T>` TypeSpec is its physical binder.
+         */
         private fun evaluateConstructorResultOrNull(
             expression: IrConstructorCall,
+            storage: MutableMap<IrValueSymbol, DotNetGenericOwnerPhysicalStorageFact>,
         ): DotNetGenericOwnerProducedValueFact? {
             val ownerAuthority = authority ?: return null
-            val view = when (val binding = bindExactLocalGenericOwnerConstructedViewOrError(
-                expression.type,
-                owner,
-                ownerAuthority.physicalAuthority,
-            )) {
-                is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
-                is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
-                    error("Internal .NET backend error: ${binding.reason}")
-                DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return null
+            val use = expression.dotNetExactGenericOwnerConstructorUseOrNull(owner) ?: return null
+            val constructedPlan = context.genericOwnerArchitecturePlans[use.constructedClass]
+                ?.takeIf(DotNetGenericOwnerArchitecturePlan::isReifiedByGenericOwnerRehearsal)
+                ?.takeIf { candidate -> candidate.owner.kind == ClassKind.CLASS }
+                ?: return null
+            val constructorPlan = constructedPlan.constructors.singleOrNull { candidate ->
+                candidate.source === expression.symbol.owner
+            } ?: return null
+            if (constructorPlan.parameterSlotDomains.size != expression.symbol.owner.parameters.size) {
+                return null
             }
+
+            val view = bindExactOwnerDependentViewOrNull(
+                use.constructedType,
+                ownerAuthority,
+            ) ?: return null
+            val constructedIdentity = ownerAuthority.physicalAuthority
+                .genericClassIdentityOrNull(use.constructedClass.symbol)
+                ?: return null
+            if (view.family != constructedIdentity) return null
+
+            for (determiningUse in use.determiningUses) {
+                val parameterIndex = determiningUse.parameterIndex
+                if (parameterIndex in constructorPlan.semanticObjectParameterIndices) {
+                    // The frozen constructor MethodDef accepts this capture through object. It may
+                    // affect the generated object's state and later semantic operations, but it
+                    // cannot invalidate the separately bound `newobj Generated<!T>` TypeSpec.
+                    if (expression.arguments.getOrNull(parameterIndex) == null) return null
+                    continue
+                }
+                if (constructorPlan.parameterSlotDomains.getOrNull(parameterIndex) !=
+                    DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT
+                ) {
+                    return null
+                }
+                val expectedDependencies = determiningUse.substitutedParameterType
+                    .dotNetGenericOwnerParameterDependencies(owner)
+                if (expectedDependencies != determiningUse.requiredOwnerParameters) return null
+                val expected = bindExactOwnerDependentCarrierOrNull(
+                    determiningUse.substitutedParameterType,
+                    ownerAuthority,
+                ) ?: return null
+                val argument = expression.arguments.getOrNull(parameterIndex) ?: return null
+                val produced = evaluateInitializerOrNull(argument, storage) ?: return null
+                if (!produced.provesExactConstructorInput(expected, ownerAuthority)) return null
+            }
+
             val carrier = when (val binding = ownerAuthority.declarations.carrierOrError(
                 view.construction,
             )) {
@@ -852,6 +911,120 @@ internal class DotNetGenericOwnerPhysicalValueShadowAnalysis(
                     DotNetGenericOwnerPhysicalViewEvidence.CONSTRUCTOR_ALLOCATION,
                 ),
                 DotNetGenericOwnerPhysicalNullState.NON_NULL,
+            )
+        }
+
+        /** One carrier selected recursively from the current declaration epoch, never a mapper. */
+        private fun bindExactOwnerDependentCarrierOrNull(
+            type: IrType,
+            ownerAuthority: OwnerAuthority,
+        ): DotNetGenericOwnerExactConstructorInputCarrier? {
+            return when (val binding = bindExactLocalGenericOwnerDependentCarrierOrError(
+                type,
+                owner,
+                ownerAuthority.identity,
+                ownerAuthority.declarations,
+            ) { classifier ->
+                ownerAuthority.physicalAuthority.genericClassIdentityOrNull(classifier)
+                    ?: ownerAuthority.physicalAuthority.naturalInterfaceIdentityOrNull(classifier)
+            }) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound ->
+                    DotNetGenericOwnerExactConstructorInputCarrier(
+                        binding.value.carrier,
+                        binding.value.view,
+                    )
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                    error("Internal .NET backend error: ${binding.reason}")
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable -> null
+            }
+        }
+
+        private fun bindExactOwnerDependentViewOrNull(
+            type: IrType,
+            ownerAuthority: OwnerAuthority,
+        ): DotNetGenericOwnerPhysicalView? =
+            bindExactOwnerDependentCarrierOrNull(type, ownerAuthority)?.view
+
+        private fun DotNetGenericOwnerProducedValueFact.provesExactConstructorInput(
+            expected: DotNetGenericOwnerExactConstructorInputCarrier,
+            ownerAuthority: OwnerAuthority,
+        ): Boolean {
+            if (!nullState.canBeNonNull) return false
+            val direct = layout as? DotNetGenericOwnerProducedValueLayout.Direct ?: return false
+            if (direct.carrier == expected.carrier) return true
+            val expectedView = expected.view ?: return false
+            return when (val proof = DotNetGenericOwnerAuthenticatedPhysicalView.prove(
+                this,
+                ownerAuthority.declarations,
+                expectedView,
+            )) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> true
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                    error("Internal .NET backend error: ${proof.reason}")
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable -> false
+            }
+        }
+
+        /**
+         * Reads only a BOUND field on the exact current physical receiver. This transfer cannot
+         * specialize object state: its result carrier is the producer-wide FieldDef carrier, so
+         * a semantic/object field naturally fails any later `!T` constructor-input proof.
+         */
+        private fun evaluateFieldReadOrNull(
+            expression: IrGetField,
+            storage: MutableMap<IrValueSymbol, DotNetGenericOwnerPhysicalStorageFact>,
+        ): DotNetGenericOwnerProducedValueFact? {
+            val ownerAuthority = authority ?: return null
+            val state = ownerAuthority.physicalAuthority.stateOrNull(expression.symbol) ?: return null
+            if (state.fieldDefinition.declaringType != ownerAuthority.identity ||
+                state.fieldDefinition.isStatic
+            ) {
+                return null
+            }
+            val receiverExpression = expression.receiver ?: return null
+            val receiver = evaluateInitializerOrNull(receiverExpression, storage) ?: return null
+            val receiverView = ((ownerAuthority.receiverStorage.storageLayout.primaryCarrier.carrier.type as?
+                    DotNetGenericOwnerSymbolicCarrierReference.Constructed)?.let(
+                ::DotNetGenericOwnerPhysicalView,
+            )) ?: return null
+            when (val proof = DotNetGenericOwnerAuthenticatedPhysicalView.prove(
+                receiver,
+                ownerAuthority.declarations,
+                receiverView,
+            )) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> Unit
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                    error("Internal .NET backend error: ${proof.reason}")
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return null
+            }
+            val carrier = when (val binding = ownerAuthority.declarations.carrierOrError(
+                state.fieldDefinition.carrier,
+            )) {
+                is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+                is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                    error("Internal .NET backend error: ${binding.reason}")
+                DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return null
+            }
+            var provenance = DotNetGenericOwnerPhysicalValueProvenance(
+                DotNetGenericOwnerGuaranteedViews.Unknown,
+            )
+            (carrier.type as? DotNetGenericOwnerSymbolicCarrierReference.Constructed)?.let { construction ->
+                provenance = DotNetGenericOwnerPhysicalValueProvenance.noNonNullViews().guarantee(
+                    DotNetGenericOwnerPhysicalView(construction),
+                    DotNetGenericOwnerPhysicalViewEvidence.FROZEN_FIELD,
+                )
+            }
+            val nullState = if (expression.type.isMarkedNullable() ||
+                carrier.nullEncoding == DotNetGenericOwnerPhysicalNullEncoding.SUBSTITUTION_DEPENDENT
+            ) {
+                DotNetGenericOwnerPhysicalNullState.MAYBE_NULL
+            } else {
+                DotNetGenericOwnerPhysicalNullState.NON_NULL
+            }
+            return DotNetGenericOwnerProducedValueFact(
+                DotNetGenericOwnerProducedValueLayout.Direct(carrier),
+                provenance,
+                nullState,
             )
         }
 

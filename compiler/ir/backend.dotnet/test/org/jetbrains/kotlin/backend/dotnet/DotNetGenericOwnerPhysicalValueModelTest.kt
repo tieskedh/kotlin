@@ -32,6 +32,7 @@ import org.jetbrains.kotlin.ir.expressions.impl.IrGetValueImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrReturnImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrTypeOperatorCallImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrWhenImpl
+import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.impl.IrExternalPackageFragmentSymbolImpl
 import org.jetbrains.kotlin.ir.symbols.impl.IrClassSymbolImpl
 import org.jetbrains.kotlin.ir.symbols.impl.IrSimpleFunctionSymbolImpl
@@ -40,6 +41,7 @@ import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.SimpleTypeNullability
 import org.jetbrains.kotlin.ir.types.defaultType
 import org.jetbrains.kotlin.ir.types.impl.IrSimpleTypeImpl
+import org.jetbrains.kotlin.ir.types.impl.IrStarProjectionImpl
 import org.jetbrains.kotlin.ir.types.impl.makeTypeProjection
 import org.jetbrains.kotlin.ir.util.IrErrorModuleFragment
 import org.jetbrains.kotlin.name.FqName
@@ -978,6 +980,303 @@ class DotNetGenericOwnerPhysicalValueModelTest {
     }
 
     @Test
+    fun `final state seal requires exact MethodDef parameter evidence for typed writers`() {
+        val fixture = stateEmissionFixture()
+
+        fun reject(
+            description: String,
+            typeDefs: List<DotNetGenericOwnerPhysicalTypeDefEmissionObservation>,
+            expectedMessage: String,
+        ) {
+            val failure = assertFailsWith<IllegalStateException>(
+                "final state seal accepted $description",
+            ) {
+                fixture.authority.sealFinalStateFields(
+                    listOf(fixture.scopeObservation(typeDefs = typeDefs)),
+                )
+            }
+            assertTrue(
+                expectedMessage in failure.message.orEmpty(),
+                "final state seal rejected $description for the wrong reason: ${failure.message}",
+            )
+        }
+
+        reject(
+            "a missing writer parameter",
+            listOf(fixture.ownerObservation.copy(methodDefParameters = emptyList())),
+            "no unique final MethodDef observation",
+        )
+        reject(
+            "a duplicate writer parameter",
+            listOf(fixture.ownerObservation.copy(methodDefParameters = listOf(
+                fixture.writerParameterObservation,
+                fixture.writerParameterObservation,
+            ))),
+            "no unique final MethodDef observation",
+        )
+        reject(
+            "an object writer for a typed state slot",
+            listOf(fixture.ownerObservation.copy(methodDefParameters = listOf(
+                fixture.writerParameterObservation.copy(
+                    carrier = DotNetGenericOwnerObservedMethodCarrier.Leaf(
+                        DotNetGenericOwnerPhysicalTypeKind.OBJECT,
+                    ),
+                ),
+            ))),
+            "changed its exact carrier",
+        )
+
+        val hostileOwnerDeclaration = testOwner("WrongWriterOwner")
+        val hostileOwner = DotNetGenericOwnerObservedLocalTypeDef(
+            physicalKey = DotNetGenericOwnerObservedPhysicalTypeDefKey(13),
+            identity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+                hostileOwnerDeclaration.symbol,
+                view = null,
+            ),
+            genericArity = 1,
+            category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+        )
+        val wrongOwnerObservation = fixture.ownerObservation.copy(
+            physicalType = DotNetGenericOwnerObservedMethodDefOwner.Local(hostileOwner),
+            physicalKey = hostileOwner.physicalKey,
+            claimedAliases = hostileOwner.aliases,
+            physicalTypePath = listOf("sample.WrongWriterOwner`1"),
+            fieldDefinitions = emptyList(),
+            methodDefParameters = listOf(fixture.writerParameterObservation),
+        )
+        reject(
+            "writer evidence emitted on another TypeDef",
+            listOf(
+                fixture.ownerObservation.copy(methodDefParameters = emptyList()),
+                wrongOwnerObservation,
+            ),
+            "no unique final TypeDef observation",
+        )
+    }
+
+    @Test
+    fun `final state seal preserves an exact local construction and its ordered arguments`() {
+        val packageFragment = IrExternalPackageFragmentImpl(
+            IrExternalPackageFragmentSymbolImpl(),
+            FqName("sample"),
+            IrErrorModuleFragment,
+        )
+        val owner = IrFactoryImpl.buildClass {
+            name = Name.identifier("ConstructedStateOwner")
+        }.also { declaration ->
+            declaration.parent = packageFragment
+            declaration.addTypeParameter { name = Name.identifier("First") }
+            declaration.addTypeParameter { name = Name.identifier("Second") }
+            packageFragment.declarations += declaration
+        }
+        val nested = IrFactoryImpl.buildClass {
+            name = Name.identifier("ConstructedStateValue")
+        }.also { declaration ->
+            declaration.parent = packageFragment
+            declaration.addTypeParameter { name = Name.identifier("Left") }
+            declaration.addTypeParameter { name = Name.identifier("Right") }
+            packageFragment.declarations += declaration
+        }
+        val unrelated = IrFactoryImpl.buildClass {
+            name = Name.identifier("UnrelatedStateValue")
+        }.also { declaration ->
+            declaration.parent = packageFragment
+            declaration.addTypeParameter { name = Name.identifier("Left") }
+            declaration.addTypeParameter { name = Name.identifier("Right") }
+            packageFragment.declarations += declaration
+        }
+        val field = testField(
+            owner,
+            "state",
+            IrSimpleTypeImpl(
+                nested.symbol,
+                SimpleTypeNullability.NOT_SPECIFIED,
+                listOf(
+                    makeTypeProjection(owner.typeParameters[0].defaultType, Variance.INVARIANT),
+                    makeTypeProjection(owner.typeParameters[1].defaultType, Variance.INVARIANT),
+                ),
+                annotations = emptyList(),
+            ),
+        )
+        val writer = IrFactoryImpl.buildFun {
+            name = Name.identifier("replace")
+            returnType = field.type
+        }.also { declaration ->
+            declaration.parent = owner
+            owner.declarations += declaration
+        }
+        val writerParameter = writer.addValueParameter("next", field.type)
+        val ownerIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(owner.symbol, view = null)
+        val nestedIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(nested.symbol, view = null)
+        val unrelatedIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(unrelated.symbol, view = null)
+        val inputs = listOf(
+            DotNetLocalGenericOwnerPhysicalTypeInput(
+                ownerIdentity,
+                "ConstructedStateOwner",
+                dotNetInvariantUnconstrainedPhysicalGenericParameters(2),
+                DotNetLocalGenericOwnerPhysicalTypeRole.GENERIC_CLASS,
+            ),
+            DotNetLocalGenericOwnerPhysicalTypeInput(
+                nestedIdentity,
+                "ConstructedStateValue",
+                dotNetInvariantUnconstrainedPhysicalGenericParameters(2),
+                DotNetLocalGenericOwnerPhysicalTypeRole.GENERIC_CLASS,
+            ),
+        )
+        val early = assertIs<
+                DotNetGenericOwnerPhysicalBindingResult.Bound<DotNetLocalGenericOwnerPhysicalAuthority>,
+                >(DotNetLocalGenericOwnerPhysicalAuthority.bindEarly(inputs)).value
+        lateinit var expectedConstruction: DotNetGenericOwnerSymbolicCarrierReference.Constructed
+        val authority = assertIs<
+                DotNetGenericOwnerPhysicalBindingResult.Bound<DotNetLocalGenericOwnerPhysicalAuthority>,
+                >(early.advanceBound(emptyList()) { provisional ->
+            expectedConstruction = boundConstruction(
+                provisional,
+                nestedIdentity,
+                listOf(
+                    boundTypeParameter(provisional, ownerIdentity, 0),
+                    boundTypeParameter(provisional, ownerIdentity, 1),
+                ),
+            )
+            DotNetGenericOwnerPhysicalBindingResult.Bound(
+                DotNetLocalGenericOwnerPhysicalBoundInput(
+                    methodDefinitions = emptyList(),
+                    callableFamilies = emptyList(),
+                    directSupertypeEdgeSets = emptyList(),
+                    stateFamilies = listOf(DotNetLocalGenericOwnerPhysicalStateFamilyInput(
+                        owner = ownerIdentity,
+                        boundInstanceFields = listOf(field.symbol),
+                        states = listOf(DotNetLocalGenericOwnerPhysicalStateInput(
+                            field = field.symbol,
+                            logicalFieldName = "state",
+                            requirement = DotNetGenericOwnerStateCarrierRequirement
+                                .TYPED_STORAGE_PRODUCER_GRAPH_PROVEN,
+                            memorySemantics = DotNetGenericOwnerStateMemorySemantics.PLAIN,
+                            hasImplicitFieldInitializer = false,
+                            fieldDefinition = fieldDescription(
+                                field.symbol,
+                                ownerIdentity,
+                                expectedConstruction,
+                            ),
+                            typedWriterParameters = listOf(
+                                DotNetLocalGenericOwnerPhysicalStateWriterParameterInput(
+                                    writer.symbol,
+                                    writerParameter.symbol,
+                                ),
+                            ),
+                        )),
+                    )),
+                ),
+            )
+        }).value
+        val observedOwner = DotNetGenericOwnerObservedLocalTypeDef(
+            DotNetGenericOwnerObservedPhysicalTypeDefKey(10),
+            ownerIdentity,
+            genericArity = 2,
+            category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+        )
+        val observedNested = DotNetGenericOwnerObservedLocalTypeDef(
+            DotNetGenericOwnerObservedPhysicalTypeDefKey(11),
+            nestedIdentity,
+            genericArity = 2,
+            category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+        )
+        val observedUnrelated = DotNetGenericOwnerObservedLocalTypeDef(
+            DotNetGenericOwnerObservedPhysicalTypeDefKey(12),
+            unrelatedIdentity,
+            genericArity = 2,
+            category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+        )
+        val expectedArguments = listOf(
+            DotNetGenericOwnerObservedMethodCarrier.OwnerParameter(observedOwner, 0),
+            DotNetGenericOwnerObservedMethodCarrier.OwnerParameter(observedOwner, 1),
+        )
+        val fieldObservation = DotNetGenericOwnerPhysicalFieldDefObservation(
+            physicalField = field.symbol,
+            physicalFieldIdentity = DotNetGenericOwnerPhysicalFieldDefIdentity.Local(field.symbol),
+            physicalName = "state",
+            visibility = DotNetIlRawMethodDefVisibility.PRIVATE,
+            isStatic = false,
+            isInitOnly = false,
+            carrier = DotNetGenericOwnerObservedMethodCarrier.LocalConstruction(
+                observedNested,
+                expectedArguments,
+            ),
+        )
+        val ownerObservation = DotNetGenericOwnerPhysicalTypeDefEmissionObservation(
+            physicalType = DotNetGenericOwnerObservedMethodDefOwner.Local(observedOwner),
+            physicalKey = observedOwner.physicalKey,
+            claimedAliases = observedOwner.aliases,
+            physicalTypePath = listOf("sample.ConstructedStateOwner`2"),
+            flags = DotNetIlRawTypeDefFlags(
+                visibility = DotNetIlRawTypeDefVisibility.PUBLIC,
+                layout = DotNetIlRawTypeDefLayout.AUTO,
+                stringFormat = DotNetIlRawTypeDefStringFormat.ANSI,
+                isInterface = false,
+                isAbstract = false,
+                isSealed = false,
+                isBeforeFieldInit = false,
+            ),
+            genericParameters = List(2) {
+                DotNetGenericOwnerPhysicalTypeDefGenericParameterObservation(
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT,
+                    constraints = emptyList(),
+                )
+            },
+            directSupertypes = emptyList(),
+            fieldDefinitions = listOf(fieldObservation),
+            methodDefParameters = listOf(
+                DotNetGenericOwnerPhysicalMethodDefParameterObservation(
+                    writer.symbol,
+                    writerParameter.symbol,
+                    fieldObservation.carrier,
+                ),
+            ),
+        )
+        val writerObservation = ownerObservation.methodDefParameters.single()
+        fun seal(
+            fieldCarrier: DotNetGenericOwnerObservedMethodCarrier,
+            writerCarrier: DotNetGenericOwnerObservedMethodCarrier = writerObservation.carrier,
+        ) = authority.sealFinalStateFields(
+            listOf(DotNetGenericOwnerCompleteEmissionScopeObservations(
+                scope = DotNetIlEmissionScope.USER,
+                typeDefs = listOf(ownerObservation.copy(
+                    fieldDefinitions = listOf(fieldObservation.copy(carrier = fieldCarrier)),
+                    methodDefParameters = listOf(writerObservation.copy(carrier = writerCarrier)),
+                )),
+                methodDefs = emptyList(),
+                methodImpls = emptyList(),
+            )),
+        )
+
+        assertEquals(
+            DotNetGenericOwnerPhysicalStateEmissionCarrierKind.CONSTRUCTED,
+            seal(fieldObservation.carrier).single().carrierKind,
+        )
+        listOf(
+            DotNetGenericOwnerObservedMethodCarrier.LocalConstruction(
+                observedUnrelated,
+                expectedArguments,
+            ),
+            DotNetGenericOwnerObservedMethodCarrier.LocalConstruction(
+                observedNested,
+                expectedArguments.reversed(),
+            ),
+        ).forEach { hostileCarrier ->
+            val failure = assertFailsWith<IllegalStateException> { seal(hostileCarrier) }
+            assertTrue("changed its exact construction" in failure.message.orEmpty())
+        }
+        val reversedWriterCarrier = DotNetGenericOwnerObservedMethodCarrier.LocalConstruction(
+            observedNested,
+            expectedArguments.reversed(),
+        )
+        val writerFailure = assertFailsWith<IllegalStateException> {
+            seal(fieldObservation.carrier, reversedWriterCarrier)
+        }
+        assertTrue("writer parameter changed its exact carrier" in writerFailure.message.orEmpty())
+    }
+
+    @Test
     fun `final state seal rejects duplicate unbindable and cross-scope claimants`() {
         val fixture = stateEmissionFixture()
         val duplicateOwner = fixture.observedOwner.copy(
@@ -1841,6 +2140,360 @@ class DotNetGenericOwnerPhysicalValueModelTest {
     }
 
     @Test
+    fun `current MethodDef projects its exact bound emitter header`() {
+        val owner = testOwner("ProjectedCurrentMethodOwner")
+        owner.parent = IrExternalPackageFragmentImpl(
+            IrExternalPackageFragmentSymbolImpl(),
+            FqName("sample"),
+            IrErrorModuleFragment,
+        )
+        val function = IrFactoryImpl.buildFun {
+            name = Name.identifier("route")
+        }.also { declaration ->
+            declaration.parent = owner
+            declaration.addTypeParameter { name = Name.identifier("R") }
+            owner.declarations += declaration
+        }
+        val ownerIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(owner.symbol, view = null)
+        val methodIdentity = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+            function.symbol,
+            DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+        )
+        val ownerInput = DotNetLocalGenericOwnerPhysicalTypeInput(
+            ownerIdentity,
+            "ProjectedCurrentMethodOwner",
+            dotNetInvariantUnconstrainedPhysicalGenericParameters(1),
+            DotNetLocalGenericOwnerPhysicalTypeRole.GENERIC_CLASS,
+        )
+        val early = assertIs<
+                DotNetGenericOwnerPhysicalBindingResult.Bound<
+                        DotNetLocalGenericOwnerPhysicalAuthority,
+                        >,
+                >(DotNetLocalGenericOwnerPhysicalAuthority.bindEarly(listOf(ownerInput))).value
+        val ownerParameter = DotNetGenericOwnerSymbolicCarrierReference.Parameter
+            .unboundTypeParameterReference(ownerIdentity, 0)
+        val methodParameter = DotNetGenericOwnerSymbolicCarrierReference.Parameter
+            .methodParameterReference(methodIdentity, 0)
+        val method = DotNetGenericOwnerPhysicalMethodDefReference(
+            identity = methodIdentity,
+            declaringType = ownerIdentity,
+            visibility = DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC,
+            dispatch = DotNetGenericOwnerPhysicalMemberDispatch.FINAL,
+            signature = DotNetGenericOwnerPhysicalMethodSignatureReference(
+                isInstance = true,
+                genericArity = 1,
+                resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct(
+                    callableSlot(
+                        DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT,
+                        ownerParameter,
+                    ),
+                ),
+                parameterSlots = listOf(
+                    callableSlot(
+                        DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                        methodParameter,
+                    ),
+                ),
+            ),
+            genericParameters = dotNetInvariantUnconstrainedPhysicalGenericParameters(1),
+        )
+        val authority = assertIs<
+                DotNetGenericOwnerPhysicalBindingResult.Bound<
+                        DotNetLocalGenericOwnerPhysicalAuthority,
+                        >,
+                >(early.advanceBound(emptyList()) {
+                    DotNetGenericOwnerPhysicalBindingResult.Bound(
+                        DotNetLocalGenericOwnerPhysicalBoundInput(
+                            methodDefinitions = listOf(method),
+                            currentMethods = listOf(
+                                DotNetLocalGenericOwnerPhysicalCurrentMethodInput(
+                                    function.symbol,
+                                    methodIdentity,
+                                ),
+                            ),
+                            callableFamilies = emptyList(),
+                            directSupertypeEdgeSets = emptyList(),
+                        ),
+                    )
+                }).value
+        val ownerInfo = DotNetIlClassInfo(
+            "ProjectedCurrentMethodOwner`1",
+            typeParameterVariances = listOf(Variance.INVARIANT),
+        )
+        val physicalName = "projectedRoute"
+        val projected = assertNotNull(
+            authority.currentMethodInfoOrNull(
+                function,
+                DotNetIlTypeMapper(mapOf(owner to ownerInfo)),
+                physicalName,
+            ),
+        )
+        val selected = assertNotNull(
+            authority.selectedBoundMethodInfoOrNull(
+                function,
+                DotNetIlTypeMapper(mapOf(owner to ownerInfo)),
+                physicalName,
+            ),
+        )
+        assertEquals(projected.owner, selected.owner)
+        assertEquals(projected.signature, selected.signature)
+        assertEquals(projected.physicalMethodName, selected.physicalMethodName)
+        assertEquals(
+            projected.genericOwnerPhysicalMethodIdentity,
+            selected.genericOwnerPhysicalMethodIdentity,
+        )
+
+        assertTrue(projected.owner === ownerInfo)
+        assertEquals(
+            DotNetIlMethodSignature(
+                returnType = DotNetIlReturnType.Value(
+                    DotNetIlValueType.TypeParameter(0, isMethodParameter = false),
+                ),
+                parameterTypes = listOf(
+                    ownerInfo.dotNetOpenSelfType(),
+                    DotNetIlValueType.TypeParameter(0, isMethodParameter = true),
+                ),
+                hasThis = true,
+                methodGenericParameterCount = 1,
+            ),
+            projected.signature,
+        )
+        assertEquals(methodIdentity, projected.genericOwnerPhysicalMethodIdentity)
+        assertEquals(physicalName, projected.physicalMethodName)
+
+        val failure = assertFailsWith<DotNetIlUnsupportedException> {
+            authority.currentMethodInfoOrNull(
+                function,
+                DotNetIlTypeMapper(emptyMap()),
+                physicalName,
+            )
+        }
+        assertEquals(
+            "BOUND physical owner of current MethodDef 'route' is unavailable",
+            failure.reason,
+        )
+    }
+
+    @Test
+    fun `callable family projects its selected bound MethodDefs without current authority`() {
+        val samplePackage = IrExternalPackageFragmentImpl(
+            IrExternalPackageFragmentSymbolImpl(),
+            FqName("sample"),
+            IrErrorModuleFragment,
+        )
+        val kotlinPackage = IrExternalPackageFragmentImpl(
+            IrExternalPackageFragmentSymbolImpl(),
+            FqName("kotlin"),
+            IrErrorModuleFragment,
+        )
+        val anyOwner = IrFactoryImpl.buildClass {
+            name = Name.identifier("Any")
+            kind = ClassKind.CLASS
+        }.also { declaration ->
+            declaration.parent = kotlinPackage
+            kotlinPackage.declarations += declaration
+        }
+        val naturalOwner = IrFactoryImpl.buildClass {
+            name = Name.identifier("Producer")
+            kind = ClassKind.INTERFACE
+        }.also { declaration ->
+            declaration.parent = samplePackage
+            declaration.addTypeParameter {
+                name = Name.identifier("T")
+                variance = Variance.OUT_VARIANCE
+            }
+            samplePackage.declarations += declaration
+        }
+        val semanticOwner = IrFactoryImpl.buildClass {
+            name = Name.identifier("ProducerSemantic")
+            kind = ClassKind.INTERFACE
+        }.also { declaration ->
+            declaration.parent = samplePackage
+            samplePackage.declarations += declaration
+        }
+        val genericClassOwner = IrFactoryImpl.buildClass {
+            name = Name.identifier("ProjectionHost")
+            kind = ClassKind.CLASS
+        }.also { declaration ->
+            declaration.parent = samplePackage
+            declaration.addTypeParameter {
+                name = Name.identifier("T")
+                variance = Variance.INVARIANT
+            }
+            samplePackage.declarations += declaration
+        }
+        val naturalSelfType = IrSimpleTypeImpl(
+            naturalOwner.symbol,
+            SimpleTypeNullability.NOT_SPECIFIED,
+            arguments = listOf(makeTypeProjection(
+                naturalOwner.typeParameters.single().defaultType,
+                Variance.INVARIANT,
+            )),
+            annotations = emptyList(),
+        )
+        val semanticSelfType = IrSimpleTypeImpl(
+            semanticOwner.symbol,
+            SimpleTypeNullability.NOT_SPECIFIED,
+            arguments = emptyList(),
+            annotations = emptyList(),
+        )
+        val naturalMember = IrFactoryImpl.buildFun {
+            name = Name.identifier("produce")
+            returnType = naturalOwner.typeParameters.single().defaultType
+        }.also { declaration ->
+            declaration.parent = naturalOwner
+            declaration.addValueParameter {
+                name = SpecialNames.THIS
+                type = naturalSelfType
+            }.kind = IrParameterKind.DispatchReceiver
+            naturalOwner.declarations += declaration
+        }
+        val anyNullableType = IrSimpleTypeImpl(
+            anyOwner.symbol,
+            SimpleTypeNullability.MARKED_NULLABLE,
+            arguments = emptyList(),
+            annotations = emptyList(),
+        )
+        val semanticMember = IrFactoryImpl.buildFun {
+            name = Name.identifier("produceSemantic")
+            returnType = anyNullableType
+        }.also { declaration ->
+            declaration.parent = semanticOwner
+            declaration.addValueParameter {
+                name = SpecialNames.THIS
+                type = semanticSelfType
+            }.kind = IrParameterKind.DispatchReceiver
+            semanticOwner.declarations += declaration
+        }
+        val naturalOwnerIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+            naturalOwner.symbol,
+            DotNetGenericInterfaceView.DECLARED,
+        )
+        val semanticOwnerIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+            semanticOwner.symbol,
+            view = null,
+        )
+        val naturalMethodIdentity = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+            naturalMember.symbol,
+            DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+        )
+        val semanticMethodIdentity = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(
+            semanticMember.symbol,
+            role = null,
+        )
+        val naturalInput = DotNetLocalGenericOwnerPhysicalTypeInput(
+            naturalOwnerIdentity,
+            "Producer",
+            listOf(DotNetGenericOwnerPhysicalGenericParameterReference(
+                DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT,
+                constraints = emptyList(),
+            )),
+            DotNetLocalGenericOwnerPhysicalTypeRole.NATURAL_INTERFACE,
+        )
+        val semanticInput = DotNetLocalGenericOwnerPhysicalTypeInput(
+            semanticOwnerIdentity,
+            "ProducerSemantic",
+            genericParameters = emptyList(),
+            role = DotNetLocalGenericOwnerPhysicalTypeRole.SEMANTIC_CAPABILITY,
+        )
+        val genericClassInput = DotNetLocalGenericOwnerPhysicalTypeInput(
+            DotNetGenericOwnerPhysicalTypeDefIdentity.Local(genericClassOwner.symbol, view = null),
+            "ProjectionHost",
+            dotNetInvariantUnconstrainedPhysicalGenericParameters(1),
+            DotNetLocalGenericOwnerPhysicalTypeRole.GENERIC_CLASS,
+        )
+        val early = assertIs<
+                DotNetGenericOwnerPhysicalBindingResult.Bound<
+                        DotNetLocalGenericOwnerPhysicalAuthority,
+                        >,
+                >(DotNetLocalGenericOwnerPhysicalAuthority.bindEarly(
+            listOf(genericClassInput),
+        )).value
+        val naturalMethod = callableMethodDescription(
+            naturalMethodIdentity,
+            naturalOwnerIdentity,
+            parameterSlots = emptyList(),
+            resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct(
+                callableSlot(
+                    DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT,
+                    DotNetGenericOwnerSymbolicCarrierReference.Parameter
+                        .unboundTypeParameterReference(naturalOwnerIdentity, 0),
+                ),
+            ),
+        )
+        val semanticMethod = callableMethodDescription(
+            semanticMethodIdentity,
+            semanticOwnerIdentity,
+            parameterSlots = emptyList(),
+            resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutReference.Direct(
+                callableSlot(
+                    DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT,
+                    objectType(),
+                ),
+            ),
+        )
+        val authorityBinding = early.advanceBound(listOf(naturalInput, semanticInput)) {
+            DotNetGenericOwnerPhysicalBindingResult.Bound(
+                DotNetLocalGenericOwnerPhysicalBoundInput(
+                    methodDefinitions = listOf(naturalMethod, semanticMethod),
+                    callableFamilies = listOf(DotNetLocalGenericOwnerPhysicalCallableFamilyInput(
+                        naturalMember.symbol,
+                        semanticMember.symbol,
+                    )),
+                    directSupertypeEdgeSets = emptyList(),
+                ),
+            )
+        }
+        val authority = assertIs<
+                DotNetGenericOwnerPhysicalBindingResult.Bound<
+                        DotNetLocalGenericOwnerPhysicalAuthority,
+                        >,
+                >(
+            authorityBinding,
+            (authorityBinding as? DotNetGenericOwnerPhysicalBindingResult.Conflict)?.reason,
+        ).value
+        val naturalInfo = DotNetIlClassInfo(
+            "Producer`1",
+            typeParameterVariances = listOf(Variance.OUT_VARIANCE),
+        )
+        val semanticInfo = DotNetIlClassInfo("ProducerSemantic")
+        val mapper = DotNetIlTypeMapper(
+            availableClasses = mapOf(
+                naturalOwner to naturalInfo,
+                semanticOwner to semanticInfo,
+            ),
+            genericInterfaces = mapOf(
+                naturalOwner to DotNetGenericInterfaceInfo(
+                    canonicalClassInfo = naturalInfo,
+                    declaredClassInfo = naturalInfo,
+                ),
+            ),
+            genericOwnerRehearsal = true,
+        )
+
+        assertNull(authority.currentMethodInfoOrNull(naturalMember, mapper, "Produce"))
+        val projectedNatural = assertNotNull(
+            authority.selectedBoundMethodInfoOrNull(naturalMember, mapper, "Produce"),
+        )
+        assertTrue(projectedNatural.owner === naturalInfo)
+        assertEquals(
+            DotNetIlReturnType.Value(DotNetIlValueType.TypeParameter(0, isMethodParameter = false)),
+            projectedNatural.signature.returnType,
+        )
+        assertEquals(naturalMethodIdentity, projectedNatural.genericOwnerPhysicalMethodIdentity)
+        assertEquals("Produce", projectedNatural.physicalMethodName)
+
+        assertNull(authority.currentMethodInfoOrNull(semanticMember, mapper, "ProduceSemantic"))
+        val projectedSemantic = assertNotNull(
+            authority.selectedBoundMethodInfoOrNull(semanticMember, mapper, "ProduceSemantic"),
+        )
+        assertTrue(projectedSemantic.owner === semanticInfo)
+        assertEquals(DotNetIlReturnType.Value(DotNetIlValueType.Object), projectedSemantic.signature.returnType)
+        assertEquals(semanticMethodIdentity, projectedSemantic.genericOwnerPhysicalMethodIdentity)
+        assertEquals("ProduceSemantic", projectedSemantic.physicalMethodName)
+    }
+
+    @Test
     fun `unrecorded declarations are unavailable and never inferred`() {
         val index = boundDeclarationIndex(emptyList(), emptyList())
         val owner = localOwnerIdentity(IrClassSymbolImpl())
@@ -2202,6 +2855,140 @@ class DotNetGenericOwnerPhysicalValueModelTest {
                 declarations,
                 listOf(sourceInput, resultInput).associateBy { input -> input.identity },
             ),
+        )
+    }
+
+    @Test
+    fun `exact local owner-dependent carrier recursively preserves ordered owner parameters`() {
+        val fixture = exactLocalCarrierFixture()
+        val orderedType = fixture.holderType(fixture.pairType(
+            fixture.owner.typeParameters[0].defaultType,
+            fixture.owner.typeParameters[1].defaultType,
+        ))
+        val swappedType = fixture.holderType(fixture.pairType(
+            fixture.owner.typeParameters[1].defaultType,
+            fixture.owner.typeParameters[0].defaultType,
+        ))
+
+        fun expected(firstIndex: Int, secondIndex: Int): DotNetGenericOwnerSymbolicCarrierReference.Constructed {
+            val pair = boundConstruction(
+                fixture.declarations,
+                fixture.pairIdentity,
+                listOf(
+                    boundTypeParameter(fixture.declarations, fixture.ownerIdentity, firstIndex),
+                    boundTypeParameter(fixture.declarations, fixture.ownerIdentity, secondIndex),
+                ),
+            )
+            return boundConstruction(fixture.declarations, fixture.holderIdentity, listOf(pair))
+        }
+
+        val ordered = fixture.bind(orderedType)
+        val swapped = fixture.bind(swappedType)
+        val expectedOrdered = expected(0, 1)
+        val expectedSwapped = expected(1, 0)
+
+        assertEquals(boundCarrier(fixture.declarations, expectedOrdered), ordered.carrier)
+        assertEquals(view(expectedOrdered), ordered.view)
+        assertEquals(boundCarrier(fixture.declarations, expectedSwapped), swapped.carrier)
+        assertEquals(view(expectedSwapped), swapped.view)
+        assertNotEquals(ordered, swapped)
+    }
+
+    @Test
+    fun `exact local owner-dependent carrier rejects unrelated owner and selector identities`() {
+        val fixture = exactLocalCarrierFixture()
+        val nestedType = fixture.holderType(fixture.pairType(
+            fixture.owner.typeParameters[0].defaultType,
+            fixture.owner.typeParameters[1].defaultType,
+        ))
+
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
+            bindExactLocalGenericOwnerDependentCarrierOrError(
+                nestedType,
+                fixture.owner,
+                fixture.outsiderIdentity,
+                fixture.declarations,
+                fixture::localDefinitionOrNull,
+            ),
+        )
+        assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(
+            bindExactLocalGenericOwnerDependentCarrierOrError(
+                nestedType,
+                fixture.owner,
+                fixture.ownerIdentity,
+                fixture.declarations,
+            ) { classifier ->
+                if (classifier === fixture.holder.symbol) fixture.outsiderIdentity
+                else fixture.localDefinitionOrNull(classifier)
+            },
+        )
+    }
+
+    @Test
+    fun `exact local owner-dependent carrier rejects projections stars and nullable owner parameters`() {
+        val fixture = exactLocalCarrierFixture()
+        val first = fixture.owner.typeParameters[0].defaultType
+        val second = fixture.owner.typeParameters[1].defaultType
+        val projected = fixture.pairType(
+            first,
+            second,
+            firstVariance = Variance.OUT_VARIANCE,
+        )
+        val starred = IrSimpleTypeImpl(
+            fixture.pair.symbol,
+            SimpleTypeNullability.NOT_SPECIFIED,
+            listOf(IrStarProjectionImpl, makeTypeProjection(second, Variance.INVARIANT)),
+            annotations = emptyList(),
+        )
+        val nullableOwnerParameter = IrSimpleTypeImpl(
+            fixture.owner.typeParameters[0].symbol,
+            SimpleTypeNullability.MARKED_NULLABLE,
+            arguments = emptyList(),
+            annotations = emptyList(),
+        )
+
+        assertEquals(DotNetGenericOwnerPhysicalBindingResult.Unavailable, fixture.bindResult(projected))
+        assertEquals(DotNetGenericOwnerPhysicalBindingResult.Unavailable, fixture.bindResult(starred))
+        assertEquals(DotNetGenericOwnerPhysicalBindingResult.Unavailable, fixture.bindResult(nullableOwnerParameter))
+    }
+
+    @Test
+    fun `exact local owner-dependent carrier rejects unadmitted and foreign nested inputs`() {
+        val fixture = exactLocalCarrierFixture()
+        val nestedType = fixture.holderType(fixture.pairType(
+            fixture.owner.typeParameters[0].defaultType,
+            fixture.owner.typeParameters[1].defaultType,
+        ))
+        val foreignNestedParameter = fixture.pair.typeParameters[0].defaultType
+
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            bindExactLocalGenericOwnerDependentCarrierOrError(
+                nestedType,
+                fixture.owner,
+                fixture.ownerIdentity,
+                fixture.declarations,
+            ) { classifier ->
+                fixture.localDefinitionOrNull(classifier).takeIf { classifier !== fixture.pair.symbol }
+            },
+        )
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            fixture.bindResult(fixture.holderType(fixture.pairType(
+                foreignNestedParameter,
+                fixture.owner.typeParameters[1].defaultType,
+            ))),
+        )
+    }
+
+    @Test
+    fun `exact local owner-dependent carrier does not infer a value class representation`() {
+        val fixture = exactLocalCarrierFixture()
+        fixture.holder.isValue = true
+
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            fixture.bindResult(fixture.holderType(fixture.owner.typeParameters[0].defaultType)),
         )
     }
 
@@ -6031,11 +6818,116 @@ class DotNetGenericOwnerPhysicalValueModelTest {
         symbol: IrSimpleFunctionSymbolImpl,
     ) = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(symbol, role = null)
 
+    private data class ExactLocalCarrierFixture(
+        val owner: IrClass,
+        val pair: IrClass,
+        val holder: IrClass,
+        val ownerIdentity: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+        val pairIdentity: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+        val holderIdentity: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+        val outsiderIdentity: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+        val declarations: DotNetGenericOwnerPhysicalDeclarationIndex,
+    ) {
+        fun pairType(
+            first: IrType,
+            second: IrType,
+            firstVariance: Variance = Variance.INVARIANT,
+        ): IrType = IrSimpleTypeImpl(
+            pair.symbol,
+            SimpleTypeNullability.NOT_SPECIFIED,
+            listOf(
+                makeTypeProjection(first, firstVariance),
+                makeTypeProjection(second, Variance.INVARIANT),
+            ),
+            annotations = emptyList(),
+        )
+
+        fun holderType(value: IrType): IrType = IrSimpleTypeImpl(
+            holder.symbol,
+            SimpleTypeNullability.NOT_SPECIFIED,
+            listOf(makeTypeProjection(value, Variance.INVARIANT)),
+            annotations = emptyList(),
+        )
+
+        fun localDefinitionOrNull(
+            classifier: IrClassSymbol,
+        ): DotNetGenericOwnerPhysicalTypeDefIdentity.Local? = when (classifier) {
+            pair.symbol -> pairIdentity
+            holder.symbol -> holderIdentity
+            else -> null
+        }
+
+        fun bindResult(
+            type: IrType,
+        ): DotNetGenericOwnerPhysicalBindingResult<DotNetGenericOwnerExactCarrierBinding> =
+            bindExactLocalGenericOwnerDependentCarrierOrError(
+                type,
+                owner,
+                ownerIdentity,
+                declarations,
+                ::localDefinitionOrNull,
+            )
+
+        fun bind(type: IrType): DotNetGenericOwnerExactCarrierBinding = assertIs<
+                DotNetGenericOwnerPhysicalBindingResult.Bound<DotNetGenericOwnerExactCarrierBinding>,
+                >(bindResult(type)).value
+    }
+
+    private fun exactLocalCarrierFixture(): ExactLocalCarrierFixture {
+        val owner = IrFactoryImpl.buildClass {
+            name = Name.identifier("ExactCarrierOwner")
+        }.also { declaration ->
+            declaration.addTypeParameter { name = Name.identifier("First") }
+            declaration.addTypeParameter { name = Name.identifier("Second") }
+        }
+        val pair = IrFactoryImpl.buildClass {
+            name = Name.identifier("ExactCarrierPair")
+        }.also { declaration ->
+            declaration.addTypeParameter { name = Name.identifier("Left") }
+            declaration.addTypeParameter { name = Name.identifier("Right") }
+        }
+        val holder = IrFactoryImpl.buildClass {
+            name = Name.identifier("ExactCarrierHolder")
+        }.also { declaration ->
+            declaration.addTypeParameter { name = Name.identifier("Value") }
+        }
+        val outsider = IrFactoryImpl.buildClass {
+            name = Name.identifier("ExactCarrierOutsider")
+        }.also { declaration ->
+            declaration.addTypeParameter { name = Name.identifier("First") }
+            declaration.addTypeParameter { name = Name.identifier("Second") }
+        }
+        val ownerIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(owner.symbol, view = null)
+        val pairIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(pair.symbol, view = null)
+        val holderIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(holder.symbol, view = null)
+        val outsiderIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(outsider.symbol, view = null)
+        val declarations = boundDeclarationIndex(
+            listOf(
+                typeDescription(ownerIdentity, 2, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+                typeDescription(pairIdentity, 2, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+                typeDescription(holderIdentity, 1, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+                typeDescription(outsiderIdentity, 2, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+            ),
+            emptyList(),
+        )
+        return ExactLocalCarrierFixture(
+            owner,
+            pair,
+            holder,
+            ownerIdentity,
+            pairIdentity,
+            holderIdentity,
+            outsiderIdentity,
+            declarations,
+        )
+    }
+
     private data class StateEmissionFixture(
         val authority: DotNetLocalGenericOwnerPhysicalAuthority,
         val owner: IrClass,
         val observedOwner: DotNetGenericOwnerObservedLocalTypeDef,
         val selectedFieldObservation: DotNetGenericOwnerPhysicalFieldDefObservation,
+        val writerParameterObservation: DotNetGenericOwnerPhysicalMethodDefParameterObservation,
         val ordinaryFieldObservation: DotNetGenericOwnerPhysicalFieldDefObservation,
         val ownerObservation: DotNetGenericOwnerPhysicalTypeDefEmissionObservation,
     ) {
@@ -6067,6 +6959,14 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             packageFragment.declarations += declaration
         }
         val selectedField = testField(owner, "state")
+        val writer = IrFactoryImpl.buildFun {
+            name = Name.identifier("replace")
+            returnType = selectedField.type
+        }.also { declaration ->
+            declaration.parent = owner
+            owner.declarations += declaration
+        }
+        val writerParameter = writer.addValueParameter("next", selectedField.type)
         val ordinaryField = testField(
             owner,
             "ordinary",
@@ -6114,6 +7014,12 @@ class DotNetGenericOwnerPhysicalValueModelTest {
                                     memorySemantics = DotNetGenericOwnerStateMemorySemantics.PLAIN,
                                     hasImplicitFieldInitializer = false,
                                     fieldDefinition = fieldDefinition,
+                                    typedWriterParameters = listOf(
+                                        DotNetLocalGenericOwnerPhysicalStateWriterParameterInput(
+                                            writer.symbol,
+                                            writerParameter.symbol,
+                                        ),
+                                    ),
                                 ),
                             ),
                         ),
@@ -6147,6 +7053,11 @@ class DotNetGenericOwnerPhysicalValueModelTest {
                 DotNetGenericOwnerPhysicalTypeKind.OBJECT,
             ),
         )
+        val writerParameterObservation = DotNetGenericOwnerPhysicalMethodDefParameterObservation(
+            writer.symbol,
+            writerParameter.symbol,
+            DotNetGenericOwnerObservedMethodCarrier.OwnerParameter(observedOwner, 0),
+        )
         val ownerObservation = DotNetGenericOwnerPhysicalTypeDefEmissionObservation(
             physicalType = DotNetGenericOwnerObservedMethodDefOwner.Local(observedOwner),
             physicalKey = observedOwner.physicalKey,
@@ -6169,12 +7080,14 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             ),
             directSupertypes = emptyList(),
             fieldDefinitions = listOf(selectedFieldObservation, ordinaryFieldObservation),
+            methodDefParameters = listOf(writerParameterObservation),
         )
         return StateEmissionFixture(
             authority = authority,
             owner = owner,
             observedOwner = observedOwner,
             selectedFieldObservation = selectedFieldObservation,
+            writerParameterObservation = writerParameterObservation,
             ordinaryFieldObservation = ordinaryFieldObservation,
             ownerObservation = ownerObservation,
         )

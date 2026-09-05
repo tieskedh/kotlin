@@ -5,12 +5,14 @@
 // calls deliberately share one hostile fixture: exact calls must construct the natural MethodSpec,
 // while widened calls must construct the corresponding semantic-capability MethodSpec.
 
-interface MethodGenericProducer<out T> {
-    fun <R> produce(marker: R): T
-}
-
+// Deliberately precedes its interface in source/IR order. A BOUND implementation MethodDef must
+// not depend on whether the local declaration slot happened to be registered by the emitter yet.
 private class MethodGenericFirstView<T>(private val value: T) : MethodGenericProducer<T> {
     override fun <R> produce(marker: R): T = value
+}
+
+interface MethodGenericProducer<out T> {
+    fun <R> produce(marker: R): T
 }
 
 private class MethodGenericSecondView<T>(private val value: T) : MethodGenericProducer<T> {

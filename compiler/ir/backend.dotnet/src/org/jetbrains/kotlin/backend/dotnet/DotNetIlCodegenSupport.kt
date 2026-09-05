@@ -64,6 +64,7 @@ import org.jetbrains.kotlin.ir.util.isNullable
 import org.jetbrains.kotlin.ir.util.isSubtypeOf
 import org.jetbrains.kotlin.ir.util.render
 import org.jetbrains.kotlin.load.dotnet.DotNetClrClasspathAssembly
+import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedDeclarationSource
 import org.jetbrains.kotlin.name.StandardClassIds
 
 /** Whether this is one of the primitive-array classifiers whose scalar element type is supported. */
@@ -1346,6 +1347,28 @@ internal class DotNetIlTypeMapper private constructor(
      * through this lookup so a removed class fails its users instead of leaving stale IL text.
      */
     fun classInfoOrNull(irClass: IrClass): DotNetIlClassInfo? {
+        if (irClass.dotNetImportedClrTypeAuthorityOrNull() != null) {
+            externalDeclarations.retainedForeignClassKotlinAuthorityConflictOrNull(irClass)?.let { reason ->
+                dotNetUnsupported(reason)
+            }
+            val competingLocalAuthorities = buildList {
+                if (irClass in availableClasses) add("current emitted TypeDef")
+                if (irClass in genericClasses) add("local generic-class plan")
+                if (irClass in genericInterfaces) add("local generic-interface plan")
+                if (irClass in genericOwnerCapabilities) add("local semantic capability")
+                if (irClass in genericOwnerReflectionCapabilities) add("local reflection capability")
+            }
+            if (competingLocalAuthorities.isNotEmpty()) {
+                dotNetUnsupported(
+                    "retained foreign CLR TypeDef '${irClass.name.asString()}' also has " +
+                            competingLocalAuthorities.joinToString(),
+                )
+            }
+            return (importedClrDeclarations.classInfoOrNull(irClass)
+                ?: dotNetUnsupported(
+                    "foreign CLR class '${irClass.name.asString()}' lost its retained TypeDef authority",
+                )).also(::recordAssemblyReference)
+        }
         val classifierInfo = classifierInfo(irClass)
         val runtimeGenericInfo = DotNetRuntimeTypes.genericInterfaceInfoFor(
             irClass,
@@ -1376,8 +1399,7 @@ internal class DotNetIlTypeMapper private constructor(
         }
             ?: DotNetRuntimeTypes.classInfoFor(irClass, classifierInfo)
             ?: externalDeclarations.classInfoOrNull(irClass, this)
-            ?: stdlibClassInfoOrNull(irClass)
-            ?: importedClrDeclarations.classInfoOrNull(irClass)).also { classInfo ->
+            ?: stdlibClassInfoOrNull(irClass)).also { classInfo ->
             classInfo?.let(::recordAssemblyReference)
         }
     }
@@ -1456,6 +1478,31 @@ internal class DotNetIlTypeMapper private constructor(
     }
 
     fun referencedFunctionInfoOrNull(function: IrSimpleFunction): DotNetIlFunctionInfo? {
+        if (function.containerSource is DotNetClrImportedDeclarationSource) {
+            externalDeclarations.retainedForeignFunctionKotlinAuthorityConflictOrNull(function)?.let { reason ->
+                dotNetUnsupported(reason)
+            }
+            val competingSyntheticAuthorities = buildList {
+                if (function in externalGenericOwnerPhysicalSlots) add("semantic physical slot")
+                if (function in externalGenericOwnerFunctionInputEntries) add("physical input entry")
+                if (function in genericOwnerNaturalMethodParameterDomains) add("natural parameter-domain plan")
+                if (function in genericOwnerCapabilityDeclarations) add("semantic capability declaration")
+                if (function in genericOwnerCapabilityBearingDeclarations) add("capability-bearing declaration")
+                if (function in genericOwnerForeignDispatchDeclarations) add("foreign-dispatch reconstruction")
+                if (function in genericOwnerNaturalFunctionInputDeclarations) add("natural input declaration")
+                if (function in splitNullableResultPayloadTypes) add("split-nullable reconstruction")
+            }
+            if (competingSyntheticAuthorities.isNotEmpty()) {
+                dotNetUnsupported(
+                    "retained foreign CLR MethodDef '${function.name.asString()}' also has " +
+                            competingSyntheticAuthorities.joinToString(),
+                )
+            }
+            return (importedClrDeclarations.functionInfoOrNull(function)
+                ?: dotNetUnsupported(
+                    "foreign CLR function '${function.render()}' lost its retained MethodDef authority",
+                )).also { info -> recordAssemblyReference(info.owner) }
+        }
         if (function.origin == DOTNET_STATIC_INITIALIZATION_ENTRY) {
             val physicalOwner = function.parent as? IrClass
             if (physicalOwner != null && isLocallyEmittableClass(physicalOwner)) {
@@ -1485,9 +1532,19 @@ internal class DotNetIlTypeMapper private constructor(
                 externalDeclarations.genericOwnerFunctionInputEntryInfo(function, binding, this)
             }
             ?: externalGenericOwnerImplementationMethodDefInfoOrNull(function)
-            ?: libraryFunction()
-            ?: importedClrDeclarations.functionInfoOrNull(function)).also { functionInfo ->
+            ?: libraryFunction()).also { functionInfo ->
             functionInfo?.owner?.let(::recordAssemblyReference)
+        }
+    }
+
+    /** Producer-recorded Kotlin-library constructor header for the rehearsal epoch. */
+    fun externalGenericOwnerConstructorInfoOrNull(
+        constructor: IrConstructor,
+    ): DotNetIlFunctionInfo? {
+        val owner = constructor.parent as? IrClass ?: return null
+        if (!genericOwnerRehearsal || isCurrentModuleClass(owner)) return null
+        return externalDeclarations.genericOwnerConstructorInfoOrNull(constructor).also { info ->
+            info?.owner?.let(::recordAssemblyReference)
         }
     }
 
@@ -1589,33 +1646,20 @@ internal class DotNetIlTypeMapper private constructor(
         field: IrField,
         carrier: DotNetGenericOwnerSymbolicCarrierReference,
     ): DotNetIlValueType {
-        return when (carrier) {
-            DotNetGenericOwnerSymbolicCarrierReference.objectCarrier() -> DotNetIlValueType.Object
-            is DotNetGenericOwnerSymbolicCarrierReference.Parameter -> {
-                val binder = carrier.binder as? DotNetGenericOwnerPhysicalGenericBinderReference.Type
-                    ?: error("Internal .NET backend error: authoritative state referenced a MethodDef parameter")
-                val localOwner = binder.definition as? DotNetGenericOwnerPhysicalTypeDefIdentity.Local
-                    ?: error("Internal .NET backend error: local state referenced a non-local TypeDef parameter")
-                check(localOwner.view == null && field.parent == localOwner.owner.owner) {
-                    "Internal .NET backend error: authoritative state escaped its declaring TypeDef"
-                }
-                val mapped = genericOwnerCapabilityTypeOrNull(field, field.type)
-                    ?: toDotNetIlValueType(field.type)
-                    ?: error(
-                        "Internal .NET backend error: BOUND FieldDef authority has no live " +
-                                "verifier-visible field carrier",
-                    )
-                check(mapped is DotNetIlValueType.TypeParameter &&
-                        !mapped.isMethodParameter && mapped.index == carrier.index) {
-                    "Internal .NET backend error: logical field mapping contradicts BOUND FieldDef authority"
-                }
-                mapped
-            }
-            is DotNetGenericOwnerSymbolicCarrierReference.Leaf,
-            is DotNetGenericOwnerSymbolicCarrierReference.Constructed,
-            is DotNetGenericOwnerSymbolicCarrierReference.SzArray,
-            -> error("Internal .NET backend error: unsupported BOUND state carrier '$carrier'")
+        if (carrier == DotNetGenericOwnerSymbolicCarrierReference.objectCarrier()) {
+            return DotNetIlValueType.Object
         }
+        val owner = field.parent as? IrClass
+            ?: error("Internal .NET backend error: authoritative state has no class owner")
+        val ownerIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(owner.symbol, view = null)
+        val ownerInfo = ownerIdentity.methodAuthorityClassInfoOrNull(this)
+            ?: error("Internal .NET backend error: BOUND state owner has no emitted local TypeDef")
+        return carrier.projectBoundLocalCarrierToIlType(
+            this,
+            ownerIdentity,
+            ownerInfo,
+            authorityDescription = "state FieldDef",
+        )
     }
 
     fun isGenericOwnerCapabilityDeclaration(declaration: IrDeclaration): Boolean =
@@ -1739,6 +1783,26 @@ internal class DotNetIlTypeMapper private constructor(
     fun genericOwnerSemanticCapabilityTypeOrNull(type: IrType): DotNetIlValueType.UserClass? {
         val owner = ((type as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner ?: return null
         return genericOwnerCapabilityInfoOrNull(owner)?.let(DotNetIlValueType::UserClass)
+    }
+
+    /**
+     * Binds a semantic carrier which a producer has already selected for an F+S ABI record.
+     *
+     * This deliberately has a wider lookup than [genericOwnerSemanticCapabilityTypeOrNull]: a
+     * source-built erased declaration can physically use the arity-zero canonical interface even
+     * though the current module did not admit that logical owner into semantic operation routing.
+     * The query is not evidence that a slot should become semantic.  Its only callers either
+     * compare against an already emitted MethodDef or reconstruct a producer-recorded carrier.
+     */
+    fun genericOwnerRecordedSemanticCarrierTypeOrNull(type: IrType): DotNetIlValueType.UserClass? {
+        val owner = ((type as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner ?: return null
+        val carrier = genericOwnerCapabilityInfoOrNull(owner)
+            ?: genericInterfaceInfoOrNull(owner)?.canonicalClassInfo?.takeIf { info ->
+                info.typeParameterCount == 0
+            }
+            ?: return null
+        recordAssemblyReference(carrier)
+        return DotNetIlValueType.UserClass(carrier)
     }
 
     /**

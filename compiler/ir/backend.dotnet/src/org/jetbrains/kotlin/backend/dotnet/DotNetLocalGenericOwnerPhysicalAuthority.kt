@@ -9,8 +9,10 @@ import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrFieldSymbol
+import org.jetbrains.kotlin.ir.symbols.IrFunctionSymbol
 import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
 import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
+import org.jetbrains.kotlin.ir.symbols.IrValueParameterSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
@@ -18,6 +20,7 @@ import org.jetbrains.kotlin.ir.types.defaultType
 import org.jetbrains.kotlin.ir.types.isMarkedNullable
 import org.jetbrains.kotlin.ir.types.isNullableAny
 import org.jetbrains.kotlin.types.Variance
+import java.util.IdentityHashMap
 
 /** Bounded compilation-local role of one selected CLR TypeDef. */
 internal enum class DotNetLocalGenericOwnerPhysicalTypeRole {
@@ -1019,6 +1022,12 @@ internal class DotNetLocalGenericOwnerPhysicalCallableFamily private constructor
     }
 }
 
+/** One exact MethodDef input which is permitted to feed a selected typed state slot. */
+internal data class DotNetLocalGenericOwnerPhysicalStateWriterParameterInput(
+    val writer: IrFunctionSymbol,
+    val parameter: IrValueParameterSymbol,
+)
+
 /** One producer-wide state slot selected before final FieldDef emission. */
 internal data class DotNetLocalGenericOwnerPhysicalStateInput(
     val field: IrFieldSymbol,
@@ -1027,6 +1036,7 @@ internal data class DotNetLocalGenericOwnerPhysicalStateInput(
     val memorySemantics: DotNetGenericOwnerStateMemorySemantics,
     val hasImplicitFieldInitializer: Boolean,
     val fieldDefinition: DotNetGenericOwnerPhysicalFieldDefReference,
+    val typedWriterParameters: List<DotNetLocalGenericOwnerPhysicalStateWriterParameterInput>,
 ) {
     init {
         require(logicalFieldName.isNotEmpty() &&
@@ -1038,6 +1048,20 @@ internal data class DotNetLocalGenericOwnerPhysicalStateInput(
             DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED,
         )) {
             "an unresolved generic-owner state requirement cannot enter BOUND FieldDef authority"
+        }
+        require(if (requirement ==
+                DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN
+        ) {
+            typedWriterParameters.isNotEmpty() && typedWriterParameters.all { input ->
+                input.parameter.owner.kind == IrParameterKind.Regular &&
+                        input.parameter.owner.parent === input.writer.owner &&
+                        input.writer.owner.parent === field.owner.parent &&
+                        input.parameter.owner.type == field.owner.type
+            }
+        } else {
+            typedWriterParameters.isEmpty()
+        }) {
+            "only typed BOUND state may retain its complete exact writer-parameter authority"
         }
     }
 }
@@ -1126,6 +1150,46 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
     private val callableFamiliesByLogicalMember = callableFamiliesByLogicalMember.toMap()
     private val currentMethodsByEmittedFunction = currentMethodsByEmittedFunction.toMap()
     private val completeEmissionFamilies = completeEmissionFamilies.toList()
+    private val selectedBoundMethodsByEmittedFunction =
+        IdentityHashMap<
+                IrSimpleFunctionSymbol,
+                DotNetGenericOwnerPhysicalMethodDefIdentity.Local,
+                >().apply {
+            fun record(
+                emittedFunction: IrSimpleFunctionSymbol,
+                identity: DotNetGenericOwnerPhysicalMethodDefIdentity,
+            ) {
+                val localIdentity = identity as? DotNetGenericOwnerPhysicalMethodDefIdentity.Local
+                    ?: error("Internal .NET backend error: local authority selected a non-local MethodDef")
+                val previous = putIfAbsent(emittedFunction, localIdentity)
+                check(previous == null || previous.sameLocalMethodIdentityAs(localIdentity)) {
+                    "Internal .NET backend error: one emitted function has multiple selected BOUND MethodDefs"
+                }
+            }
+
+            currentMethodsByEmittedFunction.forEach { entry ->
+                record(entry.key, entry.value)
+            }
+            callableFamiliesByLogicalMember.values.forEach { family ->
+                DotNetLocalGenericOwnerPhysicalCallableEntryKind.entries.forEach { kind ->
+                    val identity = family.selectedMethod(kind)
+                    val emittedFunction = (identity as? DotNetGenericOwnerPhysicalMethodDefIdentity.Local)
+                        ?.function
+                        ?: error(
+                            "Internal .NET backend error: local callable authority selected a non-local MethodDef",
+                        )
+                    record(emittedFunction, identity)
+                }
+            }
+            completeEmissionFamilies.forEach { family ->
+                family.methods.values.forEach { methodEntry ->
+                    record(methodEntry.first, methodEntry.second.identity)
+                }
+            }
+            check(boundDeclarations != null || isEmpty()) {
+                "Internal .NET backend error: PRE authority selected a BOUND MethodDef"
+            }
+        }
     private val stateFamilies = stateFamilies.toList()
     private val statesByField = stateFamilies
         .flatMap { family -> family.states }
@@ -1155,6 +1219,19 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
         emittedFunction: IrSimpleFunctionSymbol,
     ): DotNetGenericOwnerPhysicalMethodDefIdentity.Local? =
         currentMethodsByEmittedFunction[emittedFunction]
+
+    /**
+     * Exact BOUND MethodDef selected for this physical emission instance.
+     *
+     * This index is assembled only from already-bound current, callable-family, and complete-family
+     * authority. It never derives a role from the emitted function's name, origin, or logical
+     * signature. Non-identical selections for one emitted function are rejected while constructing
+     * the authority rather than choosing an arbitrary view.
+     */
+    internal fun selectedBoundMethodForEmissionOrNull(
+        emittedFunction: IrSimpleFunctionSymbol,
+    ): DotNetGenericOwnerPhysicalMethodDefIdentity.Local? =
+        selectedBoundMethodsByEmittedFunction[emittedFunction]
 
     internal fun currentMethodEmissionBindings():
             Map<IrSimpleFunctionSymbol, DotNetGenericOwnerPhysicalMethodDefIdentity.Local> =
@@ -1469,15 +1546,38 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
                 }
                 val carrier = state.fieldDefinition.carrier
                 val validCarrier = when (state.requirement) {
-                    DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN ->
-                        (carrier as? DotNetGenericOwnerSymbolicCarrierReference.Parameter)?.let { parameter ->
-                            val expectedIndex = family.owner.owner.owner.typeParameters.indexOfFirst { typeParameter ->
-                                state.field.owner.type == typeParameter.defaultType
-                            }
-                            parameter.binder ==
-                                    DotNetGenericOwnerPhysicalGenericBinderReference.Type(family.owner) &&
-                                    parameter.index == expectedIndex && expectedIndex >= 0
-                        } == true && state.memorySemantics == DotNetGenericOwnerStateMemorySemantics.PLAIN
+                    DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN -> {
+                        val expected = when (val binding =
+                            bindExactLocalGenericOwnerDependentCarrierOrError(
+                                state.field.owner.type,
+                                family.owner.owner.owner,
+                                family.owner,
+                                bound,
+                            ) { symbol ->
+                                val classIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+                                    symbol,
+                                    view = null,
+                                )
+                                val naturalIdentity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(
+                                    symbol,
+                                    DotNetGenericInterfaceView.DECLARED,
+                                )
+                                when {
+                                    mergedInputs[classIdentity]?.role ==
+                                            DotNetLocalGenericOwnerPhysicalTypeRole.GENERIC_CLASS -> classIdentity
+                                    mergedInputs[naturalIdentity]?.role ==
+                                            DotNetLocalGenericOwnerPhysicalTypeRole.NATURAL_INTERFACE -> naturalIdentity
+                                    else -> null
+                                }
+                            }) {
+                            is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value.carrier.type
+                            is DotNetGenericOwnerPhysicalBindingResult.Conflict ->
+                                return DotNetGenericOwnerPhysicalBindingResult.Conflict(binding.reason)
+                            DotNetGenericOwnerPhysicalBindingResult.Unavailable -> null
+                        }
+                        expected != null && carrier == expected &&
+                                state.memorySemantics == DotNetGenericOwnerStateMemorySemantics.PLAIN
+                    }
                     DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED ->
                         carrier == DotNetGenericOwnerSymbolicCarrierReference.objectCarrier() &&
                                 state.memorySemantics == DotNetGenericOwnerStateMemorySemantics.PLAIN

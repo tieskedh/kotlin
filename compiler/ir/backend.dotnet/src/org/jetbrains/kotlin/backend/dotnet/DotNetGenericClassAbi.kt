@@ -61,7 +61,17 @@ enum class DotNetGenericOwnerCandidateDisposition {
     RETAINED_NON_ABI_IMPLEMENTATION_OWNER,
 
     BLOCKED_METADATA_FIXED_CONDITIONAL_SUPERTYPE,
+    /** No portable producer record yet seals a semantic constructor MethodDef carrier. */
+    BLOCKED_SEMANTIC_CONSTRUCTOR_CARRIER_AUTHORITY,
+    /** Fixed variant interface state needs one sealed object-domain FieldDef contract. */
+    BLOCKED_FIXED_SEMANTIC_STATE_CARRIER,
+    /** Prototype and live mapping do not yet share authority for a nested semantic construction. */
+    BLOCKED_UNBOUND_NESTED_GENERIC_OWNER_CARRIER,
+    /** At least one local allocation cannot name its complete TypeSpec in the enclosing CLR scope. */
+    BLOCKED_UNBOUND_CONSTRUCTION_SITE_TYPE_SPEC,
     BLOCKED_OPEN_OUTPUT_STATE_COHERENCE,
+    /** An open semantic family cannot yet preserve an ordinary C# typed override. */
+    BLOCKED_UNSUPPORTED_FOREIGN_SEMANTIC_OVERRIDE,
     REQUIRES_SEMANTIC_STATE_PROOF,
     REQUIRES_COMPLETE_FIELD_ACCESS_GRAPH,
     REQUIRES_TYPED_WRITE_VALUE_PROVENANCE,
@@ -175,7 +185,41 @@ enum class DotNetGenericOwnerSemanticHookReason {
     INTERNAL_SEMANTIC_REACHABILITY,
     OWNER_RELATIVE_METHOD_BOUND,
     RELATIVE_GENERIC_INTERFACE_INPUT,
+    SEMANTIC_INTERFACE_INPUT,
+    SEMANTIC_INTERFACE_RESULT,
 }
+
+/** Physical ownership of a local source body after its semantic hook has been materialized. */
+internal enum class DotNetGenericOwnerMemberBodyPlacement {
+    /** The semantic hook owns the body; the natural MethodDef is a checked typed wrapper. */
+    SEMANTIC_BODY_WITH_NATURAL_WRAPPER,
+
+    /** Final, non-virtual input semantics are emitted independently in both physical domains. */
+    PAIRED_NATURAL_AND_SEMANTIC,
+}
+
+/**
+ * Whether producer-recorded family policy requires the object-domain result even for an exact
+ * natural receiver. Value provenance may select a carrier only after this declaration policy;
+ * it may never use an exact outer construction to override this producer decision. Semantic
+ * object state alone is not such a decision: a direct `T` result still uses the natural typed
+ * entry as its checked/unboxed boundary.
+ */
+internal fun Set<DotNetGenericOwnerSemanticHookReason>.requiresSemanticResultCapability(): Boolean =
+    DotNetGenericOwnerSemanticHookReason.SEMANTIC_INTERFACE_RESULT in this
+
+/**
+ * Pristine logical declaration fact for a locally owned Kotlin generic interface.
+ *
+ * This is deliberately negative-only evidence. A class-owner plan may use it to reject an exact
+ * `I<!T>` state or result proof when Kotlin variance can carry another physical construction. It
+ * must never admit a CLR TypeDef, prove that a constructed CLR view exists, select a MethodDef,
+ * or publish an ABI family. Those decisions remain owned by the later interface-admission epoch.
+ */
+internal data class DotNetLocalGenericInterfaceLogicalHazard(
+    val owner: IrClassSymbol,
+    val declaredVariances: List<Variance>,
+)
 
 enum class DotNetGenericOwnerOverrideTargetKind {
     LOCAL_DETACHED_PROTOTYPE,
@@ -257,6 +301,23 @@ internal fun mergeDotNetGenericOwnerParameterSlotDomains(
             localDomain
         }
     }
+}
+
+/**
+ * A semantic object parameter is an override-family obligation, not a property which a later
+ * declaration may rediscover (or discard) from its substituted Kotlin signature.  Indices are
+ * relative to the explicit MethodDef parameter vector and therefore merge monotonically only
+ * after every participant has proved the same vector length.
+ */
+internal fun mergeDotNetGenericOwnerSemanticObjectParameterIndices(
+    local: Set<Int>,
+    inherited: Set<Int>,
+    parameterCount: Int,
+): Set<Int> {
+    require(parameterCount >= 0 && (local + inherited).all { index -> index in 0 until parameterCount }) {
+        "generic-owner override families have a semantic-input index outside their physical parameter vector"
+    }
+    return local + inherited
 }
 
 /** Structural vocabulary for a profile-neutral CLR signature type. */
@@ -1052,26 +1113,49 @@ internal data class DotNetGenericOwnerMemberFamilyPlan(
     val hasOwnerDependentOutput: Boolean,
     val returnSlotDomain: DotNetGenericOwnerPhysicalSlotDomain,
     val parameterSlotDomains: List<DotNetGenericOwnerPhysicalSlotDomain>,
+    /** Explicit parameter indices whose semantic entry has the universal object carrier. */
+    val semanticObjectParameterIndices: Set<Int>,
     val roles: Set<DotNetGenericOwnerMemberFamilyRole>,
     val semanticHookReasons: Set<DotNetGenericOwnerSemanticHookReason>,
-    /** Logical policy; value provenance may never replace this route with a natural result. */
-    val requiresSemanticResultCapability: Boolean,
     val requiresDirectSuperTargets: Boolean,
     val directSuperCallCount: Int,
     val directSuperCalls: List<DotNetGenericOwnerDirectSuperCallPlan>,
     val maskedDefaultDispatcher: IrSimpleFunction?,
     val logicalBindingKey: String?,
-)
+) {
+    init {
+        require(semanticObjectParameterIndices.all(parameterSlotDomains.indices::contains)) {
+            "semantic object parameter policy names a missing explicit parameter"
+        }
+    }
+
+    /** Final logical policy; copied/linked family reasons cannot leave a stale cached decision. */
+    val requiresSemanticResultCapability: Boolean
+        get() = DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in roles &&
+                semanticHookReasons.requiresSemanticResultCapability()
+
+    /** The semantic entry accepts at least one interface value through the universal carrier. */
+    val requiresSemanticInterfaceInputCapability: Boolean
+        get() = semanticObjectParameterIndices.isNotEmpty()
+}
 
 internal data class DotNetGenericOwnerConstructorPlan(
     val source: IrConstructor,
     val logicalBindingKey: String?,
     val parameterSlotDomains: List<DotNetGenericOwnerPhysicalSlotDomain>,
+    /** Explicit constructor parameters whose one emitted MethodDef uses the object carrier. */
+    val semanticObjectParameterIndices: Set<Int>,
     val delegationArgumentMapping: DotNetGenericOwnerConstructorArgumentMapping,
     val delegatedConstructorLogicalBindingKey: String?,
     val delegatedOwnerName: String?,
     val delegatesToThis: Boolean,
-)
+) {
+    init {
+        require(semanticObjectParameterIndices.all(parameterSlotDomains.indices::contains)) {
+            "constructor semantic object policy names a missing explicit parameter"
+        }
+    }
+}
 
 internal data class DotNetGenericOwnerDirectSuperCallPlan(
     val target: IrSimpleFunction,
@@ -1121,6 +1205,7 @@ data class DotNetGenericOwnerPrototypeMemberSnapshot(
     val semanticErasesOwnerDependentOutput: Boolean,
     val returnSlotDomain: DotNetGenericOwnerPhysicalSlotDomain,
     val parameterSlotDomains: List<DotNetGenericOwnerPhysicalSlotDomain>,
+    val semanticObjectParameterIndices: Set<Int>,
     val exactPathUnboundSignatures:
             Map<DotNetGenericOwnerMemberFamilyRole, DotNetGenericOwnerPrototypeMethodSignatureSnapshot>?,
     val requiresDirectSuperTargets: Boolean,
@@ -1163,6 +1248,15 @@ data class DotNetGenericOwnerPrototypeMemberSnapshot(
         require(exactMaskedDefaultDispatcher == null || hasMaskedDefaultDispatcher) {
             "an exact generic-owner masked dispatcher requires a lowered source dispatcher"
         }
+        require(semanticObjectParameterIndices.all(parameterSlotDomains.indices::contains)) {
+            "a generic-owner prototype has a semantic-input index outside its parameter vector"
+        }
+        require(
+            (DotNetGenericOwnerSemanticHookReason.SEMANTIC_INTERFACE_INPUT in semanticHookReasons) ==
+                    semanticObjectParameterIndices.isNotEmpty()
+        ) {
+            "a generic-owner prototype has inconsistent semantic-input policy evidence"
+        }
     }
 }
 
@@ -1183,6 +1277,8 @@ data class DotNetGenericOwnerPrototypeDefaultDispatcherSnapshot(
         physicalOwnerPath: List<String>,
         ownerGenericArity: Int,
         physicalOwnerPathsByLogicalKey: Map<String, List<String>>,
+        physicalNamedTypeCategoriesByLogicalKey:
+                Map<String, DotNetGenericOwnerPhysicalNamedTypeCategory>,
     ): DotNetGenericOwnerPhysicalMethodSignatureRecord {
         require(physicalOwnerPath.isNotEmpty() && ownerGenericArity > 0) {
             "a generic-owner default helper requires an exact generic producer owner"
@@ -1197,13 +1293,19 @@ data class DotNetGenericOwnerPrototypeDefaultDispatcherSnapshot(
         return DotNetGenericOwnerPhysicalMethodSignatureRecord(
             isInstance = false,
             genericArity = genericArity,
-            resultLayout = returnSlot.bindProducerTypes(physicalOwnerPathsByLogicalKey)
+            resultLayout = returnSlot.bindProducerTypes(
+                physicalOwnerPathsByLogicalKey,
+                physicalNamedTypeCategoriesByLogicalKey,
+            )
                 .asDirectOrVoidResultLayout(),
             parameterSlots = listOf(DotNetGenericOwnerPhysicalValueSlotRecord(
                 domain = DotNetGenericOwnerPhysicalSlotDomain.OWNER_EXACT_RECEIVER,
                 type = receiverType,
             )) + parameterSlotsAfterReceiver.map { slot ->
-                slot.bindProducerTypes(physicalOwnerPathsByLogicalKey)
+                slot.bindProducerTypes(
+                    physicalOwnerPathsByLogicalKey,
+                    physicalNamedTypeCategoriesByLogicalKey,
+                )
             },
         )
     }
@@ -1215,13 +1317,20 @@ data class DotNetGenericOwnerPrototypeConstructorSnapshot(
     val logicalBindingKey: String?,
     val physicalVisibility: DotNetGenericOwnerPhysicalConstructorVisibility,
     val parameterSlotDomains: List<DotNetGenericOwnerPhysicalSlotDomain>,
+    val semanticObjectParameterIndices: Set<Int>,
     val exactPathUnboundSignature: DotNetGenericOwnerPrototypeMethodSignatureSnapshot?,
     val delegationArgumentMapping: DotNetGenericOwnerConstructorArgumentMapping,
     val hasOnlyDelegationAndInstanceInitializer: Boolean,
     val delegatedConstructorLogicalBindingKey: String?,
     val delegatedOwnerName: String?,
     val delegatesToThis: Boolean,
-)
+) {
+    init {
+        require(semanticObjectParameterIndices.all(parameterSlotDomains.indices::contains)) {
+            "prototype constructor semantic object policy names a missing explicit parameter"
+        }
+    }
+}
 
 /**
  * Path-unbound CLR carrier grammar for producer-owned state and callables.
@@ -1247,6 +1356,7 @@ data class DotNetGenericOwnerPrototypeTypeSnapshot(
     val kind: DotNetGenericOwnerPrototypeTypeKind,
     val parameterIndex: Int? = null,
     val logicalClassifierKey: String? = null,
+    val logicalClassifierCategory: DotNetGenericOwnerPhysicalNamedTypeCategory? = null,
     val arguments: List<DotNetGenericOwnerPrototypeTypeSnapshot> = emptyList(),
 ) {
     init {
@@ -1257,20 +1367,24 @@ data class DotNetGenericOwnerPrototypeTypeSnapshot(
             DotNetGenericOwnerPrototypeTypeKind.STRING,
             DotNetGenericOwnerPrototypeTypeKind.OBJECT,
             DotNetGenericOwnerPrototypeTypeKind.SYSTEM_ARRAY,
-            -> require(parameterIndex == null && logicalClassifierKey == null && arguments.isEmpty()) {
+            -> require(parameterIndex == null && logicalClassifierKey == null &&
+                    logicalClassifierCategory == null && arguments.isEmpty()) {
                 "a leaf generic-owner prototype carrier cannot contain a parameter, classifier, or arguments"
             }
             DotNetGenericOwnerPrototypeTypeKind.OWNER_TYPE_PARAMETER,
             DotNetGenericOwnerPrototypeTypeKind.METHOD_TYPE_PARAMETER,
             -> require(
-                parameterIndex != null && parameterIndex >= 0 && logicalClassifierKey == null && arguments.isEmpty()
+                parameterIndex != null && parameterIndex >= 0 && logicalClassifierKey == null &&
+                        logicalClassifierCategory == null && arguments.isEmpty()
             ) { "a generic-parameter prototype carrier requires only a non-negative parameter index" }
             DotNetGenericOwnerPrototypeTypeKind.LOGICAL_GENERIC_CLASSIFIER -> require(
-                parameterIndex == null && !logicalClassifierKey.isNullOrEmpty() && arguments.isNotEmpty() &&
+                parameterIndex == null && !logicalClassifierKey.isNullOrEmpty() &&
+                        logicalClassifierCategory != null && arguments.isNotEmpty() &&
                         arguments.none { argument -> argument.kind == DotNetGenericOwnerPrototypeTypeKind.VOID }
             ) { "a logical generic prototype classifier requires only a declaration key and type arguments" }
             DotNetGenericOwnerPrototypeTypeKind.SZ_ARRAY -> require(
-                parameterIndex == null && logicalClassifierKey == null && arguments.size == 1 &&
+                parameterIndex == null && logicalClassifierKey == null && logicalClassifierCategory == null &&
+                        arguments.size == 1 &&
                         arguments.single().kind != DotNetGenericOwnerPrototypeTypeKind.VOID
             ) { "a generic-owner prototype SZ array requires exactly one non-void element type" }
         }
@@ -1291,7 +1405,7 @@ data class DotNetGenericOwnerPrototypeTypeSnapshot(
     fun bindProducerTypes(
         physicalOwnerPathsByLogicalKey: Map<String, List<String>>,
         physicalNamedTypeCategoriesByLogicalKey:
-                Map<String, DotNetGenericOwnerPhysicalNamedTypeCategory> = emptyMap(),
+                Map<String, DotNetGenericOwnerPhysicalNamedTypeCategory>,
     ): DotNetGenericOwnerPhysicalTypeExpressionRecord = when (kind) {
         DotNetGenericOwnerPrototypeTypeKind.VOID ->
             DotNetGenericOwnerPhysicalTypeExpressionRecord.voidType()
@@ -1317,10 +1431,15 @@ data class DotNetGenericOwnerPrototypeTypeSnapshot(
             val physicalPath = requireNotNull(physicalOwnerPathsByLogicalKey[logicalKey]) {
                 "generic-owner prototype classifier '$logicalKey' has no selected producer TypeDef path"
             }
+            val physicalCategory = requireNotNull(physicalNamedTypeCategoriesByLogicalKey[logicalKey]) {
+                "generic-owner prototype classifier '$logicalKey' has no producer TypeDef category"
+            }
+            require(physicalCategory == logicalClassifierCategory) {
+                "generic-owner prototype classifier '$logicalKey' disagrees with its producer TypeDef category"
+            }
             DotNetGenericOwnerPhysicalTypeExpressionRecord.producerType(
                 typePath = physicalPath,
-                category = physicalNamedTypeCategoriesByLogicalKey[logicalKey]
-                    ?: DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+                category = physicalCategory,
                 arguments = arguments.map { argument ->
                     argument.bindProducerTypes(
                         physicalOwnerPathsByLogicalKey,
@@ -1355,10 +1474,12 @@ data class DotNetGenericOwnerPrototypeTypeSnapshot(
         )
         fun logicalGenericClassifier(
             logicalClassifierKey: String,
+            logicalClassifierCategory: DotNetGenericOwnerPhysicalNamedTypeCategory,
             arguments: List<DotNetGenericOwnerPrototypeTypeSnapshot>,
         ) = DotNetGenericOwnerPrototypeTypeSnapshot(
             kind = DotNetGenericOwnerPrototypeTypeKind.LOGICAL_GENERIC_CLASSIFIER,
             logicalClassifierKey = logicalClassifierKey,
+            logicalClassifierCategory = logicalClassifierCategory,
             arguments = arguments,
         )
         fun szArray(elementType: DotNetGenericOwnerPrototypeTypeSnapshot) =
@@ -1410,9 +1531,14 @@ data class DotNetGenericOwnerPrototypeValueSlotSnapshot(
 
     fun bindProducerTypes(
         physicalOwnerPathsByLogicalKey: Map<String, List<String>>,
+        physicalNamedTypeCategoriesByLogicalKey:
+                Map<String, DotNetGenericOwnerPhysicalNamedTypeCategory>,
     ): DotNetGenericOwnerPhysicalValueSlotRecord = DotNetGenericOwnerPhysicalValueSlotRecord(
         domain = domain,
-        type = type.bindProducerTypes(physicalOwnerPathsByLogicalKey),
+        type = type.bindProducerTypes(
+            physicalOwnerPathsByLogicalKey,
+            physicalNamedTypeCategoriesByLogicalKey,
+        ),
         nullableReferenceFlags = nullableReferenceFlags,
     )
 }
@@ -1426,6 +1552,8 @@ enum class DotNetGenericOwnerDirectSupertypeKind {
 /** Why a direct Kotlin supertype can or cannot become one exact CLR metadata edge. */
 enum class DotNetGenericOwnerPrototypeSupertypeDisposition {
     EXACT_PHYSICAL_EDGE,
+    /** KLIB fixes the logical edge, but only the producer artifact can select its CLR TypeDef. */
+    PENDING_EXTERNAL_PHYSICAL_EDGE,
     CONDITIONAL_OPEN_NULLABLE_ARGUMENT,
     UNSUPPORTED_PHYSICAL_EDGE,
 }
@@ -1436,6 +1564,8 @@ data class DotNetGenericOwnerPrototypeSupertypeSnapshot(
     val disposition: DotNetGenericOwnerPrototypeSupertypeDisposition,
     val exactPhysicalType: DotNetGenericOwnerPrototypeTypeSnapshot?,
     val nullableReferenceFlags: List<DotNetNullableReferenceFlag>?,
+    val pendingLogicalType: DotNetGenericOwnerPrototypeTypeSnapshot?,
+    val pendingNullableReferenceFlags: List<DotNetNullableReferenceFlag>?,
     val conditionalOwnerParameterIndices: List<Int>,
 ) {
     init {
@@ -1458,15 +1588,47 @@ data class DotNetGenericOwnerPrototypeSupertypeSnapshot(
                 require(conditionalOwnerParameterIndices.isEmpty()) {
                     "an exact generic-owner prototype supertype cannot retain a conditional parameter"
                 }
+                require(pendingLogicalType == null && pendingNullableReferenceFlags == null) {
+                    "an exact generic-owner prototype supertype cannot retain a pending logical edge"
+                }
+            }
+            DotNetGenericOwnerPrototypeSupertypeDisposition.PENDING_EXTERNAL_PHYSICAL_EDGE -> {
+                val logicalKey = requireNotNull(logicalClassifierKey) {
+                    "a pending generic-owner prototype supertype requires a logical classifier"
+                }
+                val logicalType = requireNotNull(pendingLogicalType) {
+                    "a pending generic-owner prototype supertype requires its unbound logical TypeSpec"
+                }
+                require(exactPhysicalType == null && nullableReferenceFlags == null &&
+                        logicalType.kind == DotNetGenericOwnerPrototypeTypeKind.LOGICAL_GENERIC_CLASSIFIER &&
+                        logicalType.logicalClassifierKey == logicalKey &&
+                        logicalType.logicalClassifierCategory == when (kind) {
+                            DotNetGenericOwnerDirectSupertypeKind.BASE_CLASS ->
+                                DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS
+                            DotNetGenericOwnerDirectSupertypeKind.INTERFACE ->
+                                DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE
+                        }
+                ) {
+                    "a pending generic-owner prototype supertype cannot claim physical authority"
+                }
+                logicalType.requiresNullableReferenceFlags(
+                    requireNotNull(pendingNullableReferenceFlags),
+                    "a pending generic-owner prototype supertype",
+                )
+                require(conditionalOwnerParameterIndices.isEmpty()) {
+                    "a pending generic-owner prototype supertype cannot retain a conditional parameter"
+                }
             }
             DotNetGenericOwnerPrototypeSupertypeDisposition.CONDITIONAL_OPEN_NULLABLE_ARGUMENT -> require(
                 exactPhysicalType == null && nullableReferenceFlags == null &&
+                        pendingLogicalType == null && pendingNullableReferenceFlags == null &&
                         conditionalOwnerParameterIndices.isNotEmpty()
             ) {
                 "a conditional generic-owner prototype supertype requires only its owner-parameter blockers"
             }
             DotNetGenericOwnerPrototypeSupertypeDisposition.UNSUPPORTED_PHYSICAL_EDGE -> require(
                 exactPhysicalType == null && nullableReferenceFlags == null &&
+                        pendingLogicalType == null && pendingNullableReferenceFlags == null &&
                         conditionalOwnerParameterIndices.isEmpty()
             ) {
                 "an unsupported generic-owner prototype supertype cannot claim partial physical facts"
@@ -1519,12 +1681,22 @@ data class DotNetGenericOwnerPrototypeMethodSignatureSnapshot(
 
     fun bindProducerTypes(
         physicalOwnerPathsByLogicalKey: Map<String, List<String>>,
+        physicalNamedTypeCategoriesByLogicalKey:
+                Map<String, DotNetGenericOwnerPhysicalNamedTypeCategory>,
     ): DotNetGenericOwnerPhysicalMethodSignatureRecord = DotNetGenericOwnerPhysicalMethodSignatureRecord(
         isInstance = isInstance,
         genericArity = genericArity,
-        resultLayout = returnSlot.bindProducerTypes(physicalOwnerPathsByLogicalKey)
+        resultLayout = returnSlot.bindProducerTypes(
+            physicalOwnerPathsByLogicalKey,
+            physicalNamedTypeCategoriesByLogicalKey,
+        )
             .asDirectOrVoidResultLayout(),
-        parameterSlots = parameterSlots.map { slot -> slot.bindProducerTypes(physicalOwnerPathsByLogicalKey) },
+        parameterSlots = parameterSlots.map { slot ->
+            slot.bindProducerTypes(
+                physicalOwnerPathsByLogicalKey,
+                physicalNamedTypeCategoriesByLogicalKey,
+            )
+        },
     )
 }
 
@@ -1657,6 +1829,7 @@ enum class DotNetGenericOwnerCallReceiverProvenance {
 enum class DotNetGenericOwnerCallRouteRequirement {
     EXACT_TYPED_ENTRY,
     SEMANTIC_CAPABILITY,
+    SEMANTIC_INPUT_CAPABILITY,
     SEMANTIC_RESULT_CAPABILITY,
     MISSING_CAPABILITY,
     PRODUCER_ERASED_OWNER,
@@ -1688,6 +1861,10 @@ data class DotNetGenericOwnerCallRouteSnapshot(
                     receiverProvenance != DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION
         ) { "a semantic generic-owner capability cannot replace a proven exact typed entry" }
         require(
+            routeRequirement != DotNetGenericOwnerCallRouteRequirement.SEMANTIC_INPUT_CAPABILITY ||
+                    receiverProvenance == DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION
+        ) { "a semantic-input capability requires exact receiver-construction provenance" }
+        require(
             routeRequirement != DotNetGenericOwnerCallRouteRequirement.SEMANTIC_RESULT_CAPABILITY ||
                     receiverProvenance == DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION
         ) { "a semantic-result capability requires exact receiver-construction provenance" }
@@ -1718,6 +1895,10 @@ data class DotNetGenericOwnerCallRouteManifestRecord(
             routeRequirement != DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY ||
                     receiverProvenance != DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION
         ) { "a semantic application route cannot replace a proven exact typed entry" }
+        require(
+            routeRequirement != DotNetGenericOwnerCallRouteRequirement.SEMANTIC_INPUT_CAPABILITY ||
+                    receiverProvenance == DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION
+        ) { "a semantic-input application route requires exact construction provenance" }
         require(
             routeRequirement != DotNetGenericOwnerCallRouteRequirement.SEMANTIC_RESULT_CAPABILITY ||
                     receiverProvenance == DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION
@@ -1765,7 +1946,7 @@ data class DotNetGenericOwnerCallRouteManifest(
 
 /** Deterministic, profile-neutral codec for compiler-derived application call-route censuses. */
 object DotNetGenericOwnerCallRouteManifestCodec {
-    const val SCHEMA_VERSION = 1
+    const val SCHEMA_VERSION = 2
     private const val MAGIC = "kotlin-dotnet-generic-owner-call-routes"
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()
@@ -2249,6 +2430,7 @@ data class DotNetGenericOwnerPhysicalMemberFamilyRecord(
     val policy: DotNetGenericOwnerMemberPolicy,
     val roles: Set<DotNetGenericOwnerMemberFamilyRole>,
     val semanticHookReasons: Set<DotNetGenericOwnerSemanticHookReason>,
+    val semanticObjectParameterIndices: Set<Int>,
     val slots: List<DotNetGenericOwnerPhysicalMemberSlotRecord>,
     val directSuperTargets: List<DotNetGenericOwnerPhysicalDirectSuperTargetRecord>,
     val defaultDispatcher: DotNetGenericOwnerPhysicalDefaultDispatcherRecord?,
@@ -2275,19 +2457,68 @@ data class DotNetGenericOwnerPhysicalMemberFamilyRecord(
         }.distinct().size == 1) {
             "generic-owner physical member family '$logicalMemberKey' has inconsistent role slot-domain vectors"
         }
+        val typedSlot = slots.single { slot ->
+            slot.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY
+        }
         require(
             semanticHookReasons.isEmpty() ==
                     (DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK !in roles)
         ) {
             "generic-owner physical member family '$logicalMemberKey' has inconsistent semantic-hook reasons"
         }
+        require(semanticObjectParameterIndices.all(typedSlot.signature.parameterSlots.indices::contains)) {
+            "generic-owner physical member family '$logicalMemberKey' has a semantic-input index outside its parameter vector"
+        }
+        require(
+            (DotNetGenericOwnerSemanticHookReason.SEMANTIC_INTERFACE_INPUT in semanticHookReasons) ==
+                    semanticObjectParameterIndices.isNotEmpty()
+        ) {
+            "generic-owner physical member family '$logicalMemberKey' has inconsistent semantic-input policy evidence"
+        }
         if (DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in roles) {
             require(DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER in roles) {
                 "generic-owner semantic member family '$logicalMemberKey' lacks its capability dispatcher"
             }
         }
-        val typedSlot = slots.single { slot ->
-            slot.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY
+        if (semanticObjectParameterIndices.isNotEmpty()) {
+            listOf(
+                slots.single { slot -> slot.role == DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK },
+                slots.single { slot -> slot.role == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER },
+            ).forEach { semanticSlot ->
+                require(semanticObjectParameterIndices.all { index ->
+                    semanticSlot.signature.parameterSlots[index].type ==
+                            DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType()
+                }) {
+                    "generic-owner physical member family '$logicalMemberKey' does not retain its semantic-input carrier"
+                }
+            }
+        }
+        if (semanticHookReasons.requiresSemanticResultCapability()) {
+            val semanticHook = slots.singleOrNull { slot ->
+                slot.role == DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK
+            }
+            val capabilityDispatcher = slots.singleOrNull { slot ->
+                slot.role == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER
+            }
+            val semanticHookResult = semanticHook?.signature?.resultLayout as?
+                    DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Direct
+            val capabilityResult = capabilityDispatcher?.signature?.resultLayout as?
+                    DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Direct
+            val typedResult = typedSlot.signature.resultLayout.valueSlotOrNull
+            val expectedSemanticNullability = typedResult
+                ?.nullableReferenceFlags
+                ?.firstOrNull()
+                ?.let(::listOf)
+            require(semanticHookResult != null && capabilityResult != null &&
+                    semanticHookResult == capabilityResult &&
+                    semanticHookResult.slot.type ==
+                    DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType() &&
+                    expectedSemanticNullability != null &&
+                    semanticHookResult.slot.nullableReferenceFlags == expectedSemanticNullability
+            ) {
+                "generic-owner physical member family '$logicalMemberKey' does not retain its " +
+                        "semantic-result carrier and nullability"
+            }
         }
         slots.singleOrNull { slot ->
             slot.role == DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK
@@ -2321,6 +2552,49 @@ data class DotNetGenericOwnerPhysicalMemberFamilyRecord(
                 logicalMemberKey,
             )) {
                 "generic-owner default family '$logicalMemberKey' has a reconstructed or unstable physical name"
+            }
+            val semanticSourceSlot = slots.singleOrNull { slot ->
+                slot.role == DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK
+            }
+            val signature = dispatcher.signature
+            val receiverSlot = signature.parameterSlots.firstOrNull()
+            val receiverType = receiverSlot?.type
+            val sourceParameterCount = typedSlot.signature.parameterSlots.size
+            val sourceParameterSlots = signature.parameterSlots
+                .drop(1)
+                .take(sourceParameterCount)
+            val maskSlots = signature.parameterSlots.drop(1 + sourceParameterCount)
+            val expectedResultLayout = if (semanticHookReasons.requiresSemanticResultCapability()) {
+                checkNotNull(semanticSourceSlot).signature.resultLayout
+            } else {
+                typedSlot.signature.resultLayout
+            }
+            val expectedSourceParameterSlots = typedSlot.signature.parameterSlots.mapIndexed { index, typed ->
+                if (index in semanticObjectParameterIndices) {
+                    checkNotNull(semanticSourceSlot).signature.parameterSlots[index]
+                } else {
+                    typed
+                }
+            }
+            require(dispatcher.physicalOwnerPath == typedSlot.physicalOwnerPath &&
+                    !signature.isInstance &&
+                    signature.genericArity == typedSlot.signature.genericArity &&
+                    signature.resultLayout == expectedResultLayout &&
+                    receiverSlot?.domain == DotNetGenericOwnerPhysicalSlotDomain.OWNER_EXACT_RECEIVER &&
+                    receiverType?.kind == DotNetGenericOwnerPhysicalTypeKind.NAMED &&
+                    receiverType.scope == DotNetGenericOwnerPhysicalTypeScope.PRODUCER &&
+                    receiverType.namedTypeCategory == DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS &&
+                    receiverType.typePath == typedSlot.physicalOwnerPath &&
+                    receiverType.arguments == List(receiverType.genericArity) { index ->
+                        DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(index)
+                    } &&
+                    sourceParameterSlots == expectedSourceParameterSlots &&
+                    maskSlots.isNotEmpty() && maskSlots.all { mask ->
+                        mask.domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
+                                mask.type == DotNetGenericOwnerPhysicalTypeExpressionRecord.int32Type()
+                    }
+            ) {
+                "generic-owner default family '$logicalMemberKey' has an invalid physical dispatcher signature"
             }
         }
         if (DotNetGenericOwnerSemanticHookReason.ABSTRACT_BROAD_PROPERTY_OBLIGATION in semanticHookReasons) {
@@ -2872,15 +3146,19 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
                     val semanticSlot = getterFamily.slots.single { slot ->
                         slot.role == DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK
                     }
+                    val hasSupportedSemanticReason =
+                        getterFamily.semanticHookReasons.requiresSemanticResultCapability() ||
+                                getterFamily.semanticHookReasons.any { reason ->
+                                    reason == DotNetGenericOwnerSemanticHookReason.PAIRED_OPEN_OUTPUT_STATE ||
+                                            reason == DotNetGenericOwnerSemanticHookReason.ABSTRACT_BROAD_PROPERTY_OBLIGATION ||
+                                            reason == DotNetGenericOwnerSemanticHookReason.INHERITED_SEMANTIC_OVERRIDE
+                                }
                     getterFamily.roles.containsAll(setOf(
                         DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
                         DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
                         DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
-                    )) && getterFamily.semanticHookReasons.any { reason ->
-                        reason == DotNetGenericOwnerSemanticHookReason.PAIRED_OPEN_OUTPUT_STATE ||
-                                reason == DotNetGenericOwnerSemanticHookReason.ABSTRACT_BROAD_PROPERTY_OBLIGATION ||
-                                reason == DotNetGenericOwnerSemanticHookReason.INHERITED_SEMANTIC_OVERRIDE
-                    } && (typedSlot.dispatch == DotNetGenericOwnerPhysicalMemberDispatch.ABSTRACT) ==
+                    )) && hasSupportedSemanticReason &&
+                            (typedSlot.dispatch == DotNetGenericOwnerPhysicalMemberDispatch.ABSTRACT) ==
                             (semanticSlot.dispatch == DotNetGenericOwnerPhysicalMemberDispatch.ABSTRACT)
                 }
             }
@@ -2904,6 +3182,7 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
                         DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
                     )) && setterFamily.semanticHookReasons.any { reason ->
                         reason == DotNetGenericOwnerSemanticHookReason.GENERAL_WIDENED_BODY ||
+                                reason == DotNetGenericOwnerSemanticHookReason.SEMANTIC_INTERFACE_INPUT ||
                                 reason == DotNetGenericOwnerSemanticHookReason.INHERITED_SEMANTIC_OVERRIDE
                     } && (typedSlot.dispatch == DotNetGenericOwnerPhysicalMemberDispatch.ABSTRACT) ==
                             (semanticSlot.dispatch == DotNetGenericOwnerPhysicalMemberDispatch.ABSTRACT)
@@ -3399,9 +3678,11 @@ fun DotNetGenericOwnerCallRouteSnapshot.resolveExternalPhysicalFamilyRoute(
     val resolvedRequirement = physicalFamilies.singleOrNull()?.let { family ->
         when {
             receiverProvenance == DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION &&
-                    DotNetGenericOwnerSemanticHookReason.PAIRED_SEMANTIC_STATE_OUTPUT in
-                    family.semanticHookReasons ->
+                    family.semanticHookReasons.requiresSemanticResultCapability() ->
                 DotNetGenericOwnerCallRouteRequirement.SEMANTIC_RESULT_CAPABILITY
+            receiverProvenance == DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION &&
+                    family.semanticObjectParameterIndices.isNotEmpty() ->
+                DotNetGenericOwnerCallRouteRequirement.SEMANTIC_INPUT_CAPABILITY
             receiverProvenance == DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION ->
                 DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY
             DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER in family.roles ->
@@ -3548,7 +3829,7 @@ fun DotNetGenericOwnerPhysicalFamilyArtifact.reflectionCallableForLogicalMemberO
  * resolve only a subset of one consumer's override obligations.
  */
 object DotNetGenericOwnerPhysicalFamilyCodec {
-    const val SCHEMA_VERSION = 21
+    const val SCHEMA_VERSION = 22
     /** Matches the producer-sealed binary codec's bounded collection grammar. */
     internal const val MAX_PHYSICAL_COLLECTION_SIZE = 1_024
     /** Matches the producer-sealed binary codec's carrier-depth ceiling. */
@@ -3794,6 +4075,9 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                         member.policy.name,
                         roles.joinToString(",") { role -> role.name },
                         reasons.joinToString(",") { reason -> reason.name }.ifEmpty { "-" },
+                        member.semanticObjectParameterIndices.sorted()
+                            .joinToString(",")
+                            .ifEmpty { "-" },
                         slots.size.toString(),
                         member.overrideRootLogicalMemberKeys.joinToString("\u0000").encoded(),
                         member.directSuperTargets.size.toString(),
@@ -4233,7 +4517,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                 },
             )
             val members = List(memberCount) {
-                val memberFields = read("M", 9)
+                val memberFields = read("M", 10)
                 val logicalMemberKey = memberFields[1].decoded()
                 val policy = enumValue(
                     memberFields[2],
@@ -4250,14 +4534,28 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                     DotNetGenericOwnerSemanticHookReason.entries.toTypedArray(),
                     "semantic-hook reason",
                 )
-                val slotCount = count(memberFields[5], "slot")
-                val overrideRoots = memberFields[6].decoded().split('\u0000')
-                val directSuperCount = count(memberFields[7], "direct-super")
-                val hasDefaultDispatcher = when (memberFields[8]) {
+                val semanticObjectParameterIndices = memberFields[5]
+                    .takeUnless { field -> field == "-" }
+                    ?.split(',')
+                    ?.map { field ->
+                        field.toIntOrNull()?.takeIf { index -> index >= 0 }
+                            ?: throw IllegalArgumentException(
+                                "generic-owner physical member family '$logicalMemberKey' has an invalid semantic-input index"
+                            )
+                    }
+                    .orEmpty()
+                require(semanticObjectParameterIndices ==
+                        semanticObjectParameterIndices.distinct().sorted()) {
+                    "generic-owner physical member family '$logicalMemberKey' has unordered or duplicate semantic-input indices"
+                }
+                val slotCount = count(memberFields[6], "slot")
+                val overrideRoots = memberFields[7].decoded().split('\u0000')
+                val directSuperCount = count(memberFields[8], "direct-super")
+                val hasDefaultDispatcher = when (memberFields[9]) {
                     "0" -> false
                     "1" -> true
                     else -> throw IllegalArgumentException(
-                        "generic-owner family artifact has invalid default-dispatcher marker '${memberFields[8]}'"
+                        "generic-owner family artifact has invalid default-dispatcher marker '${memberFields[9]}'"
                     )
                 }
                 val slots = List(slotCount) {
@@ -4331,6 +4629,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                     policy = policy,
                     roles = roles,
                     semanticHookReasons = reasons,
+                    semanticObjectParameterIndices = semanticObjectParameterIndices.toSet(),
                     slots = slots,
                     directSuperTargets = directSuperTargets,
                     defaultDispatcher = defaultDispatcher,
@@ -4882,7 +5181,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
         )
     }
 
-    /** Canonical ABI-21 signature codec shared with self-describing library MethodDef records. */
+    /** Canonical ABI-22 signature codec shared with self-describing library MethodDef records. */
     internal fun encodePhysicalMethodSignature(
         signature: DotNetGenericOwnerPhysicalMethodSignatureRecord,
     ): String {
@@ -4948,8 +5247,35 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
 fun DotNetGenericOwnerPrototypeSnapshot.resolveExternalPhysicalFamilies(
     artifact: DotNetGenericOwnerPhysicalFamilyArtifact,
 ): DotNetGenericOwnerPrototypeSnapshot {
-    val physicalOwnerPathsByLogicalKey = artifact.owners.associate { owner ->
-        owner.logicalOwnerKey to owner.physicalOwnerPath
+    val physicalTypesByLogicalKey = buildMap<
+            String,
+            Pair<List<String>, DotNetGenericOwnerPhysicalNamedTypeCategory>,
+            > {
+        artifact.owners.forEach { owner ->
+            check(put(
+                owner.logicalOwnerKey,
+                owner.physicalOwnerPath to DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+            ) == null) {
+                "producer generic-owner family artifact has duplicate logical type " +
+                        "'${owner.logicalOwnerKey}'"
+            }
+        }
+        artifact.interfaceTypes.forEach { type ->
+            check(put(
+                type.logicalInterfaceKey,
+                type.physicalTypePath to DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
+            ) == null) {
+                "producer generic-owner family artifact has duplicate logical type " +
+                        "'${type.logicalInterfaceKey}'"
+            }
+        }
+    }
+    val physicalOwnerPathsByLogicalKey = physicalTypesByLogicalKey.mapValues { entry -> entry.value.first }
+    val physicalNamedTypeCategoriesByLogicalKey =
+        physicalTypesByLogicalKey.mapValues { entry -> entry.value.second }
+    val physicalGenericAritiesByLogicalKey = buildMap {
+        artifact.owners.forEach { owner -> put(owner.logicalOwnerKey, owner.genericArity) }
+        artifact.interfaceTypes.forEach { type -> put(type.logicalInterfaceKey, type.genericArity) }
     }
     val externalMembers:
             Map<String, Pair<DotNetGenericOwnerPhysicalFamilyRecord, DotNetGenericOwnerPhysicalMemberFamilyRecord>> =
@@ -4965,6 +5291,89 @@ fun DotNetGenericOwnerPrototypeSnapshot.resolveExternalPhysicalFamilies(
     val classificationsByLogicalMember = artifact.classifications.flatMap { classification ->
         classification.logicalMemberKeys.map { logicalMemberKey -> logicalMemberKey to classification }
     }.groupBy({ entry -> entry.first }, { entry -> entry.second })
+    val classificationsByLogicalOwner = artifact.classifications.groupBy { classification ->
+        classification.logicalOwnerKey
+    }
+    fun missingPhysicalOwner(logicalOwnerKey: String, use: String): Nothing {
+        val classifications = classificationsByLogicalOwner[logicalOwnerKey].orEmpty()
+        if (classifications.isEmpty()) {
+            error("producer generic-owner family artifact lacks logical type '$logicalOwnerKey' for $use")
+        }
+        error(
+            "producer generic-owner candidate for logical type '$logicalOwnerKey' has no physical family for $use: " +
+                    classifications.joinToString { classification ->
+                        "${classification.logicalOwnerKey} (${classification.disposition})"
+                    }
+        )
+    }
+    var resolvedExternalSupertype = false
+    val resolvedDirectSupertypes = directSupertypes.map { supertype ->
+        if (supertype.disposition !=
+            DotNetGenericOwnerPrototypeSupertypeDisposition.PENDING_EXTERNAL_PHYSICAL_EDGE
+        ) {
+            return@map supertype
+        }
+        val logicalKey = requireNotNull(supertype.logicalClassifierKey)
+        val physicalType = physicalTypesByLogicalKey[logicalKey]
+            ?: missingPhysicalOwner(logicalKey, "a pending direct supertype")
+        val expectedCategory = when (supertype.kind) {
+            DotNetGenericOwnerDirectSupertypeKind.BASE_CLASS ->
+                DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS
+            DotNetGenericOwnerDirectSupertypeKind.INTERFACE ->
+                DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE
+        }
+        require(physicalType.second == expectedCategory) {
+            "producer generic-owner type '$logicalKey' has the wrong TypeDef category for its pending direct supertype"
+        }
+        val logicalType = requireNotNull(supertype.pendingLogicalType)
+        fun validateLogicalType(type: DotNetGenericOwnerPrototypeTypeSnapshot) {
+            when (type.kind) {
+                DotNetGenericOwnerPrototypeTypeKind.OWNER_TYPE_PARAMETER -> require(
+                    checkNotNull(type.parameterIndex) in 0 until genericArity
+                ) {
+                    "a pending direct supertype references an unavailable consumer owner parameter"
+                }
+                DotNetGenericOwnerPrototypeTypeKind.METHOD_TYPE_PARAMETER -> error(
+                    "a pending direct supertype cannot reference a method parameter"
+                )
+                DotNetGenericOwnerPrototypeTypeKind.LOGICAL_GENERIC_CLASSIFIER -> {
+                    val nestedKey = checkNotNull(type.logicalClassifierKey)
+                    val producerArity = physicalGenericAritiesByLogicalKey[nestedKey]
+                        ?: missingPhysicalOwner(nestedKey, "a pending direct-supertype argument")
+                    require(type.arguments.size == producerArity) {
+                        "producer generic-owner type '$nestedKey' disagrees with the KLIB direct-supertype arity"
+                    }
+                    type.arguments.forEach(::validateLogicalType)
+                }
+                DotNetGenericOwnerPrototypeTypeKind.SZ_ARRAY ->
+                    type.arguments.forEach(::validateLogicalType)
+                DotNetGenericOwnerPrototypeTypeKind.VOID -> error(
+                    "a pending direct supertype cannot contain void"
+                )
+                DotNetGenericOwnerPrototypeTypeKind.BOOLEAN,
+                DotNetGenericOwnerPrototypeTypeKind.INT32,
+                DotNetGenericOwnerPrototypeTypeKind.STRING,
+                DotNetGenericOwnerPrototypeTypeKind.OBJECT,
+                DotNetGenericOwnerPrototypeTypeKind.SYSTEM_ARRAY,
+                -> Unit
+            }
+        }
+        validateLogicalType(logicalType)
+        // Binding proves the entire KLIB-recorded argument tree, not merely the outer owner. A
+        // missing nested TypeDef therefore fails here instead of being guessed from a logical name.
+        logicalType.bindProducerTypes(
+            physicalOwnerPathsByLogicalKey,
+            physicalNamedTypeCategoriesByLogicalKey,
+        )
+        resolvedExternalSupertype = true
+        supertype.copy(
+            disposition = DotNetGenericOwnerPrototypeSupertypeDisposition.EXACT_PHYSICAL_EDGE,
+            exactPhysicalType = logicalType,
+            nullableReferenceFlags = requireNotNull(supertype.pendingNullableReferenceFlags),
+            pendingLogicalType = null,
+            pendingNullableReferenceFlags = null,
+        )
+    }
     fun externalMember(
         logicalMemberKey: String,
     ): Pair<DotNetGenericOwnerPhysicalFamilyRecord, DotNetGenericOwnerPhysicalMemberFamilyRecord> =
@@ -4980,7 +5389,7 @@ fun DotNetGenericOwnerPrototypeSnapshot.resolveExternalPhysicalFamilies(
                         }
             )
         }
-    var resolvedAny = false
+    var resolvedAny = resolvedExternalSupertype
     val resolvedMembers = members.map { member ->
         val unresolved = member.overrideBindings.filter { binding ->
             binding.targetKind == DotNetGenericOwnerOverrideTargetKind.EXTERNAL_LOGICAL_BINDING_REQUIRED
@@ -4999,6 +5408,15 @@ fun DotNetGenericOwnerPrototypeSnapshot.resolveExternalPhysicalFamilies(
                 slot -> slot.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY
             }.signature.parameterSlots.map { parameter -> parameter.domain }
             mergeDotNetGenericOwnerParameterSlotDomains(domains, producerDomains)
+        }
+        val mergedSemanticObjectParameterIndices = producerMembers.fold(
+            member.semanticObjectParameterIndices,
+        ) { indices, producerMember ->
+            mergeDotNetGenericOwnerSemanticObjectParameterIndices(
+                indices,
+                producerMember.semanticObjectParameterIndices,
+                mergedParameterSlotDomains.size,
+            )
         }
         val resolved = unresolved.flatMap { binding ->
             val logicalKey = requireNotNull(binding.overriddenLogicalBindingKey) {
@@ -5020,10 +5438,40 @@ fun DotNetGenericOwnerPrototypeSnapshot.resolveExternalPhysicalFamilies(
             fun consumerSignature(role: DotNetGenericOwnerMemberFamilyRole):
                     DotNetGenericOwnerPhysicalMethodSignatureRecord? =
                 member.exactPathUnboundSignatures?.get(role)?.let { signature ->
-                    signature.bindProducerTypes(physicalOwnerPathsByLogicalKey).let { physicalSignature ->
+                    signature.bindProducerTypes(
+                        physicalOwnerPathsByLogicalKey,
+                        physicalNamedTypeCategoriesByLogicalKey,
+                    ).let { physicalSignature ->
                         physicalSignature.copy(
                             parameterSlots = physicalSignature.parameterSlots.mapIndexed { index, parameter ->
-                                parameter.copy(domain = mergedParameterSlotDomains[index])
+                                val semanticObjectType = DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType()
+                                if (role != DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY &&
+                                    index in mergedSemanticObjectParameterIndices
+                                ) {
+                                    val producerParameter = requireNotNull(
+                                        producerMember.slots.singleOrNull { slot -> slot.role == role }
+                                            ?.signature?.parameterSlots?.getOrNull(index)
+                                    ) {
+                                        "consumer override '${member.sourceName}' has no producer " +
+                                                "semantic parameter authority at index $index"
+                                    }
+                                    require(producerParameter.type == semanticObjectType) {
+                                        "consumer override '${member.sourceName}' inherited a semantic " +
+                                                "parameter whose producer carrier is not object"
+                                    }
+                                    parameter.copy(
+                                        domain = mergedParameterSlotDomains[index],
+                                        type = semanticObjectType,
+                                        // Object is the physical carrier, but the producer's slot
+                                        // remains authority for the logical top-level nullability.
+                                        // Replacing NON_NULL/NULLABLE with OBLIVIOUS here makes a
+                                        // separately compiled override disagree with the MethodDef
+                                        // it is required to implement.
+                                        nullableReferenceFlags = producerParameter.nullableReferenceFlags,
+                                    )
+                                } else {
+                                    parameter.copy(domain = mergedParameterSlotDomains[index])
+                                }
                             },
                         )
                     }
@@ -5084,6 +5532,7 @@ fun DotNetGenericOwnerPrototypeSnapshot.resolveExternalPhysicalFamilies(
                         emptySet()
                     },
             parameterSlotDomains = mergedParameterSlotDomains,
+            semanticObjectParameterIndices = mergedSemanticObjectParameterIndices,
             // The local detached signatures predate producer-family binding and are no longer
             // authoritative after inherited broad domains and semantic roles are merged.
             exactPathUnboundSignatures = null,
@@ -5108,6 +5557,7 @@ fun DotNetGenericOwnerPrototypeSnapshot.resolveExternalPhysicalFamilies(
             disposition
         },
         members = resolvedMembers,
+        directSupertypes = resolvedDirectSupertypes,
     )
 }
 
@@ -5235,12 +5685,23 @@ fun DotNetGenericOwnerPrototypeSnapshot.physicalizeExternalSubclass(
     val delegatedLogicalKey = requireNotNull(sourceConstructor.delegatedConstructorLogicalBindingKey) {
         "a Kotlin generic subclass constructor lacks its external logical base constructor"
     }
+    val logicalBase = resolved.directSupertypes.singleOrNull { supertype ->
+        supertype.kind == DotNetGenericOwnerDirectSupertypeKind.BASE_CLASS
+    } ?: error("a Kotlin generic subclass physicalization requires one logical base-class edge")
+    require(logicalBase.disposition == DotNetGenericOwnerPrototypeSupertypeDisposition.EXACT_PHYSICAL_EDGE &&
+            logicalBase.logicalClassifierKey != null && logicalBase.exactPhysicalType != null
+    ) {
+        "a Kotlin generic subclass physicalization requires one exact logical base-class edge"
+    }
     val delegatedConstructorEntry = artifact.owners.flatMap { owner ->
         owner.constructors.map { constructor -> owner to constructor }
     }.singleOrNull { entry -> entry.second.logicalConstructorKey == delegatedLogicalKey }
         ?: error("producer generic-owner artifact lacks unique delegated constructor '$delegatedLogicalKey'")
     val producerOwner = delegatedConstructorEntry.first
     val delegatedConstructor = delegatedConstructorEntry.second
+    require(producerOwner.logicalOwnerKey == logicalBase.logicalClassifierKey) {
+        "a Kotlin generic subclass delegated constructor belongs to a different logical base owner"
+    }
     require(producerOwner.genericArity == genericArity) {
         "the current Kotlin generic subclass proof requires an exact owner-parameter base vector"
     }
@@ -5257,16 +5718,59 @@ fun DotNetGenericOwnerPrototypeSnapshot.physicalizeExternalSubclass(
     }
     val sourceConstructorSignature = requireNotNull(sourceConstructor.exactPathUnboundSignature) {
         "the Kotlin generic subclass constructor is outside the exact physical signature grammar"
-    }.bindProducerTypes(
-        artifact.owners.associate { owner -> owner.logicalOwnerKey to owner.physicalOwnerPath } +
-                logicalBindingKey?.let { key -> mapOf(key to physicalOwnerPath) }.orEmpty(),
+    }
+    val subclassPhysicalTypesByLogicalKey = buildMap<
+            String,
+            Pair<List<String>, DotNetGenericOwnerPhysicalNamedTypeCategory>,
+            > {
+        artifact.owners.forEach { owner ->
+            check(put(
+                owner.logicalOwnerKey,
+                owner.physicalOwnerPath to DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+            ) == null) {
+                "producer generic-owner family artifact has duplicate logical type " +
+                        "'${owner.logicalOwnerKey}'"
+            }
+        }
+        artifact.interfaceTypes.forEach { type ->
+            check(put(
+                type.logicalInterfaceKey,
+                type.physicalTypePath to DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
+            ) == null) {
+                "producer generic-owner family artifact has duplicate logical type " +
+                        "'${type.logicalInterfaceKey}'"
+            }
+        }
+        logicalBindingKey?.let { key ->
+            check(put(
+                key,
+                physicalOwnerPath to DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+            ) == null) {
+                "Kotlin generic subclass logical type '$key' collides with its producer artifact"
+            }
+        }
+    }
+    val sourceConstructorTypePaths =
+        subclassPhysicalTypesByLogicalKey.mapValues { entry -> entry.value.first }
+    val sourceConstructorTypeCategories =
+        subclassPhysicalTypesByLogicalKey.mapValues { entry -> entry.value.second }
+    val boundLogicalBase = logicalBase.exactPhysicalType.bindProducerTypes(
+        sourceConstructorTypePaths,
+        sourceConstructorTypeCategories,
+    )
+    require(boundLogicalBase == delegatedConstructor.constructedOwnerType) {
+        "a Kotlin generic subclass delegated constructor disagrees with its exact physical base edge"
+    }
+    val boundSourceConstructorSignature = sourceConstructorSignature.bindProducerTypes(
+        sourceConstructorTypePaths,
+        sourceConstructorTypeCategories,
     )
     require(sourceConstructor.delegationArgumentMapping ==
             DotNetGenericOwnerConstructorArgumentMapping.POSITIONAL_IDENTITY &&
             sourceConstructor.hasOnlyDelegationAndInstanceInitializer) {
         "the Kotlin generic subclass constructor has a transformed delegation or additional body effects"
     }
-    require(sourceConstructorSignature == delegatedConstructor.physicalConstructor.signature) {
+    require(boundSourceConstructorSignature == delegatedConstructor.physicalConstructor.signature) {
         "a Kotlin generic subclass constructor disagrees with the exact producer signature"
     }
     val ownerArguments = List(genericArity) { index ->
@@ -5294,7 +5798,7 @@ fun DotNetGenericOwnerPrototypeSnapshot.physicalizeExternalSubclass(
             physicalConstructor = DotNetGenericOwnerPhysicalMethodIdentityRecord(
                 physicalOwnerPath,
                 ".ctor",
-                sourceConstructorSignature,
+                boundSourceConstructorSignature,
             ),
             delegatedLogicalConstructorKey = delegatedLogicalKey,
             constructedBaseOwner = constructedBase,
@@ -5440,6 +5944,11 @@ internal fun DotNetGenericOwnerCandidateDisposition.allowsGenericOwnerRehearsalA
     this !in setOf(
         DotNetGenericOwnerCandidateDisposition.RETAINED_VALUE_CLASS_ABI,
         DotNetGenericOwnerCandidateDisposition.BLOCKED_METADATA_FIXED_CONDITIONAL_SUPERTYPE,
+        DotNetGenericOwnerCandidateDisposition.BLOCKED_SEMANTIC_CONSTRUCTOR_CARRIER_AUTHORITY,
+        DotNetGenericOwnerCandidateDisposition.BLOCKED_FIXED_SEMANTIC_STATE_CARRIER,
+        DotNetGenericOwnerCandidateDisposition.BLOCKED_UNBOUND_NESTED_GENERIC_OWNER_CARRIER,
+        DotNetGenericOwnerCandidateDisposition.BLOCKED_UNBOUND_CONSTRUCTION_SITE_TYPE_SPEC,
+        DotNetGenericOwnerCandidateDisposition.BLOCKED_UNSUPPORTED_FOREIGN_SEMANTIC_OVERRIDE,
     )
 
 /** A priority-compressed owner disposition must never conceal one unresolved physical state slot. */
@@ -5505,7 +6014,7 @@ internal fun IrType.genericOwnerDeclarationIndependentLeafPrototypeOrNull():
  */
 private fun IrType.genericOwnerPrototypeType(
     owner: IrClass,
-    preLoweringDeclarationKeys: Map<IrDeclaration, String>,
+    logicalClassifierKey: (IrClass) -> String?,
     use: DotNetGenericOwnerPrototypeTypeUse,
     method: IrSimpleFunction? = null,
     eraseOwnerDependentCarrier: Boolean = false,
@@ -5563,7 +6072,7 @@ private fun IrType.genericOwnerPrototypeType(
         }
         val elementType = elementProjection.type.genericOwnerPrototypeType(
             owner = owner,
-            preLoweringDeclarationKeys = preLoweringDeclarationKeys,
+            logicalClassifierKey = logicalClassifierKey,
             use = use,
             method = method,
             eraseOwnerDependentCarrier = false,
@@ -5577,16 +6086,17 @@ private fun IrType.genericOwnerPrototypeType(
         return DotNetGenericOwnerPrototypeTypeSnapshot.szArray(elementType)
     }
 
-    if (!classifier.isDotNetGenericClassDeclaration || classifier.isValue ||
-            simpleType.arguments.size != classifier.typeParameters.size
+    if (classifier.isValue || classifier.typeParameters.isEmpty() ||
+            simpleType.arguments.size != classifier.typeParameters.size ||
+            (!classifier.isDotNetGenericClassDeclaration && !classifier.isInterface)
     ) return null
-    val logicalClassifierKey = preLoweringDeclarationKeys[classifier] ?: return null
+    val classifierKey = logicalClassifierKey(classifier) ?: return null
     val arguments = simpleType.arguments.map { argument ->
         val projection = argument as? IrTypeProjection ?: return null
         if (projection.variance != Variance.INVARIANT) return null
         projection.type.genericOwnerPrototypeType(
             owner = owner,
-            preLoweringDeclarationKeys = preLoweringDeclarationKeys,
+            logicalClassifierKey = logicalClassifierKey,
             use = use,
             method = method,
             eraseOwnerDependentCarrier = false,
@@ -5598,17 +6108,22 @@ private fun IrType.genericOwnerPrototypeType(
         return DotNetGenericOwnerPrototypeTypeSnapshot.objectType()
     }
     return DotNetGenericOwnerPrototypeTypeSnapshot.logicalGenericClassifier(
-        logicalClassifierKey = logicalClassifierKey,
+        logicalClassifierKey = classifierKey,
+        logicalClassifierCategory = if (classifier.isInterface) {
+            DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE
+        } else {
+            DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS
+        },
         arguments = arguments,
     )
 }
 
-private fun IrType.genericOwnerPrototypeStateType(
+internal fun IrType.genericOwnerPrototypeStateType(
     owner: IrClass,
-    preLoweringDeclarationKeys: Map<IrDeclaration, String>,
+    logicalClassifierKey: (IrClass) -> String?,
 ): DotNetGenericOwnerPrototypeTypeSnapshot? = genericOwnerPrototypeType(
     owner = owner,
-    preLoweringDeclarationKeys = preLoweringDeclarationKeys,
+    logicalClassifierKey = logicalClassifierKey,
     use = DotNetGenericOwnerPrototypeTypeUse.STATE,
 )
 
@@ -5629,7 +6144,8 @@ private fun IrType.explicitNullableOwnerParameterIndices(owner: IrClass): List<I
 
 private fun IrType.genericOwnerPrototypeSupertypeSnapshot(
     owner: IrClass,
-    preLoweringDeclarationKeys: Map<IrDeclaration, String>,
+    logicalClassifierKey: (IrClass) -> String?,
+    physicalClassifierKey: (IrClass) -> String?,
 ): DotNetGenericOwnerPrototypeSupertypeSnapshot {
     val simpleType = this as? IrSimpleType
     val classifier = (simpleType?.classifier as? IrClassSymbol)?.owner
@@ -5638,12 +6154,14 @@ private fun IrType.genericOwnerPrototypeSupertypeSnapshot(
     } else {
         DotNetGenericOwnerDirectSupertypeKind.BASE_CLASS
     }
-    val logicalClassifierKey = classifier?.let(preLoweringDeclarationKeys::get)
-    fun unsupported(classifierKey: String? = logicalClassifierKey) =
+    val classifierKey = classifier?.let(logicalClassifierKey)
+    fun unsupported(unsupportedClassifierKey: String? = classifierKey) =
         DotNetGenericOwnerPrototypeSupertypeSnapshot(
             kind,
-            classifierKey,
+            unsupportedClassifierKey,
             DotNetGenericOwnerPrototypeSupertypeDisposition.UNSUPPORTED_PHYSICAL_EDGE,
+            null,
+            null,
             null,
             null,
             emptyList(),
@@ -5652,44 +6170,75 @@ private fun IrType.genericOwnerPrototypeSupertypeSnapshot(
     if (conditionalParameters.isNotEmpty()) {
         return DotNetGenericOwnerPrototypeSupertypeSnapshot(
             kind = kind,
-            logicalClassifierKey = logicalClassifierKey,
+            logicalClassifierKey = classifierKey,
             disposition = DotNetGenericOwnerPrototypeSupertypeDisposition.CONDITIONAL_OPEN_NULLABLE_ARGUMENT,
             exactPhysicalType = null,
             nullableReferenceFlags = null,
+            pendingLogicalType = null,
+            pendingNullableReferenceFlags = null,
             conditionalOwnerParameterIndices = conditionalParameters,
         )
     }
-    val physicalType = when {
+    fun unboundType(
+        classifierKeys: (IrClass) -> String?,
+    ): DotNetGenericOwnerPrototypeTypeSnapshot? = when {
         isAny() -> DotNetGenericOwnerPrototypeTypeSnapshot.objectType()
         simpleType == null || classifier == null || classifier.isValue || classifier.typeParameters.isEmpty() ||
                 simpleType.arguments.size != classifier.typeParameters.size ||
                 (!classifier.isDotNetGenericClassDeclaration && !classifier.isInterface) -> null
         else -> {
-            val classifierKey = logicalClassifierKey ?: return unsupported(null)
+            val exactClassifierKey = classifierKeys(classifier) ?: return null
             val arguments = simpleType.arguments.map { argument ->
                 val projection = argument as? IrTypeProjection
-                    ?: return unsupported(classifierKey)
+                    ?: return null
                 if (projection.variance != Variance.INVARIANT) {
-                    return unsupported(classifierKey)
+                    return null
                 }
                 projection.type.genericOwnerPrototypeType(
                     owner = owner,
-                    preLoweringDeclarationKeys = preLoweringDeclarationKeys,
+                    logicalClassifierKey = classifierKeys,
                     use = DotNetGenericOwnerPrototypeTypeUse.STATE,
-                ) ?: return unsupported(classifierKey)
+                ) ?: return null
             }
-            DotNetGenericOwnerPrototypeTypeSnapshot.logicalGenericClassifier(classifierKey, arguments)
+            DotNetGenericOwnerPrototypeTypeSnapshot.logicalGenericClassifier(
+                logicalClassifierKey = exactClassifierKey,
+                logicalClassifierCategory = if (classifier.isInterface) {
+                    DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE
+                } else {
+                    DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS
+                },
+                arguments = arguments,
+            )
         }
     }
+    val physicalType = unboundType(physicalClassifierKey)
     return if (physicalType == null) {
-        unsupported()
+        val logicalType = unboundType(logicalClassifierKey) ?: return unsupported()
+        if (logicalType.kind != DotNetGenericOwnerPrototypeTypeKind.LOGICAL_GENERIC_CLASSIFIER ||
+            classifierKey == null
+        ) {
+            unsupported()
+        } else {
+            DotNetGenericOwnerPrototypeSupertypeSnapshot(
+                kind = kind,
+                logicalClassifierKey = classifierKey,
+                disposition = DotNetGenericOwnerPrototypeSupertypeDisposition.PENDING_EXTERNAL_PHYSICAL_EDGE,
+                exactPhysicalType = null,
+                nullableReferenceFlags = null,
+                pendingLogicalType = logicalType,
+                pendingNullableReferenceFlags = DotNetNullableMetadata.flags(this, logicalType),
+                conditionalOwnerParameterIndices = emptyList(),
+            )
+        }
     } else {
         DotNetGenericOwnerPrototypeSupertypeSnapshot(
             kind,
-            logicalClassifierKey,
+            classifierKey,
             DotNetGenericOwnerPrototypeSupertypeDisposition.EXACT_PHYSICAL_EDGE,
             physicalType,
             DotNetNullableMetadata.flags(this, physicalType),
+            null,
+            null,
             emptyList(),
         )
     }
@@ -5697,15 +6246,19 @@ private fun IrType.genericOwnerPrototypeSupertypeSnapshot(
 
 private fun DotNetGenericOwnerConstructorPlan.exactPrototypePathUnboundSignature(
     owner: IrClass,
-    preLoweringDeclarationKeys: Map<IrDeclaration, String>,
+    logicalClassifierKey: (IrClass) -> String?,
 ): DotNetGenericOwnerPrototypeMethodSignatureSnapshot? {
     if (source.parameters.size != parameterSlotDomains.size) return null
     val parameterSlots = source.parameters.mapIndexed { index, parameter ->
-        val physicalType = parameter.type.genericOwnerPrototypeType(
-            owner = owner,
-            preLoweringDeclarationKeys = preLoweringDeclarationKeys,
-            use = DotNetGenericOwnerPrototypeTypeUse.CALLABLE,
-        ) ?: return null
+        val physicalType = if (index in semanticObjectParameterIndices) {
+            DotNetGenericOwnerPrototypeTypeSnapshot.objectType()
+        } else {
+            parameter.type.genericOwnerPrototypeType(
+                owner = owner,
+                logicalClassifierKey = logicalClassifierKey,
+                use = DotNetGenericOwnerPrototypeTypeUse.CALLABLE,
+            ) ?: return null
+        }
         val domain = parameterSlotDomains[index]
         if (physicalType.kind == DotNetGenericOwnerPrototypeTypeKind.VOID ||
                 domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
@@ -5731,7 +6284,7 @@ private fun DotNetGenericOwnerConstructorPlan.exactPrototypePathUnboundSignature
 
 private fun DotNetGenericOwnerMemberFamilyPlan.exactPrototypePathUnboundSignatures(
     owner: IrClass,
-    preLoweringDeclarationKeys: Map<IrDeclaration, String>,
+    logicalClassifierKey: (IrClass) -> String?,
 ): Map<DotNetGenericOwnerMemberFamilyRole, DotNetGenericOwnerPrototypeMethodSignatureSnapshot>? {
     val explicitParameters = source.parameters.filter { parameter ->
         parameter.kind != IrParameterKind.DispatchReceiver
@@ -5739,24 +6292,38 @@ private fun DotNetGenericOwnerMemberFamilyPlan.exactPrototypePathUnboundSignatur
     if (explicitParameters.size != parameterSlotDomains.size) return null
     return roles.associateWith { role ->
         val eraseOwnerDependentCarrier = role != DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY
-        val returnType = source.returnType.genericOwnerPrototypeType(
-            owner = owner,
-            preLoweringDeclarationKeys = preLoweringDeclarationKeys,
-            use = DotNetGenericOwnerPrototypeTypeUse.CALLABLE,
-            method = source,
-            eraseOwnerDependentCarrier = eraseOwnerDependentCarrier,
-        ) ?: return null
-        if (returnSlotDomain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
-                returnType.referencesOwnerParameter()
-        ) return null
-        val parameterSlots = explicitParameters.mapIndexed { index, parameter ->
-            val physicalType = parameter.type.genericOwnerPrototypeType(
+        val returnType = if (eraseOwnerDependentCarrier && requiresSemanticResultCapability) {
+            // The closed virtual-family contract, not the child's locally fixed source spelling,
+            // selects the semantic result carrier. In particular Base<T> -> Child<U> :
+            // Base<Any?> must retain the producer's object result without capturing U or
+            // fabricating Nested<object> as the semantic MethodDef result.
+            DotNetGenericOwnerPrototypeTypeSnapshot.objectType()
+        } else {
+            source.returnType.genericOwnerPrototypeType(
                 owner = owner,
-                preLoweringDeclarationKeys = preLoweringDeclarationKeys,
+                logicalClassifierKey = logicalClassifierKey,
                 use = DotNetGenericOwnerPrototypeTypeUse.CALLABLE,
                 method = source,
                 eraseOwnerDependentCarrier = eraseOwnerDependentCarrier,
             ) ?: return null
+        }
+        if (returnSlotDomain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
+                returnType.referencesOwnerParameter()
+        ) return null
+        val parameterSlots = explicitParameters.mapIndexed { index, parameter ->
+            val physicalType = if (eraseOwnerDependentCarrier &&
+                index in semanticObjectParameterIndices
+            ) {
+                DotNetGenericOwnerPrototypeTypeSnapshot.objectType()
+            } else {
+                parameter.type.genericOwnerPrototypeType(
+                    owner = owner,
+                    logicalClassifierKey = logicalClassifierKey,
+                    use = DotNetGenericOwnerPrototypeTypeUse.CALLABLE,
+                    method = source,
+                    eraseOwnerDependentCarrier = eraseOwnerDependentCarrier,
+                ) ?: return null
+            }
             val domain = parameterSlotDomains[index]
             if (physicalType.kind == DotNetGenericOwnerPrototypeTypeKind.VOID ||
                     domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
@@ -5783,7 +6350,7 @@ private fun DotNetGenericOwnerMemberFamilyPlan.exactPrototypePathUnboundSignatur
 
 private fun DotNetGenericOwnerMemberFamilyPlan.exactPrototypeDefaultDispatcher(
     owner: IrClass,
-    preLoweringDeclarationKeys: Map<IrDeclaration, String>,
+    logicalClassifierKey: (IrClass) -> String?,
 ): DotNetGenericOwnerPrototypeDefaultDispatcherSnapshot? {
     val dispatcher = maskedDefaultDispatcher ?: return null
     if (dispatcher.dispatchReceiverParameter != null || dispatcher.typeParameters.size != source.typeParameters.size) return null
@@ -5806,22 +6373,30 @@ private fun DotNetGenericOwnerMemberFamilyPlan.exactPrototypeDefaultDispatcher(
             parameter.origin == IrDeclarationOrigin.MASK_FOR_DEFAULT_FUNCTION
         }) return null
 
-    val returnType = dispatcher.returnType.genericOwnerPrototypeType(
-        owner = owner,
-        preLoweringDeclarationKeys = preLoweringDeclarationKeys,
-        use = DotNetGenericOwnerPrototypeTypeUse.CALLABLE,
-        method = dispatcher,
-    ) ?: return null
+    val returnType = if (requiresSemanticResultCapability) {
+        DotNetGenericOwnerPrototypeTypeSnapshot.objectType()
+    } else {
+        dispatcher.returnType.genericOwnerPrototypeType(
+            owner = owner,
+            logicalClassifierKey = logicalClassifierKey,
+            use = DotNetGenericOwnerPrototypeTypeUse.CALLABLE,
+            method = dispatcher,
+        ) ?: return null
+    }
     if (returnSlotDomain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
             returnType.referencesOwnerParameter()
     ) return null
     val sourceSlots = sourceDispatcherParameters.mapIndexed { index, parameter ->
-        val physicalType = parameter.type.genericOwnerPrototypeType(
-            owner = owner,
-            preLoweringDeclarationKeys = preLoweringDeclarationKeys,
-            use = DotNetGenericOwnerPrototypeTypeUse.CALLABLE,
-            method = dispatcher,
-        ) ?: return null
+        val physicalType = if (index in semanticObjectParameterIndices) {
+            DotNetGenericOwnerPrototypeTypeSnapshot.objectType()
+        } else {
+            parameter.type.genericOwnerPrototypeType(
+                owner = owner,
+                logicalClassifierKey = logicalClassifierKey,
+                use = DotNetGenericOwnerPrototypeTypeUse.CALLABLE,
+                method = dispatcher,
+            ) ?: return null
+        }
         val domain = parameterSlotDomains[index]
         if (physicalType.kind == DotNetGenericOwnerPrototypeTypeKind.VOID ||
                 domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
@@ -5836,7 +6411,7 @@ private fun DotNetGenericOwnerMemberFamilyPlan.exactPrototypeDefaultDispatcher(
     val maskSlots = maskParameters.map { parameter ->
         val physicalType = parameter.type.genericOwnerPrototypeType(
             owner = owner,
-            preLoweringDeclarationKeys = preLoweringDeclarationKeys,
+            logicalClassifierKey = logicalClassifierKey,
             use = DotNetGenericOwnerPrototypeTypeUse.CALLABLE,
             method = dispatcher,
         ) ?: return null
@@ -5877,7 +6452,25 @@ internal fun IrClass.genericOwnerPrototypePhysicalGenericParameters():
 
 internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(
     preLoweringDeclarationKeys: Map<IrDeclaration, String>,
+    localReifiedGenericInterfaces: Set<IrClass>,
+    externalDeclarations: DotNetExternalDeclarations,
 ): DotNetGenericOwnerPrototypeSnapshot {
+    val logicalClassifierKey: (IrClass) -> String? = { classifier ->
+        preLoweringDeclarationKeys[classifier]
+            ?: externalDeclarations.reifiedGenericOwnerLogicalKeyOrNull(classifier)
+            ?: classifier.dotNetLibraryAbiKeyOrNull("C").takeIf {
+                classifier.origin == IrDeclarationOrigin.IR_EXTERNAL_DECLARATION_STUB &&
+                        classifier.dotNetImportedClrTypeAuthorityOrNull() == null &&
+                        externalDeclarations.hasClass(classifier)
+            }
+    }
+    val physicalClassifierKey: (IrClass) -> String? = { classifier ->
+        preLoweringDeclarationKeys[classifier]?.takeIf {
+            !classifier.isInterface || classifier in localReifiedGenericInterfaces
+        }
+            ?: externalDeclarations.reifiedGenericOwnerLogicalKeyOrNull(classifier)
+    }
+
     fun prototypeFor(
         source: IrSimpleFunction,
         role: DotNetGenericOwnerMemberFamilyRole,
@@ -5906,7 +6499,11 @@ internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(
         isInner = owner.isInner,
         directSupertypeCount = logicalDirectSupertypes.size,
         directSupertypes = logicalDirectSupertypes.map { supertype ->
-            supertype.genericOwnerPrototypeSupertypeSnapshot(owner, preLoweringDeclarationKeys)
+            supertype.genericOwnerPrototypeSupertypeSnapshot(
+                owner,
+                logicalClassifierKey,
+                physicalClassifierKey,
+            )
         },
         directFieldCount = owner.declarations.count { declaration -> declaration is IrField },
         anonymousInitializerCount = owner.declarations.count { declaration ->
@@ -5921,9 +6518,10 @@ internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(
                 logicalBindingKey = constructor.logicalBindingKey,
                 physicalVisibility = constructor.source.genericOwnerPhysicalVisibility(),
                 parameterSlotDomains = constructor.parameterSlotDomains,
+                semanticObjectParameterIndices = constructor.semanticObjectParameterIndices,
                 exactPathUnboundSignature = constructor.exactPrototypePathUnboundSignature(
                     owner,
-                    preLoweringDeclarationKeys,
+                    physicalClassifierKey,
                 ),
                 delegationArgumentMapping = constructor.delegationArgumentMapping,
                 hasOnlyDelegationAndInstanceInitializer = constructor.source.hasOnlyPrototypePhysicalizableBody(),
@@ -5971,9 +6569,10 @@ internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(
                     semantic?.returnType?.referencesTypeParameterOf(owner) == false,
                 returnSlotDomain = family.returnSlotDomain,
                 parameterSlotDomains = family.parameterSlotDomains,
+                semanticObjectParameterIndices = family.semanticObjectParameterIndices,
                 exactPathUnboundSignatures = family.exactPrototypePathUnboundSignatures(
                     owner,
-                    preLoweringDeclarationKeys,
+                    physicalClassifierKey,
                 ),
                 requiresDirectSuperTargets = family.requiresDirectSuperTargets,
                 directSuperCallCount = family.directSuperCallCount,
@@ -5997,7 +6596,7 @@ internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(
                 hasMaskedDefaultDispatcher = family.maskedDefaultDispatcher != null,
                 exactMaskedDefaultDispatcher = family.exactPrototypeDefaultDispatcher(
                     owner,
-                    preLoweringDeclarationKeys,
+                    physicalClassifierKey,
                 ),
                 logicalBindingKey = family.logicalBindingKey,
                 overrideBindings = overrideBindings[source].orEmpty().map { binding ->
@@ -6040,7 +6639,7 @@ internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(
         states = stateCarriers.values.map { state ->
             val exactTypedCarrierType = state.field.type.genericOwnerPrototypeStateType(
                 owner,
-                preLoweringDeclarationKeys,
+                physicalClassifierKey,
             )
             val physicalCarrierType = when (state.requirement) {
                 DotNetGenericOwnerStateCarrierRequirement.DECLARATION_INDEPENDENT_STORAGE,

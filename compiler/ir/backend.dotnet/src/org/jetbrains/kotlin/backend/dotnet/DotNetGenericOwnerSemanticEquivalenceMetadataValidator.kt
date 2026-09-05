@@ -6,6 +6,7 @@
 package org.jetbrains.kotlin.backend.dotnet
 
 import java.io.File
+import org.jetbrains.kotlin.config.DotNetTarget
 import org.jetbrains.kotlin.load.dotnet.DotNetClrAssemblyMetadata
 import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterKind
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMemberReferenceSignature
@@ -166,7 +167,7 @@ fun readAndValidateDotNetGenericOwnerPeMetadata(
     sealedFamilies: Collection<DotNetPhysicalDeclaration.GenericOwnerSealedFamily>,
     semanticEquivalenceCertificates:
         Collection<DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate>,
-    coreLibraryAssemblyName: String,
+    producerTarget: DotNetTarget,
 ): DotNetGenericOwnerPeValidationResult {
     val certificateFamilyKeys = semanticEquivalenceCertificates.mapTo(hashSetOf()) { certificate ->
         certificate.sealedFamilyIndexKey
@@ -181,7 +182,7 @@ fun readAndValidateDotNetGenericOwnerPeMetadata(
                 validateDotNetGenericOwnerSealedFamilyAgainstClrMetadata(
                     declaration,
                     headerMetadata,
-                    coreLibraryAssemblyName,
+                    producerTarget,
                 ).semanticEquivalenceMethodBodies
             }
         }
@@ -190,7 +191,7 @@ fun readAndValidateDotNetGenericOwnerPeMetadata(
         validateDotNetGenericOwnerSealedFamilyAgainstClrMetadata(
             declaration,
             assembly,
-            coreLibraryAssemblyName,
+            producerTarget,
         )
     }
     val sealedBindingsByIndexKey = sealedBindings.associateBy { binding -> binding.familyIndexKey }
@@ -363,11 +364,8 @@ private fun <Authority> List<DotNetGenericOwnerPeRowClaim<Authority>>.requireBij
 internal fun validateDotNetGenericOwnerSealedFamilyAgainstClrMetadata(
     declaration: DotNetPhysicalDeclaration.GenericOwnerSealedFamily,
     assembly: DotNetClrAssemblyMetadata,
-    coreLibraryAssemblyName: String,
+    producerTarget: DotNetTarget,
 ): DotNetGenericOwnerSealedFamilyMetadataBinding {
-    require(coreLibraryAssemblyName.isNotEmpty()) {
-        "a producer-sealed J validation requires the selected core-library AssemblyRef"
-    }
     val publication = declaration.publication()
     require(publication.key.physicalIndexKey() == declaration.indexKey()) {
         "a producer-sealed J declaration is not its canonical physical-library entry"
@@ -404,7 +402,7 @@ internal fun validateDotNetGenericOwnerSealedFamilyAgainstClrMetadata(
             bound.recorded.row,
             bound.actual,
             boundTypesByKey,
-            coreLibraryAssemblyName,
+            producerTarget,
         )
     }
 
@@ -553,7 +551,7 @@ private fun DotNetClrAssemblyMetadata.requireTypeDefMatchesJRow(
     expected: DotNetGenericOwnerSealedEmissionTypeDefRow,
     actual: DotNetClrTypeDefinition,
     allTypesByKey: Map<DotNetGenericOwnerPhysicalMethodDefEmissionTypeKey, DotNetBoundPeTypeDef>,
-    coreLibraryAssemblyName: String,
+    producerTarget: DotNetTarget,
 ) {
     val structural = expected.structural
     require(actual.attributes == expected.flags.toClrAttributes()) {
@@ -595,11 +593,11 @@ private fun DotNetClrAssemblyMetadata.requireTypeDefMatchesJRow(
         val baseType = checkNotNull(actual.baseType)
         val isCoreObject = edge.target == DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.Leaf(
             DotNetGenericOwnerPhysicalTypeKind.OBJECT,
-        ) && matchesExternalTopLevelTypeReference(
+        ) && matchesCoreLibraryTopLevelTypeReference(
             baseType,
             listOf("System", "Object"),
             expectedGenericArity = 0,
-            expectedAssemblyName = coreLibraryAssemblyName,
+            producerTarget = producerTarget,
         )
         require(isCoreObject || matchesCarrier(
             edge.target,

@@ -28,6 +28,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeDefIden
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeParameterVariance
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.dotNetPhysicalValueStableName
+import org.jetbrains.kotlin.backend.dotnet.hasSameFrozenAuthorityAs
 import org.jetbrains.kotlin.backend.dotnet.isDotNetResolutionOnlyStdlibDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isReifiedByGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.planDotNetGenericInterfaceCompleteSurfaceVariance
@@ -53,6 +54,11 @@ import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
 import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 import org.jetbrains.kotlin.ir.visitors.acceptVoid
 import org.jetbrains.kotlin.types.Variance
+
+internal data class DotNetGenericInterfaceCompleteSurfaceAnalysis(
+    val snapshots: List<DotNetGenericInterfaceCompleteSurfaceVarianceShadowSnapshot>,
+    val authorityPlans: Map<IrClassSymbol, DotNetGenericInterfaceCompleteNaturalAuthorityPlan>,
+)
 
 /**
  * Computes the proposed variance of one complete natural CLR interface without changing IR.
@@ -83,9 +89,32 @@ internal class DotNetGenericInterfaceCompleteSurfaceVarianceShadowLowering(
             "Internal .NET backend error: complete-natural admission preceded complete-surface analysis"
         }
 
+        val analysis = analyze(irModule)
+        context.genericInterfaceCompleteSurfaceVarianceShadows += analysis.snapshots
+        context.genericInterfaceCompleteSurfaceVarianceAuthorityPlans.putAll(analysis.authorityPlans)
+        context.earlyGenericInterfaceCompleteNaturalAuthorityPlans.entries.forEach { entry ->
+            val symbol = entry.key
+            val earlyPlan = entry.value
+            val finalPlan = analysis.authorityPlans[symbol]
+            check(finalPlan != null && earlyPlan.hasSameFrozenAuthorityAs(finalPlan)) {
+                "Internal .NET backend error: an early complete-natural interface plan changed " +
+                        "after generic-class representation planning for '${symbol.owner.name}'"
+            }
+        }
+        context.genericInterfaceCompleteSurfaceVarianceShadowAnalysisCompleted = true
+    }
+
+    /**
+     * Runs the same dependency-closed physical-surface calculation in both authority epochs.
+     * Before class planning, owner-dependent local-class constructions are deliberately
+     * unavailable; after class planning the same algorithm may add those later-resolved plans.
+     * Any plan present in both runs must be byte-for-byte equivalent in its frozen authority.
+     */
+    internal fun analyze(
+        irModule: IrModuleFragment,
+    ): DotNetGenericInterfaceCompleteSurfaceAnalysis {
         if (!context.configuration.dotNetGenericOwnerRehearsal) {
-            context.genericInterfaceCompleteSurfaceVarianceShadowAnalysisCompleted = true
-            return
+            return DotNetGenericInterfaceCompleteSurfaceAnalysis(emptyList(), emptyMap())
         }
 
         val owners = irModule.localGenericInterfaces()
@@ -109,7 +138,8 @@ internal class DotNetGenericInterfaceCompleteSurfaceVarianceShadowLowering(
             identitiesByOwner.getValue(owner) to builder.buildOwner(owner)
         }
 
-        context.genericInterfaceCompleteSurfaceVarianceShadows += owners.map { owner ->
+        val authorityPlans = linkedMapOf<IrClassSymbol, DotNetGenericInterfaceCompleteNaturalAuthorityPlan>()
+        val snapshots = owners.map { owner ->
             val identity = identitiesByOwner.getValue(owner)
             when (val build = builds.getValue(identity)) {
                 is OwnerBuild.Unavailable -> owner.snapshot(
@@ -159,12 +189,7 @@ internal class DotNetGenericInterfaceCompleteSurfaceVarianceShadowLowering(
                                     surfaceInput = build.input,
                                     surfaceDecision = decision,
                                 )
-                                check(
-                                    context.genericInterfaceCompleteSurfaceVarianceAuthorityPlans.put(
-                                        owner.symbol,
-                                        authorityPlan,
-                                    ) == null
-                                ) {
+                                check(authorityPlans.put(owner.symbol, authorityPlan) == null) {
                                     "Internal .NET backend error: complete-surface analysis repeated one owner plan"
                                 }
                                 owner.snapshot(authorityPlan.surfaceDecision)
@@ -174,7 +199,7 @@ internal class DotNetGenericInterfaceCompleteSurfaceVarianceShadowLowering(
                 }
             }
         }
-        context.genericInterfaceCompleteSurfaceVarianceShadowAnalysisCompleted = true
+        return DotNetGenericInterfaceCompleteSurfaceAnalysis(snapshots, authorityPlans)
     }
 
     private fun IrModuleFragment.localGenericInterfaces(): List<IrClass> {

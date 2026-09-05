@@ -376,11 +376,18 @@ internal class DotNetIlExpressionCodegen(
             genericOwnerObjectCarrierCallReturnTypeOrNull(expression)?.let { return it }
             val intrinsic = intrinsicMethods.getIntrinsic(expression.symbol)
             intrinsic?.naturalReturnType(expression, this)?.let { return it }
+            val resolvedSource = expression.symbol.owner.let { candidate ->
+                candidate.resolveFakeOverride() ?: candidate.resolveFakeOverrideMaybeAbstract()
+                ?: candidate
+            }
+            val hasAuthoritativeObjectResult =
+                typeMapper.isGenericOwnerForeignDispatchDeclaration(resolvedSource)
             if (
                 intrinsic == null &&
                 !expression.symbol.owner.isDotNetErasedObjectResult() &&
-                !expression.symbol.owner.isErasedGenericInterfaceMember() &&
-                !expression.symbol.owner.isErasedGenericClassMember()
+                ((!expression.symbol.owner.isErasedGenericInterfaceMember() &&
+                        !expression.symbol.owner.isErasedGenericClassMember()) ||
+                        hasAuthoritativeObjectResult)
             ) {
                 val resolved = resolveCall(expression)
                 if (resolved.info.signature.hasSplitNullableResult) {
@@ -392,7 +399,20 @@ internal class DotNetIlExpressionCodegen(
                     return typeMapper.toDotNetIlValueType(expression.type)
                 }
                 val returnType = resolved.returnType
-                if (returnType is DotNetIlReturnType.Value) return returnType.type
+                if (returnType is DotNetIlReturnType.Value) {
+                    if (hasAuthoritativeObjectResult) {
+                        check(returnType.type == DotNetIlValueType.Object) {
+                            "Internal .NET backend error: object-result policy disagrees with " +
+                                    "the retained MethodDef"
+                        }
+                        // The local physical declaration plan, or an imported S record, and the
+                        // final/rebound MethodDef independently agree that this call pushes object.
+                        // Falling back to the substituted KLIB result would manufacture (for
+                        // example) Cursor<object> before identity or the semantic dispatcher
+                        // consumes the original result reference.
+                    }
+                    return returnType.type
+                }
             }
         }
         return typeMapper.toDotNetIlValueType(expression.type)
@@ -788,14 +808,20 @@ internal class DotNetIlExpressionCodegen(
                     expectedType.isDotNetReferenceShaped()
                 ) {
                     val logicalType = typeMapper.toDotNetIlValueType(expression.type)
-                    if (logicalType != null &&
-                        typeMapper.isGenericOwnerCapabilityViewOf(expectedType, logicalType)
+                    val selectedSemanticCapability =
+                        typeMapper.genericOwnerSemanticCapabilityTypeOrNull(expression.type)
+                    if ((logicalType != null &&
+                                typeMapper.isGenericOwnerCapabilityViewOf(expectedType, logicalType)) ||
+                        selectedSemanticCapability == expectedType
                     ) {
                         // A nested unstable construction such as Box<Consumer<Int>> stores the
                         // original sibling-capability object in Box<object>. The declaration and
                         // call planner select a capability only at the input-bearing member use;
                         // recover precisely that selected view without fabricating Consumer<int>
-                        // or turning identity/null consumers into semantic calls.
+                        // or turning identity/null consumers into semantic calls. A projected
+                        // Kotlin type can itself map only to object; in that case the independently
+                        // selected, producer-backed same-owner capability is the proof for this
+                        // checked view recovery, never the erased logical carrier.
                         emitExpression(expression, DotNetIlValueType.Object)
                         if (methodContext.isTerminated) return
                         methodContext.emit(
@@ -1561,7 +1587,11 @@ internal class DotNetIlExpressionCodegen(
             return
         }
         if (expression.operator == IrTypeOperator.REINTERPRET_CAST) {
-            if (operandType != castType || castType != expectedType) {
+            val preservesPhysicalValue = operandType == castType &&
+                    (castType == expectedType ||
+                            typeMapper.isGenericOwnerRehearsalEnabled() &&
+                            castType.isDotNetAssignableTo(expectedType))
+            if (!preservesPhysicalValue) {
                 dotNetUnsupported(
                     "reinterpret cast changes physical carrier from ${operandType.nameInSignature} " +
                             "to ${castType.nameInSignature} where ${expectedType.nameInSignature} is expected " +
@@ -1569,9 +1599,12 @@ internal class DotNetIlExpressionCodegen(
                 )
             }
             // Shared value-class declaration lowering uses REINTERPRET_CAST only to change the
-            // logical IR type of an already exact underlying value. Equal mapped carriers prove
-            // that the CLR evaluation stack needs no instruction; every unequal shape remains a
-            // located failure instead of becoming an unchecked physical conversion.
+            // logical IR type of an already exact underlying value. Equal operand/cast carriers
+            // prove that the reinterpretation itself needs no instruction. An enclosing consumer
+            // may still request a verifier-valid reference widening in the generic-owner
+            // rehearsal (for example a semantic interface to object); anything requiring boxing
+            // or a real conversion remains a located failure. The production-erased epoch keeps
+            // its prior equal-carrier rule.
             emitExpression(expression.argument, operandType)
             return
         }
@@ -2852,6 +2885,37 @@ internal class DotNetIlExpressionCodegen(
         }
     }
 
+    /**
+     * Binds the method arguments owned by one selected natural Runtime MethodDef.
+     *
+     * Most entries use the logical Kotlin method binders unchanged. A relative-input Runtime
+     * entry additionally owns one physical `<U : T>` binder which is absent from the logical
+     * declaration and from the canonical semantic sibling; that binder is derived only from the
+     * actual argument's recorded natural construction.
+     */
+    private fun runtimeNaturalMethodSpecArgumentsOrNull(
+        call: IrCall,
+        logicalCallee: IrSimpleFunction,
+        naturalInfo: DotNetIlFunctionInfo,
+    ): List<DotNetIlValueType>? {
+        val logicalArguments = logicalCallTypeArgumentsOrNull(
+            call,
+            typeMapper,
+            logicalCallee.typeParameters.size,
+        ) ?: return null
+        val relativeInputIndex =
+            DotNetRuntimeTypes.genericInterfaceRelativeGenericInputParameterIndex(logicalCallee)
+                ?: return logicalArguments
+        if (logicalArguments.isNotEmpty()) return null
+        val physicalInputIndex = relativeInputIndex + 1
+        val openInput = naturalInfo.signature.parameterTypes.getOrNull(physicalInputIndex)
+            as? DotNetIlValueType.GenericInstance ?: return null
+        val argumentType = call.arguments.getOrNull(physicalInputIndex)
+            ?.let(::mappedNaturalType) ?: return null
+        val argumentView = argumentType.dotNetViewAsGenericOwner(openInput.classInfo) ?: return null
+        return listOf(argumentView.arguments.singleOrNull() ?: return null)
+    }
+
     private fun methodSpecArgumentsOrNull(
         call: IrCall,
         mapper: DotNetIlTypeMapper,
@@ -3333,21 +3397,9 @@ internal class DotNetIlExpressionCodegen(
                 naturalReceiverType?.dotNetViewAsGenericOwner(info.owner) != null
             }
             ?.let { info ->
-                val relativeInputIndex =
-                    DotNetRuntimeTypes.genericInterfaceRelativeGenericInputParameterIndex(sourceCallee)
-                if (relativeInputIndex == null) {
-                    info to null
-                } else {
-                    val physicalInputIndex = relativeInputIndex + 1
-                    val openInput = info.signature.parameterTypes.getOrNull(physicalInputIndex)
-                        as? DotNetIlValueType.GenericInstance ?: return@let null
-                    val argumentType = call.arguments.getOrNull(physicalInputIndex)
-                        ?.let(::mappedNaturalType) ?: return@let null
-                    val argumentView = argumentType.dotNetViewAsGenericOwner(openInput.classInfo)
-                        ?: return@let null
-                    val relativeArgument = argumentView.arguments.singleOrNull() ?: return@let null
-                    info to listOf(relativeArgument)
-                }
+                val arguments = runtimeNaturalMethodSpecArgumentsOrNull(call, sourceCallee, info)
+                    ?: return@let null
+                info to arguments
             }
         val naturalRuntimeInfo = naturalRuntimeCall?.first
         val syntheticMethodInstantiation = naturalRuntimeCall?.second
@@ -3731,8 +3783,15 @@ internal class DotNetIlExpressionCodegen(
         }
         val genericClassInfo = typeMapper.genericClassInfoOrNull(irClass)
         val constructorTypeMapper = typeMapper
+        val recordedConstructorInfo =
+            constructorTypeMapper.externalGenericOwnerConstructorInfoOrNull(constructor)
         val classInfo = genericClassInfo?.classInfo ?: constructorTypeMapper.classInfoOrNull(irClass)
             ?: dotNetUnsupported("constructor call of unsupported class '${irClass.name.asString()}'")
+        require(recordedConstructorInfo == null ||
+                recordedConstructorInfo.owner.physicalPathComponents() == classInfo.physicalPathComponents()
+        ) {
+            "external constructor '${constructor.render()}' disagrees with its producer-recorded CLR owner"
+        }
         val [producedType, ownerToken, classInstantiation] = if (
             genericClassInfo != null || irClass.typeParameters.isEmpty()
         ) {
@@ -3769,7 +3828,8 @@ internal class DotNetIlExpressionCodegen(
                         "where ${expectedType.nameInSignature} is expected"
             )
         }
-        val parameterTypes = constructor.dotNetSignature(constructorTypeMapper).parameterTypes
+        val parameterTypes = recordedConstructorInfo?.signature?.parameterTypes
+            ?: constructor.dotNetSignature(constructorTypeMapper).parameterTypes
         val substitutedParameterTypes = parameterTypes.map { it.substituteDotNetTypeParameters(classInstantiation) }
         emitArguments(call.arguments, substitutedParameterTypes, "constructor of '${irClass.name.asString()}'")
         methodContext.emit(
@@ -4703,11 +4763,13 @@ internal class DotNetIlExpressionCodegen(
             logicalCallee = source,
             explicitMethodSpecArguments = naturalMethodSpecArguments,
         ) ?: return false
-        val semanticMethodSpecArguments = if (isRelativeGenericInputBoolean) {
-            naturalCallBinding.methodSpecArguments
-        } else {
-            logicalMethodSpecArguments
-        }
+        // Bind each selected physical MethodDef independently. The synthetic relative-input
+        // `<U>` above belongs to the natural `I<T>.member<U>(I<U>)` MethodDef; today's canonical
+        // semantic sibling is the distinct non-generic `member(I)` MethodDef and must not inherit
+        // that MethodSpec argument merely because both implement one logical Kotlin operation.
+        // A future method-generic semantic twin needs its own producer-recorded role/signature
+        // evidence rather than reusing the natural binding by coincidence.
+        val semanticMethodSpecArguments = logicalMethodSpecArguments
         val semanticCallBinding = bindCallSiteOrNull(
             call = call,
             info = semanticInfo,
@@ -5115,6 +5177,15 @@ internal class DotNetIlExpressionCodegen(
         call: IrCall,
         source: IrSimpleFunction,
     ): Pair<DotNetIlFunctionInfo, DotNetIlValueType>? {
+        if (typeMapper.genericOwnerCapabilityCallTarget(call) != null ||
+            typeMapper.genericOwnerForeignDispatchCallTarget(call) != null
+        ) {
+            // Result layout is never operation authority. An exact receiver may use `T + out
+            // bool` only after the declaration/argument router has decided that this operation
+            // has no semantic input or result boundary; otherwise it could fabricate I<object>
+            // for a widened nested argument merely because the result happens to be split.
+            return null
+        }
         val logicalInfo = availableFunctions[source]
             ?: typeMapper.referencedFunctionInfoOrNull(source)
             ?: return null
@@ -5163,6 +5234,8 @@ internal class DotNetIlExpressionCodegen(
                 memberView,
             )
             val naturalReturnType = naturalInfo?.let { info ->
+                val naturalMethodSpecArguments =
+                    runtimeNaturalMethodSpecArgumentsOrNull(call, source, info) ?: return@let null
                 bindCallSiteOrNull(
                     call = call,
                     info = info,
@@ -5170,7 +5243,7 @@ internal class DotNetIlExpressionCodegen(
                         DotNetIlValueType.TypeParameter(index, isMethodParameter = false)
                     },
                     logicalCallee = source,
-                    explicitMethodSpecArguments = semanticCallBinding.methodSpecArguments,
+                    explicitMethodSpecArguments = naturalMethodSpecArguments,
                 )
             }?.verifierReturnType.let { it as? DotNetIlReturnType.Value }?.type
             if (naturalReturnType != null && naturalReturnType != semanticReturnType &&
@@ -6068,14 +6141,16 @@ internal class DotNetIlExpressionCodegen(
                 )
                 return
             }
-            // Keep an exact natural C<T> local on the ordinary CLR path, but permit a later
-            // Kotlin-variant view to select the same object's non-generic capability. The
-            // lowering records this only for immutable aliases whose producer is a Kotlin class
-            // emitted with both InterfaceImpl rows; arbitrary foreign I<T> objects do not gain
-            // this escape hatch.
+            // Keep an exact natural C<T> local on the ordinary CLR path, but permit an already
+            // selected non-generic capability destination to check the same object for that
+            // producer-known view. Outside a fixed physical boundary, only an immutable value
+            // proved capability-bearing may use the conversion. At a MethodDef/field/local/
+            // return boundary the destination itself is physical authority: `castclass C` is
+            // the sole identity-preserving adaptation and cannot fabricate C<object>.
             if (slotType.isDotNetReferenceShaped() &&
                 expectedType.isDotNetReferenceShaped() &&
-                typeMapper.isGenericOwnerCapabilityBearingDeclaration(expression.symbol.owner) &&
+                (fixedPhysicalBoundary != null ||
+                        typeMapper.isGenericOwnerCapabilityBearingDeclaration(expression.symbol.owner)) &&
                 typeMapper.isGenericOwnerCapabilityViewOf(expectedType, slotType)
             ) {
                 emitLoadSlot(slot)

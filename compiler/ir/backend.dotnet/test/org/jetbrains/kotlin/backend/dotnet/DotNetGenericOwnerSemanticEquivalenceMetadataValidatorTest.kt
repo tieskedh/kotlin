@@ -6,6 +6,7 @@
 package org.jetbrains.kotlin.backend.dotnet
 
 import java.io.File
+import org.jetbrains.kotlin.config.DotNetTarget
 import org.jetbrains.kotlin.load.dotnet.DotNetClrAssemblyMetadata
 import org.jetbrains.kotlin.load.dotnet.DotNetClrAssemblyReference
 import org.jetbrains.kotlin.load.dotnet.DotNetClrBlob
@@ -30,10 +31,83 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeSpecification
 import org.jetbrains.kotlin.load.dotnet.DotNetManagedAssemblyIdentity
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class DotNetGenericOwnerSemanticEquivalenceMetadataValidatorTest {
+    @Test
+    fun coreLibraryScopeAcceptsOnlyProfileSelectedFacadeAliases() {
+        val fixture = metadataFixture(methodArity = 0)
+        fun withCoreLibraryAssemblyName(name: String): DotNetClrAssemblyMetadata =
+            fixture.assembly.copy(
+                assemblyReferences = fixture.assembly.assemblyReferences.map { reference ->
+                    reference.copy(name = name)
+                },
+            )
+        val mscorlibAssembly = withCoreLibraryAssemblyName("mscorlib")
+        val netstandardAssembly = withCoreLibraryAssemblyName("netstandard")
+
+        fixture.bindFamily(producerTarget = DotNetTarget.NET10_0)
+        fixture.bindFamily(
+            metadata = mscorlibAssembly,
+            producerTarget = DotNetTarget.NET10_0,
+        )
+        fixture.bindFamily(
+            metadata = mscorlibAssembly,
+            producerTarget = DotNetTarget.NET48,
+        )
+        fixture.bindFamily(
+            metadata = netstandardAssembly,
+            producerTarget = DotNetTarget.NETSTANDARD_2_0,
+        )
+        assertFailsWith<IllegalArgumentException> {
+            fixture.bindFamily(producerTarget = DotNetTarget.NET48)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            fixture.bindFamily(producerTarget = DotNetTarget.NETSTANDARD_2_0)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            fixture.bindFamily(
+                metadata = netstandardAssembly,
+                producerTarget = DotNetTarget.NET10_0,
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            fixture.bindFamily(
+                metadata = mscorlibAssembly,
+                producerTarget = DotNetTarget.NETSTANDARD_2_0,
+            )
+        }
+        listOf("Forged.Core", "System.Private.CoreLib").forEach { rejectedAssemblyName ->
+            val rejectedAssembly = withCoreLibraryAssemblyName(rejectedAssemblyName)
+            DotNetTarget.entries.forEach { target ->
+                assertFailsWith<IllegalArgumentException>(
+                    "$rejectedAssemblyName for ${target.description}",
+                ) {
+                    fixture.bindFamily(
+                        metadata = rejectedAssembly,
+                        producerTarget = target,
+                    )
+                }
+            }
+        }
+
+        val systemObject = fixture.assembly.typeReferences.single()
+        assertTrue(fixture.assembly.matchesCoreLibraryTopLevelTypeReference(
+            handle = systemObject.handle,
+            expectedTypePath = listOf("System", "Object"),
+            expectedGenericArity = 0,
+            producerTarget = DotNetTarget.NET10_0,
+        ))
+        assertFalse(fixture.assembly.matchesExternalTopLevelTypeReference(
+            handle = systemObject.handle,
+            expectedTypePath = listOf("System", "Object"),
+            expectedGenericArity = 0,
+            expectedAssemblyName = "mscorlib",
+        ))
+    }
+
     @Test
     fun acceptsExactArityZeroAndArityOneForwardingBodies() {
         listOf(0, 1).forEach { methodArity ->
@@ -383,7 +457,7 @@ class DotNetGenericOwnerSemanticEquivalenceMetadataValidatorTest {
             val aliasedFamily = validateDotNetGenericOwnerSealedFamilyAgainstClrMetadata(
                 aliasedFamilyDeclaration,
                 fixture.assembly,
-                CORE_LIBRARY,
+                TARGET,
             )
             val aliasedCertificate =
                 validateDotNetGenericOwnerSemanticEquivalenceCertificateAgainstClrMetadata(
@@ -754,11 +828,12 @@ class DotNetGenericOwnerSemanticEquivalenceMetadataValidatorTest {
 
         fun bindFamily(
             metadata: DotNetClrAssemblyMetadata = assembly,
+            producerTarget: DotNetTarget = TARGET,
         ): DotNetGenericOwnerSealedFamilyMetadataBinding =
             validateDotNetGenericOwnerSealedFamilyAgainstClrMetadata(
                 familyDeclaration,
                 metadata,
-                CORE_LIBRARY,
+                producerTarget,
             )
 
         fun bindCertificate(
@@ -1269,7 +1344,8 @@ class DotNetGenericOwnerSemanticEquivalenceMetadataValidatorTest {
     }
 
     private companion object {
-        const val CORE_LIBRARY = "System.Private.CoreLib"
+        val TARGET = DotNetTarget.NET10_0
+        const val CORE_LIBRARY = "System.Runtime"
         const val TYPE_REF_TABLE = 1
         const val TYPE_DEF_TABLE = 2
         const val METHOD_DEF_TABLE = 6

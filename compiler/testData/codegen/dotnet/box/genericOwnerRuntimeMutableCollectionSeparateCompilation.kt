@@ -18,6 +18,15 @@ public fun widenedValueAddAll(
     elements: Collection<Int>,
 ): Boolean = collection.addAll(elements)
 
+public interface NestedProducer<out T> {
+    public fun read(): T
+}
+
+public fun widenedNestedProducerAddAll(
+    collection: MutableCollection<NestedProducer<Any?>>,
+    elements: Collection<NestedProducer<Int>>,
+): Boolean = collection.addAll(elements)
+
 public fun widenedValueRemoveAll(
     collection: MutableCollection<Any?>,
     elements: Collection<Int>,
@@ -171,6 +180,19 @@ public fun intCollection(value: Int): SingleCollection<Int> = SingleCollection(v
 
 public fun stringCollection(value: String): SingleCollection<String> = SingleCollection(value)
 
+public class AnyNestedProducer(private val value: Any?) : NestedProducer<Any?> {
+    override fun read(): Any? = value
+}
+
+public class IntNestedProducer(private val value: Int) : NestedProducer<Int> {
+    override fun read(): Int = value
+}
+
+public fun nestedProducerCollection(
+    initial: NestedProducer<Any?>,
+): RuntimeMutableCollectionValue<NestedProducer<Any?>> =
+    RuntimeMutableCollectionValue(initial)
+
 // MODULE: main(middle)
 // FILE: main.kt
 
@@ -189,6 +211,23 @@ fun box(): String {
     val values = intCollection(54)
     if (!widenedValueAddAll(exact, values)) return "value addAll result"
     if (exact.current() != 54 || !exact.sawBulk(values)) return "value addAll identity"
+
+    val nested = nestedProducerCollection(AnyNestedProducer("nested initial"))
+    val physicalProducer: NestedProducer<Int> = IntNestedProducer(73)
+    val widenedProducer: NestedProducer<Any?> = physicalProducer
+    val physicalProducerCollection = SingleCollection(physicalProducer)
+    if (!widenedNestedProducerAddAll(nested, physicalProducerCollection)) {
+        return "nested producer addAll result"
+    }
+    val storedProducer = nested.current()
+    if (widenedProducer !== physicalProducer ||
+        storedProducer !== physicalProducer ||
+        storedProducer !== widenedProducer ||
+        storedProducer.read() != 73 ||
+        !nested.sawBulk(physicalProducerCollection)
+    ) {
+        return "nested producer semantic storage"
+    }
 
     val projectedValues = intCollection(55)
     if (!projectedAddAll(exact, projectedValues)) return "projected addAll result"

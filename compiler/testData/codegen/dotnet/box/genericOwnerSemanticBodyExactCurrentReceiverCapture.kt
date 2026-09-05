@@ -35,6 +35,34 @@ private class FixedIterator<T>(private val value: T) : Iterator<T> {
     override fun next(): T = value
 }
 
+private interface MixedCapturedProducer<out T> {
+    fun read(): T
+}
+
+private class MixedCapturedProducerValue<T>(private val value: T) : MixedCapturedProducer<T> {
+    override fun read(): T = value
+}
+
+private interface MixedCapturedView<out T> {
+    fun read(): T
+    fun ownerValue(): T
+    fun capturedProducer(): MixedCapturedProducer<T>
+}
+
+// The generated object needs the exact current-owner T for its TypeSpec and owner capture, while
+// producer is a separate semantic capture: at T = Any? it may still physically be Producer<Int>.
+private class MixedCaptureOwner<out T>(private val value: T) {
+    private fun current(): T = value
+
+    fun capture(
+        producer: MixedCapturedProducer<@UnsafeVariance T>,
+    ): MixedCapturedView<T> = object : MixedCapturedView<T> {
+        override fun read(): T = producer.read()
+        override fun ownerValue(): T = this@MixedCaptureOwner.current()
+        override fun capturedProducer(): MixedCapturedProducer<T> = producer
+    }
+}
+
 fun box(): String {
     val valueOwner = FixedCapturingOwner(42, "marker")
     val widenedValue: CapturingOwner<Any?, Any?> = valueOwner
@@ -55,6 +83,23 @@ fun box(): String {
     replacedOwner.replace(replacement)
     if (replacedOwner.producer() !== replacement) return "broad cache identity"
     if (replacedOwner.producer().next() != "broad") return "broad cache result"
+
+    val mixedOwner = MixedCaptureOwner<Any?>("owner")
+    val physicalProducer: MixedCapturedProducer<Int> = MixedCapturedProducerValue(79)
+    val widenedProducer: MixedCapturedProducer<Any?> = physicalProducer
+    val mixedView = try {
+        mixedOwner.capture(widenedProducer)
+    } catch (_: ClassCastException) {
+        return "mixed capture narrowed constructor input"
+    }
+    if (mixedView.ownerValue() != "owner" || mixedView.read() != 79) {
+        return "mixed capture values"
+    }
+    if (mixedView.capturedProducer() !== physicalProducer ||
+        mixedView.capturedProducer() !== widenedProducer
+    ) {
+        return "mixed capture producer identity"
+    }
 
     return "OK"
 }

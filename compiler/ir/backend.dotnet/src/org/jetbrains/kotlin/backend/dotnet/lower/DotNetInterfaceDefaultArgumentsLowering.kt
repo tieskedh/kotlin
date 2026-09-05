@@ -474,6 +474,15 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
             origin = DOTNET_INTERFACE_DEFAULT_HELPER,
         )
         context.externalInterfaceDefaultHelpers[helper] = bound
+        bound.implementation.helperObjectParameterIndices.forEach { index ->
+            val parameter = helper.parameters.getOrNull(index)
+                ?: error(
+                    "External interface-default helper '${member.name}' records missing " +
+                            "object parameter $index"
+                )
+            context.genericOwnerCapabilityDeclarations += parameter
+            context.genericOwnerForeignDispatchDeclarations += parameter
+        }
         context.genericInterfaceDefaultSemanticHelpers[member] = helper
         return ExternalDefaultBinding(owner, member, helper, bound)
     }

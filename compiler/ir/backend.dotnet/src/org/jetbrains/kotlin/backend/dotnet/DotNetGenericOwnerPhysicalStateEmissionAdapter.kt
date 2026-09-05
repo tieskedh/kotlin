@@ -8,6 +8,8 @@ package org.jetbrains.kotlin.backend.dotnet
 /** Public diagnostic shape of one BOUND state FieldDef sealed by final emitter evidence. */
 enum class DotNetGenericOwnerPhysicalStateEmissionCarrierKind {
     OWNER_TYPE_PARAMETER,
+    CONSTRUCTED,
+    SZ_ARRAY,
     OBJECT,
 }
 
@@ -44,6 +46,8 @@ internal fun DotNetLocalGenericOwnerPhysicalAuthority.sealFinalStateFields(
     val scope = DotNetIlEmissionScope.entries.single { candidate -> candidate.owns(owner) }
     val scopeEmission = successfulEmissions.singleOrNull { emission -> emission.scope == scope }
         ?: error("Internal .NET backend error: BOUND state owner has no unique successful emission scope")
+    val expectedWriterParameters = family.states
+        .flatMap(DotNetLocalGenericOwnerPhysicalStateInput::typedWriterParameters)
     fun DotNetGenericOwnerPhysicalTypeDefEmissionObservation.claimsBoundStateOwnerOrField(): Boolean =
         claimedAliases.any(family.owner::sameLocalTypeIdentityAs) ||
                 (physicalType as? DotNetGenericOwnerObservedMethodDefOwner.Local)
@@ -55,6 +59,11 @@ internal fun DotNetLocalGenericOwnerPhysicalAuthority.sealFinalStateFields(
                             family.states.any { state ->
                                 field.physicalFieldIdentity == state.fieldDefinition.identity
                             }
+                } || methodDefParameters.any { observed ->
+                    expectedWriterParameters.any { expected ->
+                        observed.physicalFunction === expected.writer &&
+                                observed.physicalParameter === expected.parameter
+                    }
                 }
     val crossScopeDuplicates = successfulEmissions
         .asSequence()
@@ -103,6 +112,25 @@ internal fun DotNetLocalGenericOwnerPhysicalAuthority.sealFinalStateFields(
         ) {
             error("Internal .NET backend error: final FieldDef flags contradict BOUND state authority")
         }
+        state.typedWriterParameters.forEach { expectedWriter ->
+            val observedWriter = observedOwner.methodDefParameters.singleOrNull { candidate ->
+                candidate.physicalFunction === expectedWriter.writer &&
+                        candidate.physicalParameter === expectedWriter.parameter
+            } ?: error(
+                "Internal .NET backend error: BOUND typed state writer parameter has no unique " +
+                        "final MethodDef observation",
+            )
+            if (!expected.carrier.matchesFinalStateCarrier(
+                    observedWriter.carrier,
+                    family.owner,
+                    physicalOwner,
+                )
+            ) {
+                error(
+                    "Internal .NET backend error: final typed state writer parameter changed its exact carrier",
+                )
+            }
+        }
         val carrierKind: DotNetGenericOwnerPhysicalStateEmissionCarrierKind
         val ownerParameterIndex: Int?
         when (val expectedCarrier = expected.carrier) {
@@ -116,25 +144,49 @@ internal fun DotNetLocalGenericOwnerPhysicalAuthority.sealFinalStateFields(
                 ownerParameterIndex = null
             }
             is DotNetGenericOwnerSymbolicCarrierReference.Parameter -> {
-                val actual = observed.carrier as? DotNetGenericOwnerObservedMethodCarrier.OwnerParameter
-                    ?: error(
-                        "Internal .NET backend error: final typed FieldDef lost its owner-parameter carrier",
-                    )
                 val expectedBinder = expectedCarrier.binder as?
                         DotNetGenericOwnerPhysicalGenericBinderReference.Type
                     ?: error("Internal .NET backend error: BOUND state used a MethodDef parameter")
-                if (expectedBinder.definition != family.owner || actual.index != expectedCarrier.index ||
-                    actual.binder != physicalOwner
-                ) {
+                if (observed.carrier !is DotNetGenericOwnerObservedMethodCarrier.OwnerParameter) {
+                    error(
+                        "Internal .NET backend error: final typed FieldDef lost its owner-parameter carrier",
+                    )
+                }
+                if (expectedBinder.definition != family.owner ||
+                    !expectedCarrier.matchesFinalStateCarrier(
+                        observed.carrier,
+                        family.owner,
+                        physicalOwner,
+                    )) {
                     error("Internal .NET backend error: final typed FieldDef changed its exact binder")
                 }
                 carrierKind = DotNetGenericOwnerPhysicalStateEmissionCarrierKind.OWNER_TYPE_PARAMETER
-                ownerParameterIndex = actual.index
+                ownerParameterIndex = expectedCarrier.index
             }
-            is DotNetGenericOwnerSymbolicCarrierReference.Leaf,
-            is DotNetGenericOwnerSymbolicCarrierReference.Constructed,
-            is DotNetGenericOwnerSymbolicCarrierReference.SzArray,
-            -> error("Internal .NET backend error: unsupported BOUND state carrier '$expectedCarrier'")
+            is DotNetGenericOwnerSymbolicCarrierReference.Constructed -> {
+                if (!expectedCarrier.matchesFinalStateCarrier(
+                        observed.carrier,
+                        family.owner,
+                        physicalOwner,
+                    )) {
+                    error("Internal .NET backend error: final typed FieldDef changed its exact construction")
+                }
+                carrierKind = DotNetGenericOwnerPhysicalStateEmissionCarrierKind.CONSTRUCTED
+                ownerParameterIndex = null
+            }
+            is DotNetGenericOwnerSymbolicCarrierReference.SzArray -> {
+                if (!expectedCarrier.matchesFinalStateCarrier(
+                        observed.carrier,
+                        family.owner,
+                        physicalOwner,
+                    )) {
+                    error("Internal .NET backend error: final typed FieldDef changed its exact array carrier")
+                }
+                carrierKind = DotNetGenericOwnerPhysicalStateEmissionCarrierKind.SZ_ARRAY
+                ownerParameterIndex = null
+            }
+            is DotNetGenericOwnerSymbolicCarrierReference.Leaf ->
+                error("Internal .NET backend error: unsupported BOUND state carrier '$expectedCarrier'")
         }
         DotNetGenericOwnerPhysicalStateEmissionSnapshot(
             scope = scope,
@@ -151,3 +203,34 @@ internal fun DotNetLocalGenericOwnerPhysicalAuthority.sealFinalStateFields(
     DotNetGenericOwnerPhysicalStateEmissionSnapshot::ownerName,
     DotNetGenericOwnerPhysicalStateEmissionSnapshot::logicalFieldName,
 ))
+
+private fun DotNetGenericOwnerSymbolicCarrierReference.matchesFinalStateCarrier(
+    observed: DotNetGenericOwnerObservedMethodCarrier,
+    stateOwner: DotNetGenericOwnerPhysicalTypeDefIdentity.Local,
+    physicalStateOwner: DotNetGenericOwnerObservedLocalTypeDef,
+): Boolean = when (this) {
+    is DotNetGenericOwnerSymbolicCarrierReference.Leaf ->
+        observed == DotNetGenericOwnerObservedMethodCarrier.Leaf(kind)
+    is DotNetGenericOwnerSymbolicCarrierReference.Parameter -> {
+        val typeBinder = binder as? DotNetGenericOwnerPhysicalGenericBinderReference.Type
+            ?: return false
+        val actual = observed as? DotNetGenericOwnerObservedMethodCarrier.OwnerParameter
+            ?: return false
+        typeBinder.definition == stateOwner && actual.binder == physicalStateOwner &&
+                actual.index == index
+    }
+    is DotNetGenericOwnerSymbolicCarrierReference.Constructed -> {
+        val expectedDefinition = definition as? DotNetGenericOwnerPhysicalTypeDefIdentity.Local
+            ?: return false
+        val actual = observed as? DotNetGenericOwnerObservedMethodCarrier.LocalConstruction
+            ?: return false
+        actual.definition.aliases.any(expectedDefinition::sameLocalTypeIdentityAs) &&
+                actual.arguments.size == arguments.size && arguments.zip(actual.arguments).all { pair ->
+                    pair.first.matchesFinalStateCarrier(pair.second, stateOwner, physicalStateOwner)
+                }
+    }
+    is DotNetGenericOwnerSymbolicCarrierReference.SzArray -> {
+        val actual = observed as? DotNetGenericOwnerObservedMethodCarrier.SzArray ?: return false
+        element.matchesFinalStateCarrier(actual.element, stateOwner, physicalStateOwner)
+    }
+}

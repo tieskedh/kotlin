@@ -91,6 +91,15 @@ owners, names, flags, generic arities and binders, parameter carriers, result
 layout, fields, interface edges, and MethodImpl endpoints. It does not copy a
 missing fact from the bound index or overlay expected data onto actual output.
 
+An early bridge or MethodImpl reservation is therefore not sealed authority.
+If emission removes a declaration or changes a class/interface edge, the
+emitter rebuilds the live physical class graph and rebinds every surviving
+MethodImpl from its complete effective signature: instance/static form,
+MethodDef generic arity, all explicit parameters, and direct, void, or split-
+nullable result including the trailing `bool&`. Only a stable render round may
+seal or publish those endpoints; a stale reservation cannot survive eviction or
+relinking.
+
 A stable identity may correlate descriptions between epochs. A later epoch may
 bind an earlier symbolic physical type expression, but may not reinterpret a
 previously selected declaration family. Missing evidence is `Unavailable`.
@@ -127,6 +136,11 @@ from selected foreign metadata rather than a Kotlin representation plan.
 error. A separately compiled Kotlin consumer sees the producer's sealed fact
 through its verified producer record; it does not relabel that fact as a local
 emission.
+
+One logical IR declaration may not simultaneously be retained-foreign authority
+and a Kotlin planned, producer-recorded, emitted, or compiler-capability claim.
+Such a TypeDef or MethodDef collision is `Conflict`; source ordering, lookup
+precedence, and semantic fallback may not choose a winner.
 
 Physical carriers form a tagged vocabulary, not a Kotlin-subtype lattice:
 
@@ -275,57 +289,82 @@ priority-compressed owner disposition is diagnostic after this closure; it may
 report the dominant reason but cannot admit, reject, or conceal a resolved or
 unresolved field requirement. Intrinsic owner blockers remain independent.
 
-The first executable state grammar admits exactly one owner-dependent state
-slot. It must be private, mutable, non-static, plain-memory, and logically one
-direct owner parameter. That slot must already be classified as either:
+The executable state grammar admits one or more independent owner-dependent
+state slots. Each emitted FieldDef must be private, non-static, non-init-only,
+and plain-memory. Kotlin/IR source finality is not an exclusion: ordinary
+backing fields, including fields for `val`, are emitted non-init-only today.
+For typed state, the exact logical field type must bind either to one direct
+owner parameter or to one exact invariant construction of already admitted
+local class/natural-interface TypeDefs whose recursive leaves are declaration-
+independent carriers or parameters of the same physical owner. Semantic state
+selects `object` explicitly. Each target field retains its own full carrier and
+writer lineage; evidence for `!K`, `!V`, or `C<!K>` cannot authorize another
+field or construction. Every slot must already be classified independently as
+either:
 
-- `TYPED_STORAGE_PRODUCER_GRAPH_PROVEN`, bound to that owner's exact generic
-  parameter; or
+- `TYPED_STORAGE_PRODUCER_GRAPH_PROVEN`, recursively bound to that exact
+  carrier; or
 - `SEMANTIC_OBJECT_REQUIRED`, bound to `object`.
 
-For this first grammar, an admitted initializer may only be the exact
-`POSITIONAL_CONSTRUCTOR_PARAMETER` recipe: the selected constructor parameter
-is copied directly into the field with the recorded field-`T` value type. An
-explicit init-block store, another-field source, computed expression, or other
+The planning coordinate for a same-compilation construction uses its actual IR
+classifier identity. A public KLIB/linkage key is neither required nor invented
+for a private or executable-local TypeDef. BOUND validation then rebinds the
+same shape against the declaration index, and final emission compares the
+complete recursive FieldDef carrier. This is compilation-local physical
+identity, not portable producer authority.
+
+For this grammar, a field has one of two initialization shapes. It either has
+one implicit `POSITIONAL_CONSTRUCTOR_PARAMETER` initializer, or it has no
+implicit initializer and already has at least one direct `IrSetField` whose
+value is a same-logical-type non-dispatch parameter of the writer. An explicit
+init-block expression, another-field source, computed expression, or other
 nontrivial initializer makes the bounded family unavailable. For typed state,
-every direct store must likewise take its value from the exact non-dispatch
-parameter of its writer and that parameter must have the field's direct `T`
-type. These are conservative admission failures, not hard diagnostics against
-otherwise valid Kotlin; the rehearsal simply does not claim BOUND state
-authority for the owner.
+every live store must additionally consume a parameter whose independently
+bound physical carrier is exactly the selected FieldDef carrier; logical type
+equality alone is not authority. These are conservative admission failures,
+not hard diagnostics against otherwise valid Kotlin; the rehearsal simply does
+not claim BOUND state authority for the owner.
 
 One unresolved owner-dependent slot makes the whole owner unavailable. An
 owner-level priority/disposition summary cannot conceal
 `COMPLETE_ACCESS_GRAPH_REQUIRED` or
-`TYPED_WRITE_VALUE_PROVENANCE_REQUIRED`. Nested, projected, logically nullable,
-volatile, and declaration-independent slots are outside this first grammar.
+`TYPED_WRITE_VALUE_PROVENANCE_REQUIRED`. Exact invariant local constructions
+are admitted, and CLR-reference nullability may retain the same verifier
+carrier. Stars/projections, nullable bare owner parameters, substitution-
+dependent value/value-class nullability, arrays, volatile fields, open writer
+graphs, external state authority, and declaration-independent slots remain
+outside this grammar.
 
 At `BOUND_DECLARATION_INDEX`, the family records the complete identity set of
-all instance fields already declared on the owner. The admitted state slot also
-records its exact IR field identity, declaring owner, privacy/static/init-only
-flags, symbolic carrier, memory semantics, and whether the producer plan
-contained an implicit field initializer. Later lowerings may neither add a new
-`!T`/`object` shadow field nor remove any pre-existing instance field. Field
+all instance fields already declared on the owner. Each admitted state slot
+also records its exact IR field identity, declaring owner, privacy/static/init-
+only flags, symbolic carrier, memory semantics, and whether the producer plan
+contained an implicit field initializer. Later lowerings may neither add a
+duplicate or alternate-carrier shadow field nor remove any pre-existing
+instance field. Field
 emission consumes the symbolic authority before consulting the logical type
 mapper.
 
 Immediately before BOUND, after every admitted bridge- and body-producing pass,
 the backend re-scans the complete live module and re-proves the typed-writer
 grammar for every live store to the selected field. A newly materialized store
-which is not the exact non-dispatch field-`T` writer parameter makes the family
+whose value is not the exact non-dispatch writer parameter independently bound
+to the selected FieldDef carrier makes the family
 `Unavailable`; this is still conservative pre-BOUND admission, not an internal
 error. Once the family is BOUND, any further field or writer-set change is a
 contradiction of frozen authority and therefore an internal conflict.
 
 Before any dependency artifact, IL result, or PE product is published, the
 actual final observations are validated. The full observed instance-field
-identity set on the owner must equal the complete BOUND set; the selected owner-
-dependent FieldDef is then sealed separately. That seal requires one matching
-FieldDef on the exact TypeDef, no duplicate owner/field in another emission
-scope, and the BOUND TypeDef category and generic arity. It revalidates field
-identity, owner-derived scope, flags, carrier, binder, and the exact owner
-parameter index. The physical field name is first observed and sealed by this
-final-emission epoch; it is not BOUND authority. The PE harness correlates that
+identity set on the owner must equal the complete BOUND set; each selected
+owner-dependent FieldDef is then sealed separately. Each seal requires one
+matching FieldDef on the exact TypeDef, no duplicate owner/field in another
+emission scope, and the BOUND TypeDef category and generic arity. It revalidates
+field identity, owner-derived scope, flags, and the complete recursive carrier:
+constructed TypeDef identity, argument count and order, and every owner-
+parameter leaf's exact binder and index. The physical field name is first
+observed and sealed by this final-emission epoch; it is not BOUND authority. The
+PE harness correlates each
 sealed name with the objective FieldDef. Diagnostic state snapshots are
 published only after ILAsm reports success; IL-only and failure paths expose no
 snapshot or false seal.
@@ -335,11 +374,13 @@ site receives a unique copy-preserving lineage containing its exact target,
 owning producer declaration, statement origin, and verifier-visible value type.
 Final routing requires each lineage exactly once and rejects removal,
 duplication, retargeting, producer/origin/type changes, or a newly introduced
-write. The sole post-BOUND materialization contract is one pre-recorded exact
-positional Common `INITIALIZE_FIELD` store. Its constructor, parameter index,
-receiver, value symbol, value type, and occurrence count must match the
-producer-recorded initializer, and the field initializer itself must have been
-lowered away. This expected lowering is not a newly admitted writer.
+write. Only a field recorded with an implicit initializer has one post-BOUND
+materialization exception: the exact positional Common `INITIALIZE_FIELD`
+store. Its constructor, parameter index, receiver, value symbol, value type, and
+occurrence count must match the producer-recorded initializer, and the field
+initializer itself must have been lowered away. A field admitted from existing
+explicit stores has no such exception. The expected Common lowering is not a
+newly admitted writer.
 
 This is a producer-local authority proof, not a serialized per-value witness or
 a general external state record. A memberless downstream generic child may
@@ -347,6 +388,17 @@ inherit the exact base construction but owns no copied or shadow field. Broader
 state forms require another whole-owner structural proof. Converting a generic
 child's semantic-capability carrier to a separately owned base capability is an
 independent interface-carrier problem and remains outside Stage 6.
+
+Class-state planning must know about Kotlin variance before physical interface
+admission, but this does not make logical variance physical authority. A
+pristine local logical-hazard index records the declared variance vector of
+every Kotlin-owned generic interface. It may only veto an exact state or result
+proof when an owner-dependent argument is declaration-site variant or has a
+non-invariant use-site projection. It cannot admit a TypeDef, establish a
+constructed CLR view, select a MethodDef, or publish an ABI family. Imported
+CLR declarations stay outside this index; Runtime and external Kotlin families
+use their retained or producer-recorded authority. Later local admission must
+validate that its logical declaration still matches the frozen snapshot.
 
 ### 5. Per-value provenance is a product fact
 
@@ -502,6 +554,34 @@ supplies no replacement evidence. An actual `IMPLICIT_NOTNULL` may refine
 refinement which preserves every operation-guaranteed view and existing
 lineage; lineage remains only a selector over independently guaranteed views.
 
+An exact outer receiver construction is not by itself a certificate for an
+owner-dependent nested result. In particular,
+`Outer<Any?>.nested(): Producer<Any?>` may legally return the same object which
+physically implements only `Producer<int>` after Kotlin covariance. Such a
+member remains a semantic-result operation until producer-wide return analysis
+proves the expected natural construction on every normal path. The earlier
+`InlineConstructedSource<T>.source()` integration classification is corrected
+by the
+[nested-variant result archive](../archive/generic-owner-nested-variant-result-correction-2026-09-03.md);
+the post-selection live MethodDef and result-spine validations remain valid.
+
+Semantic-result selection is one final family policy, not an early cached
+Boolean. Local routing derives it after override/state closure, and the member-
+family record publishes the final requirement so external consumers never
+reconstruct it from a substituted logical return type. The same query governs
+prototype construction, routing, and property artifact validation. Adding or
+changing that serialized policy requires a physical-library ABI advance.
+
+For an open class family, semantic-result routing must still observe an ordinary
+C# subclass which overrides only the natural typed MethodDef. The virtual
+MethodDef probe may forward any count of binder-independent fixed-leaf
+arguments whose natural and semantic carriers are already proven identical;
+the broader `DECLARATION_INDEPENDENT` domain is not sufficient evidence. If the
+source is abstract, or an argument requires an unproved broad/owner-relative
+conversion, the class owner remains erased until a complete foreign-override
+dispatch exists. A protected compiler hook is never an extra C# authoring
+obligation.
+
 The same fourth form may contain more than one mutually exclusive direct call
 without weakening those requirements. Its first result-path grammar is exactly:
 
@@ -572,8 +652,8 @@ public ABI. `K` is declaration authority only and supplies no receiver/value
 provenance. Selected lineage remains only a selector over already guaranteed
 views and cannot supply any part of this proof.
 
-Physical-library ABI 67 loads and identity-binds `K` to the same library's
-complete `J` family. External-library ingestion independently binds every
+The physical-library ABI identity-binds `K` to the same library's complete `J`
+family. External-library ingestion independently binds every
 recorded `J` TypeDef, GenericParam, direct edge, MethodDef, Param, and
 MethodImpl to the producer DLL, then validates the two exact selected
 dispatcher MethodDef bodies. A method-generic forwarder additionally requires
@@ -1022,30 +1102,33 @@ or logical supertypes.
 
 ### 8. Disposition of the current bounded proofs
 
-The commits from `445266c9` through `030bb9e1` remain executable evidence while
+The bounded proofs which motivated this model remain executable evidence while
 the shared model runs in shadow mode. Their architectural disposition is:
 
 | Proof | Fundamental rule | Current implementation disposition |
 | --- | --- | --- |
-| `445266c9` post-representation covariant slots | an already emitted base/interface MethodDef is physical authority | **Fundamental; retain.** Later specialization emits an adapter/MethodImpl. Central declaration authority should replace any local signature reinterpretation. |
-| `ec04adb7` erased bootstrap interface edges | a TypeDef may mention only generic binders it physically owns | **Fundamental; retain.** This is a metadata validity guard, not an optimization recognizer. |
-| `8dd5800d` closed semantic interface inputs | a broad parameter may enter a semantic domain without erasing unrelated exact receiver/state facts | **Temporary proof restriction.** The current final/non-generic and paired-body slice should generalize to entry-environment facts plus independent parameter domains. |
-| `3581b56d` nullable generic interface results | direct open `T?` may have a producer-recorded payload-plus-null-flag layout | **Fundamental layout, removable combined role.** `SplitNullable` remains; any member category which couples it to inputs/owners is derived from `CallableContract`. |
-| `155e82c9` compiler-owned inline temporaries | a single-definition immutable alias may preserve its producer fact | **Derivable; authoritative consumers landed.** The shared final-fact adapter now derives direct equal-carrier aliases and one exhaustive unique-recorded-interface join for both source and compiler-owned locals without IR-origin evidence. The old recognizer remains migration fallback until entry, conversion, broader control-flow, and remaining carrier shapes are derived. |
-| `00dc1de3` exact-receiver output-only helpers | a proven receiver view may service an operation which consumes no broadened owner input | **Derivable and removable.** Use the shared polarity/parameter-domain query and virtual-slot authority, not a helper recognizer. |
-| `03cd3271` parameterless exact result chains | an authority-recorded producer result may carry exact provenance through a chain | **Derivable; authoritative consumers landed.** A bound natural MethodDef with an already-guaranteed receiver construction produces its `Direct` result through the shared operation query and may retain equal owner-bound `!n` storage after live emitter validation. Local result placement covers parameterless `SplitNullable`, a complete empty-MethodSpec vector of exact-natural strict-owner and fixed declaration-independent leaf operations, and the exact `<R>(K, R): V?` MethodSpec composition. Each admitted pair may have a positive number of mutually exclusive terminal direct-return uses; every other use category, unsupported control-flow join, unsupported mixed-domain vector, or other MethodSpec operation requires an independent policy. |
-| `030bb9e1` generated-owner captures | an exact captured definition may enter a field whose producer-wide storage plan selects that exact carrier | **Derivable and removable.** Generated/anonymous status is never evidence; capture definition, constructor transfer, and field plan are. |
+| post-representation covariant slots | an already emitted base/interface MethodDef is physical authority | **Fundamental; retain.** Later specialization emits an adapter/MethodImpl. Central declaration authority should replace any local signature reinterpretation. |
+| erased bootstrap interface edges | a TypeDef may mention only generic binders it physically owns | **Fundamental; retain.** This is a metadata validity guard, not an optimization recognizer. |
+| closed semantic interface inputs | a broad parameter may enter a semantic domain without erasing unrelated exact receiver/state facts | **Temporary proof restriction.** The current final/non-generic and paired-body slice should generalize to entry-environment facts plus independent parameter domains. |
+| nullable generic interface results | direct open `T?` may have a producer-recorded payload-plus-null-flag layout | **Fundamental layout, removable combined role.** `SplitNullable` remains; any member category which couples it to inputs/owners is derived from `CallableContract`. |
+| compiler-owned inline temporaries | a single-definition immutable alias may preserve its producer fact | **Derivable; authoritative consumers landed.** The shared final-fact adapter now derives direct equal-carrier aliases and one exhaustive unique-recorded-interface join for both source and compiler-owned locals without IR-origin evidence. The old recognizer remains migration fallback until entry, conversion, broader control-flow, and remaining carrier shapes are derived. |
+| exact-receiver output-only helpers | a proven receiver view may service an operation which consumes no broadened owner input | **Derivable and removable.** Use the shared polarity/parameter-domain query and virtual-slot authority, not a helper recognizer. |
+| parameterless exact result chains | an authority-recorded producer result may carry exact provenance through a chain | **Derivable mechanism; one integration premise superseded.** A final natural operation with an independently proven non-semantic result produces its `Direct` carrier and may retain equal owner-bound storage after live emitter validation. Exact outer receiver construction alone does not prove an owner-dependent nested result, so the former `InlineConstructedSource<T>.source()` positive now uses the semantic route. Parameterless `SplitNullable`, independently certified direct results, complete supported argument vectors, and exact MethodSpec compositions retain their separate authority. |
+| generated-owner captures | an exact captured definition may enter a field whose producer-wide storage plan selects that exact carrier | **Derivable and removable.** Generated/anonymous status is never evidence; capture definition, constructor transfer, and field plan are. |
 | Stage 6 producer-wide FieldDef authority | detached families, private helpers, state, and output pairing reach one monotone fixpoint; final per-field requirements select state before BOUND identity/writer freezing and actual-only sealing | **Fundamental authority rule with a temporary proof grammar.** Retain fixpoint closure, field-set and writer-lineage preservation, final-requirement admission, and actual-only sealing; generalize the admitted field/carrier grammar structurally. |
 | current caller-MethodDef `!!R` entry/local | a parameter read is produced by its exact BOUND current MethodDef entry environment, not by its logical type or an owner binder | **Derivable entry-environment rule with a temporary first grammar.** Retain BOUND identity, POST-only production, equal-carrier placement, live `ldarg`/`ldloc` rebinding, and final same-function header sealing; generalize binder count, constraints, carriers, and consumers independently. |
 | current caller-MethodDef `!!R` callee MethodSpec | a MethodSpec argument is an operation use of an independently authenticated caller carrier; equal caller/callee/TypeDef indices do not merge binder identity | **Derivable operation-binding rule with a temporary first grammar; authoritative consumer landed.** The shared late call-edge seal now derives the owner- and caller-bound positive behavior and hostile binder-swap failures from independent callee/caller scopes. Retain the bounded adapter only until the operation query itself admits a more general structural MethodSpec grammar. |
 | ordered caller-MethodDef direct-result prefixes | independently placed prefix definitions may feed one already-authoritative operation only through an exact emission-order obligation; prefix facts do not derive from the pending outer and remain valid if it is denied | **Derivable composition rule with a temporary first grammar; authoritative consumer landed.** The current two-prefix/balanced-roundtrip recognizer proves root scoping, carrier correlation, dependent denial, live source identity, and shared call-edge consumption. Replace the shape recognizer only when a general effect/sequence model derives the same obligations; do not fold prefixes into carrier authority. |
 
-None of the bounded positive proofs is presently classified as unsound within
-its asserted restrictions. Three tempting generalizations are unsound and are
-therefore forbidden: treating an IR origin as proof, treating a generated class
-as proof, or treating a parameterless call as proof without its MethodDef result
-contract and receiver lineage. Shadow comparison must include hostile negatives
-for each before deleting the old recognizer.
+The constructed-call/path-complete integration fixture previously made one
+unsound inference: exact outer construction was treated as nested-result
+semantic equivalence. That fixture classification is superseded; the generic
+live-result validation remains a correct consumer after a natural operation is
+independently authorized. Three further tempting generalizations remain
+forbidden: treating an IR origin as proof, treating a generated class as proof,
+or treating a parameterless call as proof from its physical signature and
+receiver lineage without declaration-stable result policy. Shadow comparison
+must include hostile negatives before deleting an old recognizer.
 
 ### 9. Split-nullable is an orthogonal result layout
 
@@ -1118,8 +1201,44 @@ Serialized `K` records declaration equivalence only. An external consumer must
 rebuild every value fact independently from its own final IR and live physical
 entry; neither `K` nor selected-view lineage can create a receiver view.
 
-Physical-library ABI 66 records the CLR sealed-delegate variance exception as
-an orthogonal class-TypeDef fact. The fact remains separate from logical KLIB
+#### Pending external direct-supertype edges
+
+A KLIB-derived prototype may retain an unresolved logical direct-supertype
+locator when the physical owner belongs to another Kotlin artifact. Its
+`PENDING_EXTERNAL_PHYSICAL_EDGE` disposition, logical classifier, path-unbound
+type tree, and nullability/projection snapshot carry no TypeDef, construction,
+or edge authority. They exist only to select the producer fact which must be
+authenticated later.
+
+External physicalization resolves that locator against the selected producer
+artifact and validates the exact physical owner, CLR category and arity, plus
+the complete nested argument tree and nullable-reference flags. Only that join
+may turn the pending locator into an exact edge. Missing, ambiguous, stale, or
+mismatched producer evidence remains unavailable or conflicting; it never
+fabricates a construction such as `I<object>` from the logical KLIB view.
+
+#### Constructor MethodDef seal
+
+The ordinary physical function record `F` identifies a constructor endpoint as
+the instance `.ctor` on its recorded owner, but it is not by itself a complete
+semantic-carrier contract. When a public generic-owner constructor exposes a
+producer-selected object-domain parameter, the producer additionally publishes
+`L:<logicalConstructorKey>` from the final live constructor header. `L` records
+the same logical owner and constructor, physical owner path, visibility, and
+complete non-generic void MethodDef signature, including every physical
+parameter carrier.
+
+`L` is valid only with same-library `C` and `F` endpoints and after exact PE
+validation of the owner chain, flags, overload, and signature. A separate
+consumer which needs any non-natural constructor slot must find the requested
+parameter as `object` in that authenticated `L`; it never remaps the constructor
+from KLIB. Missing authority keeps the construction unavailable or the owner
+erased. `L` does not by itself admit a CLR-generic owner, supertype edge, state
+layout, or member family.
+
+The rehearsal record schema represents the CLR sealed-delegate variance
+exception as an orthogonal class-TypeDef fact. The fact remains separate from
+logical KLIB
 classifier kind and from method/member authority. For the current bounded
 producer grammar, the record carries one complete ordered, unconstrained
 GenericParam variance vector. Only the decoded producer-library adapter may
@@ -1561,8 +1680,9 @@ covers at least:
 
 Each positive test must prove object identity, authoritative state, selected
 MethodDef/MethodImpl, exact carrier where promised, and Kotlin-visible result.
-Each negative test must prove fail-closed behavior without a fabricated view or
-silent semantic fallback.
+Each negative test must prove fail-closed behavior without a fabricated exact
+view or an exact route acquired through silent fallback. An independently
+selected semantic route remains valid.
 
 ## Migration recommendation
 
@@ -1594,113 +1714,11 @@ revised.
 This is a **GO** for production-inert architectural consolidation. It is not a
 GO for a generic-interface, generic-class, or stdlib ABI cutover.
 
-The bounded Stage 6 state slice implements the declaration/state half of this
-model and is retained as executable evidence. Stage 7 independently composes one
-strict owner input with a split-nullable owner result on a custom structural
-family, including producer-recorded MethodDef consumption, ordinary C#
-implementation, and the exact erased inverse. A later extension removes the
-non-MethodSpec consumer's zero/one cardinality branch and proves the first
-repeated-input instance at `N = 2`; it does not claim mixed MethodSpec or new
-foreign/C# evidence. Retained/foreign operation
-authority now also covers a resource-bounded recursive memberless interface
-graph. Multi-member consumption, including same-name/same-arity overloads, is
-now executable evidence that authority remains independently per retained
-MethodDef. Ordered multi-binder forwarding and permutation now use the same
-physical-interface closure without another substitution engine. Exact retained
-edge proofs now admit bounded TypeSpec nominal constraints, including dependent
-parameter implication, without widening the general construction helper. Exact
-direct nominal non-generic interface, ordinary reference-class, and value-type
-carriers are retained from selected and raw-authenticated TypeDefs without
-fabricating their edge closure. Recursive constructed carriers retain these
-forms plus exact sealed CLR delegates, including exact value-type arguments,
-under the shared physical depth/node budgets. Actual signature class/value
-markers must agree with the retained TypeDef, and non-nullable versus
-`System.Nullable<T>` carriers preserve their distinct physical null encodings.
-Covariant and contravariant delegate constructions require shared selected-root
-and sealed-TypeDef classification. Their reference-only conversions now share
-the interface argument-direction planner, physical classifier, exact ancestry,
-and value-provenance transfer; declared delegate members are not implied by
-that authority.
-Nominally or specially constrained TypeDefs may now occur recursively inside an
-exact retained edge, with separate source/edge/subtree proofs and operation-
-scoped authority that cannot escape into general construction. Reference,
-value, default-constructor, and by-ref-like binder forms compose through the
-shared target-aware validator rather than a backend-local substitute. That same
-validator now authenticates each exact constrained source/target subtree for
-one reference-variance conversion. The declaration index carries only selected-
-metadata authority for this query; success records a per-value view, leaves the
-source carrier and InterfaceImpl closure untouched, and cannot be reused by the
-general construction helper or a sibling target. Direct retained owners and
-inherited graphs share this rule on Framework 4.8 and .NET 10. ABI 66
-additionally admits unconstrained producer-recorded sealed delegates through
-the same reference-only conversion. Covariant, contravariant, and mixed ordered
-binders retain their exact construction while ordinary variant classes,
-unmarked producer records, value arguments, and caller-authored delegate facts
-fail closed. This declaration proof does not claim producer-side delegate
-synthesis, constrained producer delegate rows, delegate members, or operation
-routing. Direct equal-carrier local placement, one exhaustive unique-common-
-interface join, bare and constructed-natural exact parameter entries, one
-parameterless natural MethodDef `Direct` result, and one `SplitNullable` pair
-whose positive reads are all terminal same-function returns now consume final
-value facts through an explicit authority adapter. Constructed locals and
-entries remain local owner-bound
-reference `C<!n,...>` forms; the bare entry and result slices add `!n` with
-substitution-dependent null encoding. The result path selects a bound MethodDef
-and only a receiver construction already guaranteed by provenance; an existing
-semantic route vetoes natural production, while the absence of an older route-
-census record supplies no evidence and does not hide an ordinary natural call.
-One exact argument-bearing operation additionally binds every final argument
-fact to its instantiated slot, preserves an orthogonal split-nullable result,
-and corrects a weaker semantic fallback only after explicit logical-result
-policy permits it. That same final operation now authorizes pair-local placement
-for a complete empty-MethodSpec vector of `STRICT_OWNER_INPUT` slots and fixed
-declaration-independent Boolean/Int32/String/Object leaves. Natural and
-semantic MethodDefs must agree on each leaf, instantiated leaves remain equal,
-and only a `DECLARATION_INDEPENDENT` producer-planned regular parameter with
-matching typed/current fixed-leaf prototypes and `Direct(Fixed(same leaf))`
-final storage reaches operation routing; owner, constructed, broad semantic-
-object, fallback-object, and MethodDef-binder facts remain excluded. The
-retained token is the complete operation rather than result-only evidence. A second exact
-operation binds the selected MethodDef's
-producer-recorded generic arity to one complete MethodSpec vector whose entries
-are proven current-owner parameters; TypeDef and MethodDef substitution remain
-independent, broad logical receivers remain semantic, and a caller-MethodDef
-parameter supplies no false class-binder authority. Producer binding and
-authority validation now compose those same policies for one unconstrained
-generic MethodDef with a strict owner input and split-nullable owner output.
-Separate consumers bind the producer record, direct exact calls remain
-unboxed, and ordinary natural-only C# implementations are reached by widened
-Kotlin calls without changing identity. Each placement path independently
-checks the live emitter or every fixed-boundary branch. Pair-local placement now
-also consumes that exact `<R>(K, R): V?` operation. Its token preserves both the
-open `!K`/`!!R`/`!V` declaration and the instantiated owner-bound MethodSpec and
-carriers, and sealed emission must agree with both. Pair declaration repeats the
-complete live-use proof so later IR cannot turn placement authority into a
-non-return, protected, other-target, or sequential consumer. Other generic or
-unsupported mixed-domain input shapes remain unavailable. Split-pair placement through flat
-control-flow initializer joins and cardinality-independent strict-owner input
-vectors are now closed. A direct constructed-parameter alias now validates its
-expected `I<!T,...>` against the final verifier-visible storage-read slot rather
-than a carrier reconstructed from its logical whole expression. This late check
-cannot mint provenance and fails closed on disagreement. Remaining constructed
-entry forms expand only through enumerated independent emitter observations,
-starting with the actually selected direct-call MethodDef result—not another
-state or stdlib recognizer. The first caller `!!R` entry/local carrier is
-independently BOUND and late-sealed, and its bounded callee use follows that
-separate entry proof. Explicit conversions remain later. The entry fact alone
-grants no operation authority; a separate adapter may use it only as the sole
-MethodSpec argument of a selected local natural `<R>(R): T` interface MethodDef
-whose one-parameter TypeDef, input/result slots, receiver construction, and
-unconstrained binders are all independently BOUND. Caller, callee, and TypeDef
-binder identities remain distinct. Semantic/widened receivers, `super`, split,
-mixed, nested, constrained, and multiple-binder forms remain unavailable. A
-shared call-edge seal now rebinds the complete live operation before this token
-may authorize a later bounded consumer. The current seal is local,
-exact-natural, and non-empty-MethodSpec only; it creates no new route. One
-exact-root ordered two-prefix/balanced-roundtrip consumer may now retain the
-direct `!T` result only after independently placed `I<!T>` and caller `!!R`
-prefixes correlate, and emission must consume that same seal. General prefix,
-container, branch, conversion, and MethodSpec result placement remains closed.
+Checkpoint-specific implementation chronology and verification evidence are
+preserved in the
+[2026-09-05 consolidation archive](../archive/generic-owner-physical-authority-consolidation-2026-09-05.md).
+They are executable evidence for this migration order, not additional durable
+representation rules.
 
 ## Consequences
 

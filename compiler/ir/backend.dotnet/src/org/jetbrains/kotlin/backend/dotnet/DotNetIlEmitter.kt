@@ -43,6 +43,7 @@ import org.jetbrains.kotlin.ir.declarations.IrDeclarationWithVisibility
 import org.jetbrains.kotlin.ir.declarations.IrEnumEntry
 import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrFile
+import org.jetbrains.kotlin.ir.declarations.IrFunction
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrProperty
@@ -247,6 +248,14 @@ internal class DotNetIlEmitter(
         covariantReturnBridges.asSequence()
             .filter(DotNetLoweredCovariantReturnBridge::requiresNewSlotOnTarget)
             .mapTo(linkedSetOf(), DotNetLoweredCovariantReturnBridge::target)
+    private val covariantReturnBridgeByImplementation: Map<IrSimpleFunction, DotNetLoweredCovariantReturnBridge> =
+        buildMap {
+            for (bridge in covariantReturnBridges) {
+                check(put(bridge.implementation, bridge) == null) {
+                    "Internal .NET backend error: one covariant-return adapter has multiple lowering records"
+                }
+            }
+        }
 
     /**
      * Renders the module to IL text.
@@ -836,128 +845,141 @@ internal class DotNetIlEmitter(
             return interfaceView.erasedGenericValueClassImplementationView(member)
         }
 
-        // Base-chain and interface linking pass, deliberately AFTER every registration: a base
-        // class or interface may be declared after its user (forward references are legal IL —
-        // probe-verified, inheritprobe_s1 — and legal Kotlin), so the links cannot be built
-        // inside the gate loop. The links feed [isDotNetAssignableTo]'s upcast walk only; the
-        // `extends` and `implements` lines are re-resolved from the LIVE map every render round
-        // (see [renderUserClass]), so a base or interface that failed the gate (its entry is
-        // absent here, leaving the link out) or is evicted later evicts its derived
-        // classes/implementers/sub-interfaces through the fixpoint rather than through these
-        // links. The base link is the full SUPERTYPE token — closed (`D : Box<Int>`) or open and
-        // composed (`D<A, B> : Box<B, A>`) — and must widen only to that exact instantiation. A
-        // base whose instantiation mentions an unmappable or unavailable type simply leaves the
-        // link out (the render's live re-resolution owns the eviction and its carried reason).
-        for ([irClass, classInfo] in availableClasses) {
-            classInfo.baseType = if (irClass.isAnnotationClass) {
-                // The logical KLIB edge is kotlin.Annotation, but the same declaration's
-                // physical class extends System.Attribute. Record that physical edge in the
-                // ordinary assignability graph as well as on the rendered `extends` line, so a
-                // freshly constructed marker widens to an Annotation-typed local without a cast.
-                DotNetIlValueType.MappedClass("${typeMapper.coreLibrary.reference}System.Attribute")
-            } else {
-                irClass.dotNetBaseSuperTypeOrNull()?.let { baseSuperType ->
+        fun relinkLivePhysicalClassGraph() {
+            // Base-chain and interface linking pass, deliberately AFTER every registration: a base
+            // class or interface may be declared after its user (forward references are legal IL —
+            // probe-verified, inheritprobe_s1 — and legal Kotlin), so the links cannot be built
+            // inside the gate loop. The links feed [isDotNetAssignableTo]'s upcast walk and are
+            // rebuilt from the live maps before each MethodImpl-sealing round. The `extends` and
+            // `implements` lines are independently re-resolved from those maps by [renderUserClass],
+            // so a base or interface that failed the gate or was evicted takes its derived
+            // classes/implementers/sub-interfaces down through the fixpoint. The base link is the
+            // full SUPERTYPE token — closed (`D : Box<Int>`) or open and
+            // composed (`D<A, B> : Box<B, A>`) — and must widen only to that exact instantiation. A
+            // base whose instantiation mentions an unmappable or unavailable type simply leaves the
+            // link out (the render's live re-resolution owns the eviction and its carried reason).
+            for ([irClass, classInfo] in availableClasses) {
+                classInfo.baseType = if (irClass.isAnnotationClass) {
+                    // The logical KLIB edge is kotlin.Annotation, but the same declaration's
+                    // physical class extends System.Attribute. Record that physical edge in the
+                    // ordinary assignability graph as well as on the rendered `extends` line, so a
+                    // freshly constructed marker widens to an Annotation-typed local without a cast.
+                    DotNetIlValueType.MappedClass("${typeMapper.coreLibrary.reference}System.Attribute")
+                } else {
+                    irClass.dotNetBaseSuperTypeOrNull()?.let { baseSuperType ->
+                        try {
+                            typeMapper.toDotNetIlBaseClassType(baseSuperType)
+                        } catch (_: DotNetIlUnsupportedException) {
+                            null
+                        }
+                    }
+                }
+                val canonicalInterfaces = irClass.dotNetDirectInterfaceTypes().mapNotNull { interfaceType ->
                     try {
-                        typeMapper.toDotNetIlBaseClassType(baseSuperType)
+                        canonicalGenericSignatureTypeMapper.toDotNetIlImplementedInterfaceType(interfaceType)
                     } catch (_: DotNetIlUnsupportedException) {
                         null
                     }
+                }.filter { interfaceType ->
+                    interfaceType is DotNetIlValueType.UserClass ||
+                            interfaceType is DotNetIlValueType.GenericInstance
                 }
+                classInfo.interfaces = (canonicalInterfaces +
+                        externalGenericOwnerCapabilitySuperTypes[irClass].orEmpty()).distinct()
             }
-            val canonicalInterfaces = irClass.dotNetDirectInterfaceTypes().mapNotNull { interfaceType ->
-                try {
-                    canonicalGenericSignatureTypeMapper.toDotNetIlImplementedInterfaceType(interfaceType)
-                } catch (_: DotNetIlUnsupportedException) {
-                    null
-                }
-            }.filter { interfaceType ->
-                interfaceType is DotNetIlValueType.UserClass ||
-                        interfaceType is DotNetIlValueType.GenericInstance
-            }
-            classInfo.interfaces = (canonicalInterfaces +
-                    externalGenericOwnerCapabilitySuperTypes[irClass].orEmpty()).distinct()
-        }
-        // Populate the structural graph for every PHYSICAL view, not only the canonical one.
-        // Codegen uses this graph for assignability and owner-view recovery; the IL renderer
-        // independently prints the same edges below. Keeping only the canonical links would make
-        // declared/exact capabilities appear unrelated even though the emitted metadata says
-        // otherwise.
-        for ([irClass, classInfo] in availableClasses) {
-            val ownInterfaceInfo = genericInterfaces[irClass]
-            if (ownInterfaceInfo == null) {
-                // A declaration-erased class has no CLR owner parameter with which to spell
-                // `C<T> : I<T>`. Mapping it to `I<object>` would invent a distinct obligation and
-                // still would not represent `I<String>` or `I<int>`. The canonical interface keeps
-                // Kotlin dispatch. A genuinely closed edge such as `C<T> : I<String>` is retained.
-                val typedInterfaces = if (
-                    irClass.origin == DOTNET_GENERIC_OWNER_CAPABILITY_INTERFACE
-                ) emptyList() else irClass.dotNetDirectInterfaceTypes().mapNotNull { interfaceType ->
-                    if (
-                        typeMapper.isErasedGenericClass(irClass) &&
-                        interfaceType.referencesTypeParameterOf(irClass)
-                    ) {
-                        return@mapNotNull null
+            // Populate the structural graph for every PHYSICAL view, not only the canonical one.
+            // Codegen uses this graph for assignability and owner-view recovery; the IL renderer
+            // independently prints the same edges below. Keeping only the canonical links would make
+            // declared/exact capabilities appear unrelated even though the emitted metadata says
+            // otherwise.
+            for ([irClass, classInfo] in availableClasses) {
+                val ownInterfaceInfo = genericInterfaces[irClass]
+                if (ownInterfaceInfo == null) {
+                    // A declaration-erased class has no CLR owner parameter with which to spell
+                    // `C<T> : I<T>`. Mapping it to `I<object>` would invent a distinct obligation and
+                    // still would not represent `I<String>` or `I<int>`. The canonical interface keeps
+                    // Kotlin dispatch. A genuinely closed edge such as `C<T> : I<String>` is retained.
+                    val typedInterfaces = if (
+                        irClass.origin == DOTNET_GENERIC_OWNER_CAPABILITY_INTERFACE
+                    ) emptyList() else irClass.dotNetDirectInterfaceTypes().mapNotNull { interfaceType ->
+                        if (
+                            typeMapper.isErasedGenericClass(irClass) &&
+                            interfaceType.referencesTypeParameterOf(irClass)
+                        ) {
+                            return@mapNotNull null
+                        }
+                        val interfaceClass = (interfaceType.classifier as? IrClassSymbol)?.owner
+                            ?: return@mapNotNull null
+                        val interfaceInfo = typeMapper.genericInterfaceInfoOrNull(interfaceClass)
+                            ?: return@mapNotNull null
+                        val capabilityView = interfaceInfo.mostSpecificCapabilityView
+                            ?: return@mapNotNull null
+                        typeMapper.genericInterfaceCapabilityTypeOrNull(
+                            interfaceType,
+                            capabilityView,
+                        )
                     }
-                    val interfaceClass = (interfaceType.classifier as? IrClassSymbol)?.owner
-                        ?: return@mapNotNull null
-                    val interfaceInfo = typeMapper.genericInterfaceInfoOrNull(interfaceClass)
-                        ?: return@mapNotNull null
-                    val capabilityView = interfaceInfo.mostSpecificCapabilityView
-                        ?: return@mapNotNull null
-                    typeMapper.genericInterfaceCapabilityTypeOrNull(
-                        interfaceType,
-                        capabilityView,
-                    )
+                    // A consumer class whose producer base was emitted in the erased epoch may need
+                    // to reimplement a typed interface explicitly. The lowering-created bridge is
+                    // the physical evidence for that InterfaceImpl edge. Put the edge in the linked
+                    // graph before MethodDef reservation as well as in the final renderer, so a
+                    // MethodImpl binds through the exact metadata construction it will actually name.
+                    val bridgeInterfaces = irClass.dotNetTypedBridgeReimplementedInterfaceTypes(typeMapper)
+                    classInfo.interfaces = (classInfo.interfaces + typedInterfaces + bridgeInterfaces).distinct()
+                    continue
                 }
-                classInfo.interfaces = (classInfo.interfaces + typedInterfaces).distinct()
-                continue
-            }
 
-            val declaredClassInfo = ownInterfaceInfo.declaredClassInfo ?: continue
+                val declaredClassInfo = ownInterfaceInfo.declaredClassInfo ?: continue
 
-            val declaredSelf = typeMapper.genericInterfaceCapabilityTypeOrNull(
-                irClass.defaultType,
-                DotNetGenericInterfaceView.DECLARED,
-            ) ?: error("Internal .NET backend error: declared generic interface self-view is unavailable")
-            val declaredSupers = irClass.dotNetDirectInterfaceTypes().mapNotNull { interfaceType ->
-                val interfaceClass = (interfaceType.classifier as? IrClassSymbol)?.owner
-                    ?: return@mapNotNull null
-                if (typeMapper.genericInterfaceInfoOrNull(interfaceClass) == null ||
-                    !typeMapper.isClrLegalDeclaredGenericInterfaceSupertype(interfaceType, irClass)
-                ) return@mapNotNull null
-                typeMapper.genericInterfaceCapabilityTypeOrNull(
-                    interfaceType,
+                val declaredSelf = typeMapper.genericInterfaceCapabilityTypeOrNull(
+                    irClass.defaultType,
                     DotNetGenericInterfaceView.DECLARED,
-                )
-            }
-            if (declaredClassInfo !== ownInterfaceInfo.canonicalClassInfo) {
-                declaredClassInfo.interfaces =
-                    (listOf(DotNetIlValueType.UserClass(ownInterfaceInfo.canonicalClassInfo)) + declaredSupers)
-                        .distinct()
-            }
-
-            ownInterfaceInfo.exactClassInfo?.let { exactInfo ->
-                val exactSupers = irClass.dotNetDirectInterfaceTypes().mapNotNull { interfaceType ->
+                ) ?: error("Internal .NET backend error: declared generic interface self-view is unavailable")
+                val declaredSupers = irClass.dotNetDirectInterfaceTypes().mapNotNull { interfaceType ->
                     val interfaceClass = (interfaceType.classifier as? IrClassSymbol)?.owner
                         ?: return@mapNotNull null
-                    val superInfo = typeMapper.genericInterfaceInfoOrNull(interfaceClass)
-                        ?: return@mapNotNull null
-                    val capabilityView = superInfo.mostSpecificCapabilityView
-                        ?: return@mapNotNull null
+                    if (typeMapper.genericInterfaceInfoOrNull(interfaceClass) == null ||
+                        !typeMapper.isClrLegalDeclaredGenericInterfaceSupertype(interfaceType, irClass)
+                    ) return@mapNotNull null
                     typeMapper.genericInterfaceCapabilityTypeOrNull(
                         interfaceType,
-                        capabilityView,
+                        DotNetGenericInterfaceView.DECLARED,
                     )
                 }
-                exactInfo.interfaces = (listOf(declaredSelf) + exactSupers).distinct()
+                if (declaredClassInfo !== ownInterfaceInfo.canonicalClassInfo) {
+                    declaredClassInfo.interfaces =
+                        (listOf(DotNetIlValueType.UserClass(ownInterfaceInfo.canonicalClassInfo)) + declaredSupers)
+                            .distinct()
+                }
+
+                ownInterfaceInfo.exactClassInfo?.let { exactInfo ->
+                    val exactSupers = irClass.dotNetDirectInterfaceTypes().mapNotNull { interfaceType ->
+                        val interfaceClass = (interfaceType.classifier as? IrClassSymbol)?.owner
+                            ?: return@mapNotNull null
+                        val superInfo = typeMapper.genericInterfaceInfoOrNull(interfaceClass)
+                            ?: return@mapNotNull null
+                        val capabilityView = superInfo.mostSpecificCapabilityView
+                            ?: return@mapNotNull null
+                        typeMapper.genericInterfaceCapabilityTypeOrNull(
+                            interfaceType,
+                            capabilityView,
+                        )
+                    }
+                    exactInfo.interfaces = (listOf(declaredSelf) + exactSupers).distinct()
+                }
             }
         }
+        relinkLivePhysicalClassGraph()
         // Static facade-field references (`ldsfld`/`stsfld` of top-level property backing
         // fields) resolve their owning IL class through this map, the facade counterpart of
         // [DotNetIlTypeMapper.classInfoOrNull].
         val facadeClassInfoByFile = files.associateWith { DotNetIlClassInfo(fileClassNames.getValue(it)) }
 
         val availableFunctions = LinkedHashMap<IrSimpleFunction, DotNetIlFunctionInfo>()
+        val availableConstructors = LinkedHashMap<IrConstructor, DotNetIlFunctionInfo>()
+        val methodImplBindings = LinkedHashMap<IrSimpleFunction, DotNetIlMethodImplBinding>()
+        val earlyMethodImplReservations =
+            LinkedHashMap<IrSimpleFunction, DotNetMethodImplReservation>()
         DotNetRuntimeTypes.registerCallableFunctions(
             irBuiltIns,
             functionAdapterSymbols,
@@ -1100,7 +1122,13 @@ internal class DotNetIlEmitter(
                 genericClasses.remove(subtreeClass)
                 // The members go with the class: a call site must not resolve to a member of a
                 // class that no longer exists in the module.
-                subtreeClass.dotNetMemberFunctions().forEach(availableFunctions::remove)
+                subtreeClass.dotNetMemberFunctions().forEach { member ->
+                    availableFunctions.remove(member)
+                    methodImplBindings.remove(member)
+                    earlyMethodImplReservations.remove(member)
+                }
+                subtreeClass.declarations.filterIsInstance<IrConstructor>()
+                    .forEach(availableConstructors::remove)
                 val subtreeReason = when {
                     subtreeClass === failedClass -> reason
                     subtreeClass === evictionRoot -> rootReason
@@ -1165,6 +1193,13 @@ internal class DotNetIlEmitter(
                 val constructorsByIlIdentity = hashMapOf<String, IrConstructor>()
                 for (constructor in irClass.declarations.filterIsInstance<IrConstructor>()) {
                     val signature = constructor.dotNetSignature(typeMapper)
+                    if (genericOwnerRehearsal) {
+                        availableConstructors[constructor] = DotNetIlFunctionInfo(
+                            classInfo,
+                            signature,
+                            physicalMethodName = ".ctor",
+                        )
+                    }
                     val ilIdentity = ".ctor(${signature.renderParameterTypes()})"
                     constructorsByIlIdentity.put(ilIdentity, constructor)?.let {
                         dotNetUnsupported(
@@ -1220,18 +1255,6 @@ internal class DotNetIlEmitter(
                         )
                         continue
                     }
-                    val signatureMapper = memberTypeMapper(member)
-                    val signature = try {
-                        if (member.origin == DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE) {
-                            member.dotNetCanonicalBridgeSignature(signatureMapper)
-                        } else {
-                            member.dotNetSignature(signatureMapper)
-                        }
-                    } catch (e: DotNetIlUnsupportedException) {
-                        if (member.isReifiedInlinePhysicalRemainder()) continue
-                        throw e
-                    }
-                    checkOverrideKeepsIlSignature(member, signature, signatureMapper, ::memberTypeMapper)
                     val genericInterfaceInfo = genericInterfaces[irClass]
                     val sourceMemberView = if (
                         genericInterfaceInfo?.exactClassInfo != null &&
@@ -1248,6 +1271,60 @@ internal class DotNetIlEmitter(
                             genericInterfaceInfo?.exactClassInfo ?: classInfo
                         null -> classInfo
                     }
+                    val signatureMapper = memberTypeMapper(member)
+                    val bridgePlan = covariantReturnBridgeByImplementation[member]
+                    val methodImplReservation: DotNetMethodImplReservation?
+                    val boundCurrentMethod = localGenericOwnerPhysicalAuthority
+                        ?.currentMethodInfoOrNull(
+                            member,
+                            signatureMapper,
+                            physicalMethodName = null,
+                        )
+                    val signature = try {
+                        check(boundCurrentMethod == null || bridgePlan == null &&
+                                member.origin.dotNetGenericInterfaceBridgeMemberViewOrNull == null) {
+                            "Internal .NET backend error: one MethodDef has both current and adapter authority"
+                        }
+                        // A BOUND MethodDef is already physical truth. Do not first remap the
+                        // logical IR signature merely to discard it: that would still make a
+                        // forward reference fail when the logical view is not independently
+                        // representable in this emission epoch.
+                        val selectedSignature = boundCurrentMethod?.signature ?: if (
+                            member.origin == DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE
+                        ) {
+                            member.dotNetCanonicalBridgeSignature(signatureMapper)
+                        } else {
+                            member.dotNetSignature(signatureMapper)
+                        }
+                        methodImplReservation = when {
+                            bridgePlan != null -> {
+                                check(bridgePlan.owner === irClass) {
+                                    "Internal .NET backend error: covariant-return adapter changed its logical owner"
+                                }
+                                member.dotNetCovariantReturnBridgeReservation(
+                                    bridge = bridgePlan,
+                                    useSiteCarrier = physicalOwner.dotNetOpenSelfType(),
+                                    mappedSignature = selectedSignature,
+                                    typeMapper = typeMapper,
+                                    physicalSignatureMapper = ::memberTypeMapper,
+                                    knownSlotInfo = availableFunctions[bridgePlan.inheritedMember],
+                                )
+                            }
+                            member.origin.dotNetGenericInterfaceBridgeMemberViewOrNull != null &&
+                                    member.dotNetValueClassImplementationSourceOrNull() == null ->
+                                member.dotNetGenericInterfaceTypedBridgeReservation(
+                                useSiteCarrier = physicalOwner.dotNetOpenSelfType(),
+                                mappedSignature = selectedSignature,
+                                typeMapper = typeMapper,
+                            )
+                            else -> null
+                        }
+                        methodImplReservation?.bodySignature ?: selectedSignature
+                    } catch (e: DotNetIlUnsupportedException) {
+                        if (member.isReifiedInlinePhysicalRemainder()) continue
+                        throw e
+                    }
+                    checkOverrideKeepsIlSignature(member, signature, signatureMapper, ::memberTypeMapper)
                     val physicalMethodName = when {
                         member.origin.isDotNetGenericInterfaceRelativeGenericInputBridge -> {
                             val naturalNames = member.overriddenSymbols.map { overridden ->
@@ -1282,12 +1359,31 @@ internal class DotNetIlEmitter(
                                     "both map to the same IL method '$ilIdentity'"
                         )
                     }
-                    availableFunctions[member] = DotNetIlFunctionInfo(
+                    val memberInfo = boundCurrentMethod?.let { current ->
+                        check(current.owner.ilTypeRef == physicalOwner.ilTypeRef &&
+                                current.signature == signature &&
+                                current.genericOwnerPhysicalMethodIdentity ==
+                                genericOwnerPhysicalMethodDefEmissionBindings[member]) {
+                            "Internal .NET backend error: BOUND current MethodDef disagrees with local registration"
+                        }
+                        DotNetIlFunctionInfo(
+                            current.owner,
+                            current.signature,
+                            physicalMethodName,
+                            current.genericOwnerPhysicalMethodIdentity,
+                        )
+                    } ?: DotNetIlFunctionInfo(
                         physicalOwner,
                         signature,
                         physicalMethodName,
                         genericOwnerPhysicalMethodDefEmissionBindings[member],
                     )
+                    availableFunctions[member] = memberInfo
+                    methodImplReservation?.let { reservation ->
+                        check(earlyMethodImplReservations.put(member, reservation) == null) {
+                            "Internal .NET backend error: MethodImpl adapter was reserved twice"
+                        }
+                    }
                 }
                 for (member in irClass.dotNetMemberFakeOverrides()) {
                     checkInheritedInterfaceImplKeepsIlSignature(
@@ -1313,6 +1409,100 @@ internal class DotNetIlEmitter(
             } catch (e: DotNetIlUnsupportedException) {
                 evictClassSubtree(irClass, e.reason)
             }
+        }
+
+        // The early reservation chose each body header so collision checks could run. This query
+        // rebuilds the physical owner graph from the declarations which are live in the current
+        // render round, then resolves every declaration from that same live MethodDef table (or
+        // retained producer/foreign authority). A failure evicts the implementation owner and
+        // requests another fixpoint round; only a stable round may retain these bindings.
+        fun resealLiveMethodImplBindings(): Boolean {
+            relinkLivePhysicalClassGraph()
+            methodImplBindings.clear()
+            var implementationOwnerEvicted = false
+            for ([implementation, early] in earlyMethodImplReservations.toList()) {
+                val bridge = covariantReturnBridgeByImplementation[implementation]
+                val bodyInfo = availableFunctions[implementation] ?: continue
+                try {
+                    val mappedSignature = implementation.dotNetSignature(memberTypeMapper(implementation))
+                    val sealed = if (bridge != null) {
+                        val slotOwner = bridge.inheritedMember.parent as? IrClass
+                        val registeredSlotInfo = availableFunctions[bridge.inheritedMember]
+                        if (slotOwner != null && typeMapper.isCurrentModuleClass(slotOwner) &&
+                            registeredSlotInfo == null
+                        ) {
+                            dotNetUnsupported(
+                                "covariant-return declaration '${slotOwner.diagnosticName()}." +
+                                        "${bridge.inheritedMember.name.asString()}' did not survive physical emission"
+                            )
+                        }
+                        implementation.dotNetCovariantReturnBridgeReservation(
+                            bridge = bridge,
+                            useSiteCarrier = bodyInfo.owner.dotNetOpenSelfType(),
+                            mappedSignature = mappedSignature,
+                            typeMapper = typeMapper,
+                            physicalSignatureMapper = ::memberTypeMapper,
+                            knownSlotInfo = registeredSlotInfo,
+                        )
+                    } else {
+                        check(implementation.origin.dotNetGenericInterfaceBridgeMemberViewOrNull != null) {
+                            "Internal .NET backend error: reserved MethodImpl adapter has no lowering role"
+                        }
+                        implementation.dotNetGenericInterfaceTypedBridgeReservation(
+                            useSiteCarrier = bodyInfo.owner.dotNetOpenSelfType(),
+                            mappedSignature = mappedSignature,
+                            typeMapper = typeMapper,
+                        )
+                    }
+                    val declarationsUnchanged =
+                        early.declarations.size == sealed.declarations.size &&
+                                early.declarations.zip(sealed.declarations).all { pair ->
+                                    val before = pair.first
+                                    val after = pair.second
+                                    before.declarationFunction === after.declarationFunction &&
+                                            before.declarationOwner == after.declarationOwner &&
+                                            before.declarationInfo.owner.ilTypeRef ==
+                                            after.declarationInfo.owner.ilTypeRef &&
+                                            before.declarationInfo.signature == after.declarationInfo.signature &&
+                                            before.declarationMethodName == after.declarationMethodName
+                                }
+                    check(early.bodySignature == sealed.bodySignature && declarationsUnchanged &&
+                            bodyInfo.signature == sealed.bodySignature) {
+                        "Internal .NET backend error: MethodImpl authority changed between " +
+                                "MethodDef reservation and sealed emission for '${implementation.render()}': " +
+                                "early body=${early.bodySignature}, sealed body=${sealed.bodySignature}, " +
+                                "registered body=${bodyInfo.signature}; early declarations=" +
+                                early.declarations.joinToString { declaration ->
+                                    "${declaration.declarationOwner.nameInSignature}::" +
+                                            "${declaration.declarationMethodName}${declaration.declarationInfo.signature}"
+                                } + "; sealed declarations=" +
+                                sealed.declarations.joinToString { declaration ->
+                                    "${declaration.declarationOwner.nameInSignature}::" +
+                                            "${declaration.declarationMethodName}${declaration.declarationInfo.signature}"
+                                }
+                    }
+                    check(methodImplBindings.put(
+                        implementation,
+                        DotNetIlMethodImplBinding(
+                            bodyFunction = implementation,
+                            bodyInfo = bodyInfo,
+                            declarations = sealed.declarations,
+                        ),
+                    ) == null) {
+                        "Internal .NET backend error: MethodImpl was sealed twice"
+                    }
+                } catch (failure: DotNetIlUnsupportedException) {
+                    val implementationOwner = implementation.parent as? IrClass
+                        ?: error("Internal .NET backend error: MethodImpl adapter has no class owner")
+                    evictClassSubtree(implementationOwner, failure.reason)
+                    implementationOwnerEvicted = true
+                }
+            }
+            check(methodImplBindings.keys ==
+                    earlyMethodImplReservations.keys.filterTo(linkedSetOf()) { it in availableFunctions }) {
+                "Internal .NET backend error: live MethodImpl adapters and sealed bindings differ"
+            }
+            return implementationOwnerEvicted
         }
 
         val renderedClasses = LinkedHashMap<IrClass, RenderedClass>()
@@ -1436,6 +1626,25 @@ internal class DotNetIlEmitter(
             staticFieldLines.clear()
             staticInitializationFailureFieldLines.clear()
             var anyDeclarationRemoved = false
+            if (resealLiveMethodImplBindings()) {
+                anyDeclarationRemoved = true
+                val progressStateAfterReseal = listOf(
+                    availableClasses.size,
+                    availableFunctions.size,
+                    classSkipReasons.size,
+                    skipReasons.size,
+                    propertySkipReasons.size,
+                    failedInitializerFiles.size,
+                )
+                check(progressStateAfterReseal != progressStateAtRoundStart) {
+                    "Internal .NET backend error: MethodImpl resealing evicted an owner " +
+                            "without changing the live declaration or diagnostic state"
+                }
+                // A declaration removed late in this reseal can invalidate a binding inserted
+                // earlier in the same snapshot. Do not render from that transient map: the next
+                // round rebuilds the graph and every binding from the reduced live set.
+                continue
+            }
             for (irClass in availableClasses.keys.toList()) {
                 // Already evicted with the subtree of an earlier failure in this round.
                 if (irClass !in availableClasses) continue
@@ -1447,6 +1656,8 @@ internal class DotNetIlEmitter(
                         classInfo = availableClasses.getValue(irClass),
                         irClass = irClass,
                         availableFunctions = availableFunctions,
+                        availableConstructors = availableConstructors,
+                        methodImplBindings = methodImplBindings,
                         intrinsicMethods = intrinsicMethods,
                         typeMapper = typeMapper,
                         declaredGenericTypeMapper = declaredGenericTypeMapper,
@@ -1949,10 +2160,77 @@ internal class DotNetIlEmitter(
             }
         }
         val emittedFiles = files.toSet()
+        fun publishedInterfaceMemberRoleOrNull(
+            source: IrSimpleFunction,
+        ): DotNetPublishedGenericInterfaceMemberRole? {
+            val owner = source.parent as? IrClass ?: return null
+            val contract = publishedGenericInterfaceFamilies[owner] ?: return null
+            val logicalMemberKey = preLoweringDeclarationKeys[source] ?: return null
+            return contract.declaredMembers.singleOrNull { member ->
+                member.logicalMemberKey == logicalMemberKey
+            }?.role
+        }
+        val semanticResultSources = if (genericOwnerRehearsal) {
+            buildSet {
+                genericOwnerArchitecturePlans.values.forEach { plan ->
+                    plan.memberFamilies.values.forEach { family ->
+                        if (family.requiresSemanticResultCapability) add(family.source)
+                    }
+                }
+                genericOwnerCapabilitySlots.keys.forEach { source ->
+                    if (publishedInterfaceMemberRoleOrNull(source)
+                            ?.requiresSemanticResultCapability == true
+                    ) {
+                        add(source)
+                    }
+                }
+            }
+        } else {
+            emptySet()
+        }
+        val semanticObjectParameters = if (genericOwnerRehearsal) {
+            buildMap {
+                genericOwnerArchitecturePlans.values.forEach { plan ->
+                    plan.memberFamilies.values.forEach { family ->
+                        if (family.semanticObjectParameterIndices.isNotEmpty()) {
+                            put(family.source, family.semanticObjectParameterIndices)
+                        }
+                    }
+                }
+                genericOwnerCapabilitySlots.keys.forEach { source ->
+                    val indices = publishedInterfaceMemberRoleOrNull(source)
+                        ?.semanticObjectParameterIndices
+                        .orEmpty()
+                    if (indices.isNotEmpty()) {
+                        val previous = put(source, indices)
+                        check(previous == null || previous == indices) {
+                            "Internal .NET backend error: generic-interface and owner-family " +
+                                    "semantic-input policies disagree for '${source.render()}'"
+                        }
+                    }
+                }
+            }
+        } else {
+            emptyMap()
+        }
+        val genericOwnerConstructorPlans = if (genericOwnerRehearsal) {
+            genericOwnerArchitecturePlans.values
+                .flatMap { plan -> plan.constructors }
+                .associateBy { constructor -> constructor.source }
+        } else {
+            emptyMap()
+        }
         val declarations = collectDotNetLibraryDeclarations(
             files = emittedFiles,
             availableClasses = availableClasses,
             availableFunctions = availableFunctions,
+            availableConstructors = availableConstructors,
+            genericOwnerConstructorPlans = genericOwnerConstructorPlans,
+            finalTypeDefObservations = if (genericOwnerRehearsal) {
+                renderedClasses.values.flatMap { rendered -> rendered.typeDefEmissionObservations }
+            } else {
+                emptyList()
+            },
             genericInterfaces = genericInterfaces,
             genericClasses = genericClasses,
             currentAssemblyName = assemblyName,
@@ -1974,8 +2252,12 @@ internal class DotNetIlEmitter(
                 if (genericOwnerRehearsal) genericOwnerFunctionInputEntries else emptyMap(),
             genericOwnerFunctionInputEntryAuthorities =
                 if (genericOwnerRehearsal) genericOwnerFunctionInputEntryAuthorities else emptyMap(),
+            genericOwnerFunctionInputEntryObjectParameters =
+                if (genericOwnerRehearsal) genericOwnerFunctionInputEntryObjectParameters else emptyMap(),
             genericOwnerForeignOverrideProbeTargets =
                 if (genericOwnerRehearsal) genericOwnerForeignOverrideProbeTargets else emptyMap(),
+            genericOwnerSemanticResultSources = semanticResultSources,
+            genericOwnerSemanticObjectParameterIndices = semanticObjectParameters,
             preLoweringDeclarationKeys = preLoweringDeclarationKeys,
             interfaceDefaultImplementations = interfaceDefaultImplementations,
             defaultArgumentDispatchers = defaultArgumentDispatchers,
@@ -2732,6 +3014,13 @@ internal class DotNetIlEmitter(
                         carrier = normalizeObservedTypeCarrier(field.carrier, physicalBinder),
                     )
                 },
+                methodDefParameters = raw.methodDefParameters.map { parameter ->
+                    DotNetGenericOwnerPhysicalMethodDefParameterObservation(
+                        physicalFunction = parameter.physicalFunction,
+                        physicalParameter = parameter.physicalParameter,
+                        carrier = normalizeObservedTypeCarrier(parameter.carrier, physicalBinder),
+                    )
+                },
             )
         }
         val methodImplObservations = rawMethodImplObservations.map { raw ->
@@ -3362,39 +3651,54 @@ internal class DotNetIlEmitter(
         }
     }
 
-    /** One verifier-visible result convention after binding the declaring TypeDef's `!n` leaves. */
-    private sealed class DotNetBoundPhysicalResultLayout {
-        object Void : DotNetBoundPhysicalResultLayout()
-        data class Direct(val carrier: DotNetIlValueType) : DotNetBoundPhysicalResultLayout()
-        data class SplitNullable(val payload: DotNetIlValueType) : DotNetBoundPhysicalResultLayout()
+    /** One authoritative declaration MethodDef bound through a concrete physical receiver view. */
+    private data class DotNetBoundPhysicalMethodAtUseSite(
+        val declarationOwner: DotNetIlValueType,
+        val declarationInfo: DotNetIlFunctionInfo,
+        val shape: DotNetIlEffectiveMethodImplSignature,
+    )
 
-        fun render(): String = when (this) {
-            Void -> "void"
-            is Direct -> carrier.nameInSignature
-            is SplitNullable -> "${payload.nameInSignature} + out bool"
+    /** Early MethodDef reservation retained until every local MethodDef has been registered. */
+    private data class DotNetMethodImplReservation(
+        val bodySignature: DotNetIlMethodSignature,
+        val declarations: List<DotNetIlMethodImplDeclarationBinding>,
+    )
+
+    /** Copies one bound declaration layout into the MethodDef header of its explicit body. */
+    private fun DotNetIlEffectiveMethodImplSignature.dotNetMethodImplBodySignature(
+        bodyOwner: DotNetIlValueType,
+    ): DotNetIlMethodSignature {
+        val declaredParameters = if (hasSplitNullableResult) {
+            check(explicitPhysicalParameterTypes.lastOrNull() ==
+                    DotNetIlValueType.ByReference(DotNetIlValueType.Boolean)) {
+                "Internal .NET backend error: split-nullable MethodImpl shape lacks its out-bool slot"
+            }
+            explicitPhysicalParameterTypes.dropLast(1)
+        } else {
+            explicitPhysicalParameterTypes
         }
+        return DotNetIlMethodSignature(
+            returnType = returnType,
+            parameterTypes = if (hasThis) listOf(bodyOwner) + declaredParameters else declaredParameters,
+            hasThis = hasThis,
+            hasSplitNullableResult = hasSplitNullableResult,
+            methodGenericParameterCount = methodGenericParameterCount,
+        )
     }
 
-    /**
-     * The complete MethodDef layout relevant to CLR override/interface-slot identity. The
-     * dispatch receiver's owner token is deliberately omitted: a class implementation and its
-     * interface slot necessarily have different receiver owners. Every explicit parameter,
-     * MethodDef generic binder, instance/static bit, and result convention remains physical.
-     */
-    private data class DotNetBoundPhysicalMethodShape(
-        val isInstance: Boolean,
-        val methodGenericParameterCount: Int,
-        val parameterTypes: List<DotNetIlValueType>,
-        val resultLayout: DotNetBoundPhysicalResultLayout,
-    ) {
-        fun render(): String = buildString {
-            if (isInstance) append("instance ")
-            append(resultLayout.render())
-            if (methodGenericParameterCount > 0) append(" <").append(methodGenericParameterCount).append('>')
-            append('(')
-            append(parameterTypes.joinToString(", ") { it.nameInSignature })
-            append(')')
+    private fun DotNetIlEffectiveMethodImplSignature.render(): String = buildString {
+        if (hasThis) append("instance ")
+        if (hasSplitNullableResult) {
+            val payload = (returnType as? DotNetIlReturnType.Value)?.type
+                ?: error("Internal .NET backend error: split-nullable MethodImpl shape has a void payload")
+            append(payload.nameInSignature).append(" + out bool")
+        } else {
+            append(returnType.nameInSignature)
         }
+        if (methodGenericParameterCount > 0) append(" <").append(methodGenericParameterCount).append('>')
+        append('(')
+        append(explicitPhysicalParameterTypes.joinToString(", ") { it.nameInSignature })
+        append(')')
     }
 
     /**
@@ -3409,6 +3713,14 @@ internal class DotNetIlEmitter(
     ): DotNetIlFunctionInfo {
         val declarationOwner = parent as? IrClass
             ?: dotNetUnsupported("physical member '${name.asString()}' has no declaring class")
+        val signatureMapper = physicalSignatureMapper(this)
+        localGenericOwnerPhysicalAuthority?.selectedBoundMethodInfoOrNull(
+            this,
+            signatureMapper,
+            dotNetAbiMethodNameOrNull(
+                isErasedGenericClass = signatureMapper::isErasedGenericClass,
+            ),
+        )?.let { return it }
         if (
             declarationOwner.isInterface &&
             !typeMapper.isCurrentModuleClass(declarationOwner) &&
@@ -3425,15 +3737,14 @@ internal class DotNetIlEmitter(
             recordedNaturalMethods.singleOrNull()?.second?.let { return it }
         }
         typeMapper.referencedFunctionInfoOrNull(this)?.let { return it }
-        val mapper = physicalSignatureMapper(this)
-        val physicalOwner = mapper.classInfoOrNull(declarationOwner)
+        val physicalOwner = signatureMapper.classInfoOrNull(declarationOwner)
             ?: dotNetUnsupported(
                 "physical owner of '${declarationOwner.diagnosticName()}.${name.asString()}' is unavailable"
             )
         val signature = if (origin == DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE) {
-            dotNetCanonicalBridgeSignature(mapper)
+            dotNetCanonicalBridgeSignature(signatureMapper)
         } else {
-            dotNetSignature(mapper)
+            dotNetSignature(signatureMapper)
         }
         return DotNetIlFunctionInfo(physicalOwner, signature)
     }
@@ -3443,54 +3754,226 @@ internal class DotNetIlEmitter(
      * the exact physical supertype construction already present in the linked graph; `!!n`
      * remains an identity binder. No logical fake-override type is consulted or reconstructed.
      */
+    private fun IrSimpleFunction.dotNetBoundPhysicalMethodAt(
+        useSiteCarrier: DotNetIlValueType,
+        typeMapper: DotNetIlTypeMapper,
+        physicalSignatureMapper: (IrSimpleFunction) -> DotNetIlTypeMapper,
+        knownInfo: DotNetIlFunctionInfo? = null,
+    ): DotNetBoundPhysicalMethodAtUseSite {
+        val declarationOwner = parent as? IrClass
+            ?: dotNetUnsupported("physical member '${name.asString()}' has no declaring class")
+        val info = knownInfo ?: dotNetAuthoritativePhysicalInfo(typeMapper, physicalSignatureMapper)
+        val ownerArity = info.owner.typeParameterCount
+        val physicalDeclarationOwner = if (ownerArity == 0) {
+            val hasPhysicalView = sequenceOf(useSiteCarrier) + useSiteCarrier.dotNetAllSupertypes()
+            if (hasPhysicalView.none { view ->
+                    view is DotNetIlValueType.UserClass &&
+                            view.classInfo.ilTypeRef == info.owner.ilTypeRef
+                }
+            ) {
+                dotNetUnsupported(
+                    "physical receiver '${useSiteCarrier.nameInSignature}' has no view of " +
+                            "non-generic MethodDef owner '${info.owner.ilTypeRef}' required by " +
+                            "'${declarationOwner.diagnosticName()}.${name.asString()}'"
+                )
+            }
+            DotNetIlValueType.UserClass(info.owner)
+        } else {
+            useSiteCarrier.dotNetUniqueViewAsGenericOwner(info.owner)
+                ?.takeIf { view -> view.arguments.size == ownerArity }
+                ?: run {
+                    val matchingViews = (sequenceOf(useSiteCarrier) + useSiteCarrier.dotNetAllSupertypes())
+                        .filterIsInstance<DotNetIlValueType.GenericInstance>()
+                        .filter { view -> view.classInfo.ilTypeRef == info.owner.ilTypeRef }
+                        .map { view -> view.nameInSignature }
+                        .distinct()
+                        .toList()
+                    dotNetUnsupported(
+                    "physical receiver '${useSiteCarrier.nameInSignature}' has no unique exact view of " +
+                            "'${info.owner.ilTypeRef}' required by " +
+                            "'${declarationOwner.diagnosticName()}.${name.asString()}'; matching views=" +
+                            matchingViews.joinToString(prefix = "[", postfix = "]")
+                    )
+                }
+        }
+        return dotNetBindPhysicalMethodAtOwner(physicalDeclarationOwner, info)
+    }
+
+    /**
+     * Binds through one bridge-selected view, but only after the linked physical graph proves
+     * that exact construction exists. The selected lineage disambiguates multiple honest views;
+     * it is not authority and can never fabricate a missing InterfaceImpl edge.
+     */
+    private fun IrSimpleFunction.dotNetBoundPhysicalMethodAtSelectedView(
+        useSiteCarrier: DotNetIlValueType,
+        selectedDeclarationOwner: DotNetIlValueType.GenericInstance,
+        info: DotNetIlFunctionInfo,
+    ): DotNetBoundPhysicalMethodAtUseSite {
+        check(selectedDeclarationOwner.classInfo.ilTypeRef == info.owner.ilTypeRef &&
+                selectedDeclarationOwner.arguments.size == info.owner.typeParameterCount) {
+            "Internal .NET backend error: selected MethodImpl lineage disagrees with its MethodDef owner"
+        }
+        val selectedViewExists = (sequenceOf(useSiteCarrier) + useSiteCarrier.dotNetAllSupertypes())
+            .any { physicalView -> physicalView == selectedDeclarationOwner }
+        if (!selectedViewExists) {
+            dotNetUnsupported(
+                "physical receiver '${useSiteCarrier.nameInSignature}' does not guarantee selected " +
+                        "MethodImpl view '${selectedDeclarationOwner.nameInSignature}' required by " +
+                        "'${(parent as? IrClass)?.diagnosticName()}.${name.asString()}'"
+            )
+        }
+        return dotNetBindPhysicalMethodAtOwner(selectedDeclarationOwner, info)
+    }
+
+    /** Applies one already-proven declaration-owner construction to an open MethodDef header. */
+    private fun IrSimpleFunction.dotNetBindPhysicalMethodAtOwner(
+        physicalDeclarationOwner: DotNetIlValueType,
+        info: DotNetIlFunctionInfo,
+    ): DotNetBoundPhysicalMethodAtUseSite {
+        return DotNetBoundPhysicalMethodAtUseSite(
+            declarationOwner = physicalDeclarationOwner,
+            declarationInfo = info,
+            shape = info.bindEffectiveMethodImplSignatureAt(physicalDeclarationOwner),
+        )
+    }
+
+    /** Compatibility query for validators which still begin at a logical local owner. */
     private fun IrSimpleFunction.dotNetBoundPhysicalShapeAt(
         useSiteOwner: IrClass,
         typeMapper: DotNetIlTypeMapper,
         physicalSignatureMapper: (IrSimpleFunction) -> DotNetIlTypeMapper,
         knownInfo: DotNetIlFunctionInfo? = null,
-    ): DotNetBoundPhysicalMethodShape {
-        val declarationOwner = parent as? IrClass
-            ?: dotNetUnsupported("physical member '${name.asString()}' has no declaring class")
-        val info = knownInfo ?: dotNetAuthoritativePhysicalInfo(typeMapper, physicalSignatureMapper)
-        val ownerArity = info.owner.typeParameterCount
-        val ownerArguments = when {
-            ownerArity == 0 -> emptyList()
-            declarationOwner.typeParameters.size != ownerArity -> dotNetUnsupported(
-                "physical owner '${info.owner.ilTypeRef}' of '${declarationOwner.diagnosticName()}." +
-                        "${name.asString()}' has arity $ownerArity, but its logical declaration has " +
-                        "${declarationOwner.typeParameters.size}; refusing to fabricate a CLR construction"
+    ): DotNetIlEffectiveMethodImplSignature {
+        val useSiteCarrier = typeMapper.toDotNetIlValueType(useSiteOwner.defaultType)
+            ?: dotNetUnsupported(
+                "physical owner '${useSiteOwner.diagnosticName()}' has no verifier-visible self carrier"
             )
-            else -> useSiteOwner.dotNetTypeArgumentsFor(info.owner, typeMapper)
-                ?.takeIf { arguments -> arguments.size == ownerArity }
-                ?: dotNetUnsupported(
-                    "class '${useSiteOwner.diagnosticName()}' has no unique exact physical view of " +
-                            "'${info.owner.ilTypeRef}' required by '${name.asString()}'"
+        return dotNetBoundPhysicalMethodAt(
+            useSiteCarrier,
+            typeMapper,
+            physicalSignatureMapper,
+            knownInfo,
+        ).shape
+    }
+
+    /**
+     * A covariant-return adapter implements one already-existing MethodDef. Its own MethodDef must
+     * therefore copy the complete bound physical slot signature; remapping the synthetic bridge's
+     * logical IR type can only be used for its body. This is especially important for an erased
+     * Kotlin generic base whose producer-recorded result is an arity-zero semantic interface:
+     * the later consumer must not reinterpret that result as `object`.
+     */
+    private fun IrSimpleFunction.dotNetCovariantReturnBridgeReservation(
+        bridge: DotNetLoweredCovariantReturnBridge,
+        useSiteCarrier: DotNetIlValueType,
+        mappedSignature: DotNetIlMethodSignature,
+        typeMapper: DotNetIlTypeMapper,
+        physicalSignatureMapper: (IrSimpleFunction) -> DotNetIlTypeMapper,
+        knownSlotInfo: DotNetIlFunctionInfo?,
+    ): DotNetMethodImplReservation {
+        check(bridge.implementation === this && origin == DOTNET_COVARIANT_RETURN_BRIDGE) {
+            "Internal .NET backend error: covariant-return adapter disagrees with its lowering record"
+        }
+        val boundSlot = bridge.inheritedMember.dotNetBoundPhysicalMethodAt(
+            useSiteCarrier,
+            typeMapper,
+            physicalSignatureMapper,
+            knownSlotInfo,
+        )
+        val slotShape = boundSlot.shape
+        val receiverCount = if (slotShape.hasThis) 1 else 0
+        check(mappedSignature.hasThis == slotShape.hasThis &&
+                mappedSignature.methodGenericParameterCount == slotShape.methodGenericParameterCount &&
+                mappedSignature.physicalParameterTypes.size ==
+                receiverCount + slotShape.explicitPhysicalParameterTypes.size
+        ) {
+            "Internal .NET backend error: covariant-return adapter changed the slot arity"
+        }
+        return DotNetMethodImplReservation(
+            bodySignature = slotShape.dotNetMethodImplBodySignature(useSiteCarrier),
+            declarations = listOf(
+                DotNetIlMethodImplDeclarationBinding(
+                    declarationFunction = bridge.inheritedMember,
+                    declarationOwner = boundSlot.declarationOwner,
+                    declarationInfo = boundSlot.declarationInfo,
+                    declarationMethodName = boundSlot.declarationInfo.physicalMethodName
+                        ?: bridge.inheritedMember.dotNetIlMethodName(),
                 )
+            ),
+        )
+    }
+
+    /**
+     * Seals a declared/exact generic-interface bridge against the MethodDef it implements.
+     *
+     * The synthetic IR parameter types describe the forwarding body, not the emitted header. In
+     * particular, Kotlin's ordinary bound mapping may collapse `U : String` to `string`, while an
+     * existing relative CLR slot still declares and consumes `!!0`. Bind the declaration through
+     * the exact interface construction named by the physical receiver and copy that complete
+     * layout into the body. Multiple Kotlin slots may coalesce only when their bound CLR layouts
+     * are identical.
+     */
+    private fun IrSimpleFunction.dotNetGenericInterfaceTypedBridgeReservation(
+        useSiteCarrier: DotNetIlValueType,
+        mappedSignature: DotNetIlMethodSignature,
+        typeMapper: DotNetIlTypeMapper,
+    ): DotNetMethodImplReservation {
+        val memberView = origin.dotNetGenericInterfaceBridgeMemberViewOrNull
+            ?: error("Internal .NET backend error: typed generic-interface bridge has no view")
+        val bridgeClass = parent as? IrClass
+            ?: error("Internal .NET backend error: typed generic-interface bridge has no class owner")
+        check(overriddenSymbols.isNotEmpty()) {
+            "Internal .NET backend error: typed generic-interface bridge has no declaration slot"
         }
-        val methodArguments = (0 until info.signature.methodGenericParameterCount).map { index ->
-            DotNetIlValueType.TypeParameter(index, isMethodParameter = true)
+        val boundDeclarations = overriddenSymbols.map { overriddenSymbol ->
+            val declaration = overriddenSymbol.owner
+            val interfaceClass = (declaration.parent as? IrClass)
+                ?.takeIf { candidate -> candidate.isInterface }
+                ?: error("Internal .NET backend error: typed bridge declaration is not an interface member")
+            val declarationInfo = typeMapper.genericInterfaceCapabilityFunctionInfoOrNull(
+                declaration,
+                memberView,
+            ) ?: dotNetUnsupported(
+                "generic interface ${memberView.name.lowercase()} MethodDef is unavailable for " +
+                        "'${declaration.name.asString()}'"
+            )
+            val selectedDeclarationOwner = bridgeClass.dotNetTypedBridgeDeclarationOwner(
+                interfaceClass,
+                memberView,
+                typeMapper,
+            )
+            val bound = declaration.dotNetBoundPhysicalMethodAtSelectedView(
+                useSiteCarrier = useSiteCarrier,
+                selectedDeclarationOwner = selectedDeclarationOwner,
+                info = declarationInfo,
+            )
+            bound to DotNetIlMethodImplDeclarationBinding(
+                declarationFunction = declaration,
+                declarationOwner = bound.declarationOwner,
+                declarationInfo = bound.declarationInfo,
+                declarationMethodName = declarationInfo.physicalMethodName
+                    ?: typeMapper.genericInterfaceTypedMethodName(declaration),
+            )
         }
-        val binding = info.signature.bindCallSite(ownerArity, ownerArguments, methodArguments)
-        val boundReturn = binding.verifierReturnType
-        val resultLayout = when {
-            info.signature.hasSplitNullableResult -> {
-                val payload = (boundReturn as? DotNetIlReturnType.Value)?.type
-                    ?: dotNetUnsupported(
-                        "split-nullable MethodDef '${declarationOwner.diagnosticName()}.${name.asString()}' " +
-                                "has a void payload"
-                    )
-                DotNetBoundPhysicalResultLayout.SplitNullable(payload)
-            }
-            boundReturn == DotNetIlReturnType.Void -> DotNetBoundPhysicalResultLayout.Void
-            boundReturn is DotNetIlReturnType.Value ->
-                DotNetBoundPhysicalResultLayout.Direct(boundReturn.type)
-            else -> error("unreachable .NET return layout")
+        val shapes = boundDeclarations.map { pair -> pair.first.shape }.distinct()
+        if (shapes.size != 1) {
+            dotNetUnsupported(
+                "typed generic-interface bridge '${name.asString()}' targets MethodDefs with " +
+                        "different physical layouts: ${shapes.joinToString { shape -> shape.render() }}"
+            )
         }
-        return DotNetBoundPhysicalMethodShape(
-            isInstance = info.signature.hasThis,
-            methodGenericParameterCount = info.signature.methodGenericParameterCount,
-            parameterTypes = binding.verifierParameterTypes.drop(if (info.signature.hasThis) 1 else 0),
-            resultLayout = resultLayout,
+        val slotShape = shapes.single()
+        val receiverCount = if (slotShape.hasThis) 1 else 0
+        check(mappedSignature.hasThis == slotShape.hasThis &&
+                mappedSignature.methodGenericParameterCount == slotShape.methodGenericParameterCount &&
+                mappedSignature.physicalParameterTypes.size ==
+                receiverCount + slotShape.explicitPhysicalParameterTypes.size
+        ) {
+            "Internal .NET backend error: typed generic-interface bridge changed its slot arity"
+        }
+        return DotNetMethodImplReservation(
+            bodySignature = slotShape.dotNetMethodImplBodySignature(useSiteCarrier),
+            declarations = boundDeclarations.map { pair -> pair.second },
         )
     }
 
@@ -3864,10 +4347,63 @@ internal class DotNetIlEmitter(
      * non-generic owner, or a non-generic nested holder when CLR generic/interface storage would
      * split the Kotlin event. The companion type itself has no `.cctor`.
      */
+    /**
+     * Exact InterfaceImpl construction selected by one lowering-created typed bridge lineage.
+     * The caller must still install/verify this edge in the physical graph; this logical
+     * substitution is a selector for the bridge obligation, never evidence that the edge exists.
+     */
+    private fun IrClass.dotNetTypedBridgeDeclarationOwner(
+        interfaceClass: IrClass,
+        memberView: DotNetGenericInterfaceMemberView,
+        typeMapper: DotNetIlTypeMapper,
+    ): DotNetIlValueType.GenericInstance {
+        check(interfaceClass.isInterface && typeMapper.genericInterfaceInfoOrNull(interfaceClass) != null) {
+            "Internal .NET backend error: typed bridge lineage has no admitted interface family"
+        }
+        val substitutor = AbstractIrTypeSubstitutor.forSuperClass(
+            interfaceClass.symbol,
+            defaultType,
+        ) ?: dotNetUnsupported(
+            "its inherited typed interface capability '${interfaceClass.diagnosticName()}' " +
+                    "could not be substituted"
+        )
+        val substitutedInterfaceType = substitutor.substitute(interfaceClass.defaultType) as? IrSimpleType
+            ?: dotNetUnsupported(
+                "its inherited typed interface capability '${interfaceClass.diagnosticName()}' " +
+                        "has a non-simple substituted type"
+            )
+        return typeMapper.genericInterfaceCapabilityTypeOrNull(
+            substitutedInterfaceType,
+            memberView.physicalView,
+        ) ?: dotNetUnsupported(
+            "its inherited typed interface capability '${substitutedInterfaceType.render()}' " +
+                    "could not be compiled"
+        )
+    }
+
+    /** Exact InterfaceImpl constructions materialized solely by typed bridge declarations. */
+    private fun IrClass.dotNetTypedBridgeReimplementedInterfaceTypes(
+        typeMapper: DotNetIlTypeMapper,
+    ): List<DotNetIlValueType.GenericInstance> =
+        declarations.filterIsInstance<IrSimpleFunction>().flatMap { member ->
+            val memberView = member.origin.dotNetGenericInterfaceBridgeMemberViewOrNull
+                ?: return@flatMap emptyList()
+            member.overriddenSymbols.mapNotNull { overridden ->
+                val slot = overridden.owner
+                val interfaceClass = (slot.parent as? IrClass)
+                    ?.takeIf { candidate -> candidate.isInterface }
+                    ?: return@mapNotNull null
+                if (typeMapper.genericInterfaceInfoOrNull(interfaceClass) == null) return@mapNotNull null
+                dotNetTypedBridgeDeclarationOwner(interfaceClass, memberView, typeMapper)
+            }
+        }.distinct()
+
     private fun renderUserClass(
         classInfo: DotNetIlClassInfo,
         irClass: IrClass,
         availableFunctions: MutableMap<IrSimpleFunction, DotNetIlFunctionInfo>,
+        availableConstructors: Map<IrConstructor, DotNetIlFunctionInfo>,
+        methodImplBindings: Map<IrSimpleFunction, DotNetIlMethodImplBinding>,
         intrinsicMethods: DotNetIlIntrinsicMethods,
         typeMapper: DotNetIlTypeMapper,
         declaredGenericTypeMapper: DotNetIlTypeMapper,
@@ -3981,40 +4517,8 @@ internal class DotNetIlEmitter(
             emptyList()
         }
         val inheritedBridgeTypedInterfaceTypes = if (splitGenericInfo == null) {
-            irClass.declarations.filterIsInstance<IrSimpleFunction>().flatMap { member ->
-                val memberView = member.origin.dotNetGenericInterfaceBridgeMemberViewOrNull
-                    ?: return@flatMap emptyList()
-                member.overriddenSymbols.mapNotNull { overridden ->
-                    val slot = overridden.owner
-                    val interfaceClass = (slot.parent as? IrClass)
-                        ?.takeIf { candidate -> candidate.isInterface }
-                        ?: return@mapNotNull null
-                    if (typeMapper.genericInterfaceInfoOrNull(interfaceClass) == null) return@mapNotNull null
-                    val substitutor = AbstractIrTypeSubstitutor.forSuperClass(
-                        interfaceClass.symbol,
-                        irClass.defaultType,
-                    ) ?: dotNetUnsupported(
-                        "its inherited typed interface capability '${interfaceClass.diagnosticName()}' " +
-                                "could not be substituted"
-                    )
-                    val substitutedInterfaceType =
-                        substitutor.substitute(interfaceClass.defaultType) as? IrSimpleType
-                            ?: dotNetUnsupported(
-                                "its inherited typed interface capability '${interfaceClass.diagnosticName()}' " +
-                                        "has a non-simple substituted type"
-                            )
-                    typeMapper.genericInterfaceCapabilityTypeOrNull(
-                        substitutedInterfaceType,
-                        memberView.physicalView,
-                    ) ?: dotNetUnsupported(
-                        "its inherited typed interface capability '${substitutedInterfaceType.render()}' " +
-                                "could not be compiled"
-                    )
-                }
-            }
-        } else {
-            emptyList()
-        }
+            irClass.dotNetTypedBridgeReimplementedInterfaceTypes(typeMapper)
+        } else emptyList()
         val reimplementedCanonicalInterfaceTypes = if (splitGenericInfo == null) {
             irClass.declarations.filterIsInstance<IrSimpleFunction>().mapNotNull { member ->
                 if (member.origin != DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE) return@mapNotNull null
@@ -4070,6 +4574,27 @@ internal class DotNetIlEmitter(
             mutableListOf<DotNetIlRawMethodDefHeaderObservation>()
         } else {
             null
+        }
+        val methodDefParameterObservations = if (genericOwnerRehearsal) {
+            mutableListOf<DotNetIlRawMethodDefParameterObservation>()
+        } else {
+            null
+        }
+        fun recordMethodDefParameters(function: IrFunction, info: DotNetIlFunctionInfo) {
+            val parameters = function.parameters
+            val carriers = info.signature.parameterTypes
+            check(parameters.size == carriers.size) {
+                "Internal .NET backend error: final MethodDef parameter symbols and carriers differ"
+            }
+            parameters.zip(carriers).forEach { [parameter, carrier] ->
+                methodDefParameterObservations?.add(
+                    DotNetIlRawMethodDefParameterObservation(
+                        physicalFunction = function.symbol,
+                        physicalParameter = parameter.symbol,
+                        carrier = carrier,
+                    ),
+                )
+            }
         }
         val typeDefEmissionObservations = if (genericOwnerRehearsal) {
             mutableListOf<DotNetIlRawTypeDefEmissionObservation>()
@@ -4158,20 +4683,41 @@ internal class DotNetIlEmitter(
             }
             val memberTypeMapper = typeMapperForMember(member)
             val recordedInfo = classFunctions[member]
-            val memberInfo = DotNetIlFunctionInfo(
-                classInfo,
-                if (member.origin == DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE) {
+            val methodImplBinding = methodImplBindings[member]
+            val reboundCurrentMethod = localGenericOwnerPhysicalAuthority
+                ?.currentMethodInfoOrNull(
+                    member,
+                    memberTypeMapper,
+                    recordedInfo?.physicalMethodName,
+                )
+            val memberInfo = methodImplBinding?.bodyInfo?.also { info ->
+                check(info.owner.ilTypeRef == classInfo.ilTypeRef && recordedInfo === info) {
+                    "Internal .NET backend error: covariant-return adapter changed its emitted MethodDef"
+                }
+            } ?: reboundCurrentMethod?.also { info ->
+                check(info.owner.ilTypeRef == classInfo.ilTypeRef &&
+                        recordedInfo?.owner?.ilTypeRef == info.owner.ilTypeRef &&
+                        recordedInfo.signature == info.signature &&
+                        recordedInfo.genericOwnerPhysicalMethodIdentity ==
+                        info.genericOwnerPhysicalMethodIdentity) {
+                    "Internal .NET backend error: BOUND current MethodDef changed before final rendering"
+                }
+            } ?: run {
+                val mappedSignature = if (
+                    member.origin == DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE
+                ) {
                     member.dotNetCanonicalBridgeSignature(memberTypeMapper)
                 } else {
                     member.dotNetSignature(memberTypeMapper)
-                },
-                recordedInfo?.physicalMethodName,
-                if (recordedInfo != null) {
-                    recordedInfo.genericOwnerPhysicalMethodIdentity
-                } else {
-                    genericOwnerPhysicalMethodDefEmissionBindings[member]
-                },
-            )
+                }
+                DotNetIlFunctionInfo(
+                    classInfo,
+                    mappedSignature,
+                    recordedInfo?.physicalMethodName,
+                    recordedInfo?.genericOwnerPhysicalMethodIdentity
+                        ?: genericOwnerPhysicalMethodDefEmissionBindings[member],
+                )
+            }
             classFunctions.putLocal(member, memberInfo)
             val rendered = try {
                 DotNetIlMethodCodegen(
@@ -4183,6 +4729,7 @@ internal class DotNetIlEmitter(
                     typeMapper = memberTypeMapper,
                     facadeClassInfoByFile = facadeClassInfoByFile,
                     covariantReturnImplementations = covariantReturnImplementations,
+                    methodImplBinding = methodImplBinding,
                     genericOwnerCapabilitySlots = genericOwnerCapabilitySlots,
                     genericOwnerDirectForeignOverrideDispatch =
                         genericOwnerDirectForeignOverrideDispatches[member],
@@ -4200,6 +4747,7 @@ internal class DotNetIlEmitter(
                 dotNetUnsupported("member '${member.name.asString()}' is not supported: ${failure.reason}")
             }
             renderedMethods += rendered.ilText
+            recordMethodDefParameters(member, memberInfo)
             localPlacementObservations?.addAll(rendered.localPlacementObservations)
             methodDefHeaderObservations?.addAll(rendered.methodDefHeaderObservations)
             methodImplObservations?.addAll(rendered.methodImplObservations)
@@ -4208,9 +4756,15 @@ internal class DotNetIlEmitter(
         for (declaration in irClass.declarations) {
             when (declaration) {
                 is IrConstructor -> {
+                    val constructorInfo = availableConstructors[declaration]
+                        ?: DotNetIlFunctionInfo(
+                            classInfo,
+                            declaration.dotNetSignature(physicalTypeMapper),
+                            physicalMethodName = ".ctor",
+                        )
                     val rendered = DotNetIlMethodCodegen(
                         function = declaration,
-                        functionInfo = DotNetIlFunctionInfo(classInfo, declaration.dotNetSignature(physicalTypeMapper)),
+                        functionInfo = constructorInfo,
                         isEntryPoint = false,
                         availableFunctions = classFunctions,
                         intrinsicMethods = intrinsicMethods,
@@ -4227,6 +4781,7 @@ internal class DotNetIlEmitter(
                         capturePhysicalMethodDefHeaders = genericOwnerRehearsal,
                     ).render()
                     renderedMethods += rendered.ilText
+                    recordMethodDefParameters(declaration, constructorInfo)
                     localPlacementObservations?.addAll(rendered.localPlacementObservations)
                     methodDefHeaderObservations?.addAll(rendered.methodDefHeaderObservations)
                     methodImplObservations?.addAll(rendered.methodImplObservations)
@@ -4245,6 +4800,8 @@ internal class DotNetIlEmitter(
                             classInfo = nestedClassInfo,
                             irClass = declaration,
                             availableFunctions = availableFunctions,
+                            availableConstructors = availableConstructors,
+                            methodImplBindings = methodImplBindings,
                             intrinsicMethods = intrinsicMethods,
                             typeMapper = typeMapper,
                             declaredGenericTypeMapper = declaredGenericTypeMapper,
@@ -4454,6 +5011,7 @@ internal class DotNetIlEmitter(
                     }
                 },
                 fieldDefinitions = fieldDefObservations.orEmpty(),
+                methodDefParameters = methodDefParameterObservations.orEmpty(),
             ),
         )
         val physicalIlText = buildString {
@@ -4466,6 +5024,7 @@ internal class DotNetIlEmitter(
                     intrinsicMethods = intrinsicMethods,
                     exactTypeMapper = exactGenericTypeMapper,
                     facadeClassInfoByFile = facadeClassInfoByFile,
+                    methodImplBindings = methodImplBindings,
                 )
                 renderedExactView = rendered
                 append(
@@ -4496,6 +5055,7 @@ internal class DotNetIlEmitter(
         intrinsicMethods: DotNetIlIntrinsicMethods,
         exactTypeMapper: DotNetIlTypeMapper,
         facadeClassInfoByFile: Map<IrFile, DotNetIlClassInfo>,
+        methodImplBindings: Map<IrSimpleFunction, DotNetIlMethodImplBinding>,
     ): RenderedClass {
         val signatureTypeMapper = exactTypeMapper.declaredGenericInterfaceSignatureView()
         val viewFunctions = availableFunctions.toMutableMap()
@@ -4535,15 +5095,17 @@ internal class DotNetIlEmitter(
                 return null
             }
             val recordedInfo = availableFunctions[member]
-            val memberInfo = DotNetIlFunctionInfo(
+            val methodImplBinding = methodImplBindings[member]
+            val memberInfo = methodImplBinding?.bodyInfo?.also { info ->
+                check(info.owner.ilTypeRef == classInfo.ilTypeRef && recordedInfo === info) {
+                    "Internal .NET backend error: exact-view covariant-return adapter changed its emitted MethodDef"
+                }
+            } ?: DotNetIlFunctionInfo(
                 classInfo,
                 member.dotNetSignature(signatureTypeMapper),
                 recordedInfo?.physicalMethodName,
-                if (recordedInfo != null) {
-                    recordedInfo.genericOwnerPhysicalMethodIdentity
-                } else {
-                    genericOwnerPhysicalMethodDefEmissionBindings[member]
-                },
+                recordedInfo?.genericOwnerPhysicalMethodIdentity
+                    ?: genericOwnerPhysicalMethodDefEmissionBindings[member],
             )
             viewFunctions[member] = memberInfo
             val rendered = DotNetIlMethodCodegen(
@@ -4554,6 +5116,8 @@ internal class DotNetIlEmitter(
                 intrinsicMethods = intrinsicMethods,
                 typeMapper = signatureTypeMapper,
                 facadeClassInfoByFile = facadeClassInfoByFile,
+                covariantReturnImplementations = covariantReturnImplementations,
+                methodImplBinding = methodImplBinding,
                 genericOwnerPhysicalValueLocalPlacementAuthority =
                     genericOwnerPhysicalValueLocalPlacementAuthority,
                 genericOwnerAuthoritativePhysicalOperationRoutes =

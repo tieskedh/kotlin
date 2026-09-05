@@ -278,10 +278,10 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // Propagate the already selected convention to any lowering-generated natural MethodImpls.
     // Kotlin IR/KLIB still retain the logical `T?` signature throughout both passes.
     ::DotNetSplitNullableResultLowering,
-    // Freeze one rehearsal-only symbolic copy of the selected local TypeDef/MethodDef/edge graph
-    // only after the split/covariant callable fixpoint. The current BOUND slice records direct
-    // producers; this placement also leaves one honest epoch for later split-result MethodImpl
-    // authority. It is read only by shadows and cannot change routing or emitted metadata.
+    // Freeze rehearsal-only BOUND declaration and state authority only after the split/covariant
+    // callable fixpoint. Later candidate routing and emission may consume these facts only through
+    // their matching value/operation evidence and must rebind them against final live IR and
+    // successful emission; production remains dominated by the erased epoch.
     ::DotNetLocalGenericOwnerPhysicalAuthorityLowering,
     // Initializer merging first — a stated deviation from the JVM phase order for a CLR-neutral
     // reason: the shared ForLoopsLowering is a body pass, so a `for` loop inside an `init {}`
