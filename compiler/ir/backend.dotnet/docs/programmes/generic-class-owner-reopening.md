@@ -63,43 +63,26 @@ this programme.
 
 ## Current work package
 
-The source-built Stdlib census is paused. The bounded declaration/MethodDef
-stages, Stage 6 producer-wide state proof, and Stage 7 callable-composition
-proof are complete; their current limits are indexed by the
-[archive](../archive/README.md). Stage 6 closes only
-the one-field grammar after monotone family/helper/state/output closure, final
-per-field admission, a complete live-module writer reproof after bridge/body
-production, complete BOUND field/writer/initializer freezing, and pre-
-publication full-field validation with ILAsm-gated snapshots. Stage 7 composes
-one strict owner input with one distinct split-nullable owner output without
-changing Runtime `Map`; it does not admit broader callable families. The
-separately identified generic-child-capability to base-capability conversion
-remains outside these proofs. Work now proceeds in this order:
+The schema-22 declaration/value/operation/state consolidation is complete; its
+bounded grammar and evidence are indexed by the
+[archive](../archive/README.md). The source-built Runtime/Stdlib rehearsal
+census now resumes. Work proceeds in this order:
 
-1. **Bounded proof complete — callable composition.** The custom structural
-   `Lookup<K,V>` proves owner-dependent input plus
-   `SplitNullable(!V, out bool)`, independently recorded parameter domains and
-   result layout, ordinary C# implementation, and the exact erased inverse.
-   Multi-member/Runtime application remains outside this proof.
-2. **Complete declaration authority.** Add retained-foreign, static/file-facade,
-   overlapping-family, and global final-emission evidence without letting an
-   earlier expected record fill a missing final fact.
-3. **Complete value provenance.** Make the shared operation query authoritative
-   one bounded case at a time and delete a recognizer only after the general
-   model derives both its positive and hostile-negative behavior.
-4. **Generalize producer-wide state only from structural proofs.** Extend beyond
-   private mutable direct-owner-parameter/plain fields to nested, nullable,
-   value-class, multiple-field, volatile, mixed-capture, open-writer, and
-   externally authoritative state without weakening whole-owner admission.
-5. **Complete retained/foreign entry validation.** Derive inherited,
+1. **Recompute the next complete source closure.** Compile it in candidate and
+   erased-inverse modes and let the first real failure select the next general
+   declaration, provenance, operation, placement, or state rule.
+2. **Generalize only from structural proofs.** Extend MethodSpec, joins,
+   captures, properties, multiple fields/members, nullable/value-class state,
+   open writers, and deeper inheritance without declaration, package, member-
+   name, IR-origin, or stdlib exceptions.
+3. **Complete retained/foreign entry validation.** Derive inherited,
    implementation, open, projected, vararg, multiple-view, SZ-array, and
    bounded-element cases from the shared authority/provenance model.
-6. **Freeze the complete selected rehearsal family.** Migrate the selected
-   Runtime/Stdlib candidate family only after the preceding proofs derive every
-   remaining bounded recognizer and hostile negative. This is the final
-   rehearsal-family migration, not a production cutover.
-7. **Run the go/no-go rehearsal and exact inverse.** Only then resume the
-   generic-owner-dependent Stdlib census.
+4. **Freeze the complete selected rehearsal family.** Close the Runtime/Stdlib
+   candidate, hostile matrix, deployment profiles, ordinary C# surface, and
+   exact erased inverse. This remains a rehearsal, not a production cutover.
+5. **Run the go/no-go decision.** Record GO, CONSTRAIN, or NO-GO only after the
+   complete rehearsal census supplies the required evidence.
 
 The current checkpoint and blockers live only in [`../../STATUS.md`](../../STATUS.md).
 
