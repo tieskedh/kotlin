@@ -359,7 +359,16 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             val wrapperPlan = context.genericOwnerArchitecturePlans[wrapper]
             check(wrapperPlan?.isReifiedByGenericOwnerRehearsal == true) {
                 "Generic SAM wrapper '${wrapper.name}' for '${interfaceSymbol.owner.name}' has no " +
-                        "complete verifier-visible CLR construction plan"
+                "complete verifier-visible CLR construction plan"
+            }
+        }
+        for (entry in context.genericSamWrapperSemanticPlans.entries) {
+            val wrapper = entry.key
+            val interfaceSymbol = entry.value.logicalInterface
+            val wrapperPlan = context.genericOwnerArchitecturePlans[wrapper]
+            check(wrapperPlan?.isReifiedByGenericOwnerRehearsal == true) {
+                "Semantic-only SAM wrapper '${wrapper.name}' for " +
+                        "'${interfaceSymbol.owner.name}' has no verifier-visible witness binder plan"
             }
         }
         val callRoutes = GenericOwnerCallRouteAnalyzer(

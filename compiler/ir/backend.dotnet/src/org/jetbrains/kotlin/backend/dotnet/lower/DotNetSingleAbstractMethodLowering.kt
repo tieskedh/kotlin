@@ -9,6 +9,8 @@ import org.jetbrains.kotlin.backend.common.ScopeWithIr
 import org.jetbrains.kotlin.backend.common.lower.SingleAbstractMethodLowering
 import org.jetbrains.kotlin.backend.common.suspendFunction
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
+import org.jetbrains.kotlin.backend.dotnet.DotNetContravariantOpenNullableSamWrapperPlan
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeParameterVariance
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMemberResultLayout
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMemberRole
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
@@ -21,15 +23,19 @@ import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperatorCall
 import org.jetbrains.kotlin.ir.expressions.putClassTypeArgument
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
+import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.IrTypeSubstitutor
+import org.jetbrains.kotlin.ir.types.SimpleTypeNullability
 import org.jetbrains.kotlin.ir.types.classOrNull
 import org.jetbrains.kotlin.ir.types.defaultType
+import org.jetbrains.kotlin.ir.types.makeNotNull
 import org.jetbrains.kotlin.ir.types.starProjectedType
 import org.jetbrains.kotlin.ir.types.typeWith
 import org.jetbrains.kotlin.ir.util.copyTypeParameters
+import org.jetbrains.kotlin.ir.util.isNullable
 import org.jetbrains.kotlin.ir.types.isNullableAny
 import org.jetbrains.kotlin.ir.util.render
 import org.jetbrains.kotlin.types.Variance
@@ -39,8 +45,14 @@ import java.util.IdentityHashMap
 internal class DotNetSingleAbstractMethodLowering(
     private val dotNetContext: DotNetBackendContext,
 ) : SingleAbstractMethodLowering(dotNetContext) {
+    private enum class GenericSamWrapperPhysicalPlan {
+        NATURAL,
+        SEMANTIC_ONLY,
+    }
+
     private val externalDeclarations = dotNetContext.externalDeclarationsForLowering()
-    private val physicalInterfacesByWrapper = IdentityHashMap<IrClass, IrClass>()
+    private val naturalInterfacesByWrapper = IdentityHashMap<IrClass, IrClass>()
+    private val semanticInterfacesByWrapper = IdentityHashMap<IrClass, IrClass>()
 
     // .NET serializes authoritative inline bodies to KLIB before target lowering. A consumer
     // therefore materializes its own private wrapper after inlining; the producer's physical
@@ -59,11 +71,21 @@ internal class DotNetSingleAbstractMethodLowering(
         typeOperand.classOrNull?.defaultType
             ?: error("Unsupported SAM conversion: ${typeOperand.render()}")
 
+    override fun getCreatedObjectProxyCacheDiscriminator(
+        typeOperand: IrType,
+        erasedSuperType: IrType,
+    ): Any? {
+        val interfaceClass = physicalSamInterfaceOrNull(erasedSuperType) ?: return null
+        return physicalPlan(typeOperand, interfaceClass)
+    }
+
     override fun configureCreatedObjectProxySuperType(
         klass: IrClass,
         superType: IrType,
+        typeOperand: IrType,
     ): IrType {
         val interfaceClass = physicalSamInterfaceOrNull(superType) ?: return superType
+        val plan = physicalPlan(typeOperand, interfaceClass)
         val copiedParameters = klass.copyTypeParameters(interfaceClass.typeParameters)
         check(copiedParameters.size == 1) {
             "Internal .NET backend error: bounded generic SAM wrapper has unexpected arity"
@@ -72,7 +94,28 @@ internal class DotNetSingleAbstractMethodLowering(
             parameter.variance = Variance.INVARIANT
             parameter.isReified = false
         }
-        check(physicalInterfacesByWrapper.put(klass, interfaceClass) == null) {
+        if (plan == GenericSamWrapperPhysicalPlan.SEMANTIC_ONLY) {
+            val witnessParameter = copiedParameters.single().symbol
+            check(semanticInterfacesByWrapper.put(klass, interfaceClass) == null &&
+                    dotNetContext.genericSamWrapperSemanticPlans.put(
+                        klass,
+                        DotNetContravariantOpenNullableSamWrapperPlan(
+                            logicalInterface = interfaceClass.symbol,
+                            witnessParameter = witnessParameter,
+                        ),
+                    ) == null
+            ) {
+                "Internal .NET backend error: semantic-only SAM wrapper authority was recorded twice"
+            }
+            // The copied invariant binder is only a witness for the underlying open T in T?.
+            // This generated owner must not claim an incidental I<object> construction even
+            // transiently: generic-owner planning runs before capability bridging and may treat
+            // every declared supertype as physical evidence. Common can still derive the SAM
+            // member from the logical interface supplied to createObjectProxy; the later bridge
+            // phase binds that member directly to the interface's non-generic capability.
+            return dotNetContext.irBuiltIns.anyType
+        }
+        check(naturalInterfacesByWrapper.put(klass, interfaceClass) == null) {
             "Internal .NET backend error: generated SAM wrapper was physically configured twice"
         }
         check(dotNetContext.genericSamWrapperNaturalInterfaces.put(klass, interfaceClass.symbol) == null) {
@@ -89,10 +132,17 @@ internal class DotNetSingleAbstractMethodLowering(
         superType: IrType,
         type: IrType,
     ): IrType {
-        val interfaceClass = physicalInterfacesByWrapper[klass] ?: return type
+        val interfaceClass = naturalInterfacesByWrapper[klass]
+            ?: semanticInterfacesByWrapper[klass]
+            ?: return type
+        val arguments = if (klass in semanticInterfacesByWrapper) {
+            List(interfaceClass.typeParameters.size) { dotNetContext.irBuiltIns.anyNType }
+        } else {
+            klass.typeParameters.map { parameter -> parameter.defaultType }
+        }
         return IrTypeSubstitutor(
             interfaceClass.typeParameters.map { parameter -> parameter.symbol },
-            klass.typeParameters.map { parameter -> parameter.defaultType },
+            arguments,
             allowEmptySubstitution = true,
         ).substitute(type)
     }
@@ -100,15 +150,22 @@ internal class DotNetSingleAbstractMethodLowering(
     override fun getCreatedObjectProxyEqualityType(
         klass: IrClass,
         superType: IrType,
-    ): IrType = physicalInterfacesByWrapper[klass]?.symbol?.starProjectedType ?: superType
+    ): IrType = (naturalInterfacesByWrapper[klass] ?: semanticInterfacesByWrapper[klass])
+        ?.symbol?.starProjectedType ?: superType
 
     override fun getCreatedObjectProxyResultType(
         klass: IrClass,
         typeOperand: IrType,
         defaultType: IrType,
     ): IrType {
-        val interfaceClass = physicalInterfacesByWrapper[klass] ?: return defaultType
-        exactConstructionArguments(typeOperand, interfaceClass)
+        val interfaceClass = naturalInterfacesByWrapper[klass]
+            ?: semanticInterfacesByWrapper[klass]
+            ?: return defaultType
+        if (klass in naturalInterfacesByWrapper) {
+            checkNotNull(exactConstructionArgumentsOrNull(typeOperand, interfaceClass)) {
+                "Generic SAM construction '${typeOperand.render()}' lost its exact CLR TypeSpec"
+            }
+        }
         return typeOperand
     }
 
@@ -117,10 +174,23 @@ internal class DotNetSingleAbstractMethodLowering(
         klass: IrClass,
         typeOperand: IrType,
     ) {
-        val interfaceClass = physicalInterfacesByWrapper[klass] ?: return
-        val arguments = exactConstructionArguments(typeOperand, interfaceClass)
-        call.type = klass.symbol.typeWith(arguments)
-        arguments.forEachIndexed(call::putClassTypeArgument)
+        naturalInterfacesByWrapper[klass]?.let { interfaceClass ->
+            val arguments = checkNotNull(exactConstructionArgumentsOrNull(typeOperand, interfaceClass)) {
+                "Generic SAM construction '${typeOperand.render()}' lost its exact CLR TypeSpec"
+            }
+            call.type = klass.symbol.typeWith(arguments)
+            arguments.forEachIndexed(call::putClassTypeArgument)
+            return
+        }
+        val interfaceClass = semanticInterfacesByWrapper[klass] ?: return
+        val witnesses = checkNotNull(semanticOpenNullableWitnessArgumentsOrNull(typeOperand, interfaceClass)) {
+            "Generic SAM construction '${typeOperand.render()}' lost its open-nullable witness"
+        }
+        // IrConstructorCall independently carries the constructed owner arguments and the
+        // expression's selected result view. The emitter therefore allocates Wrapper<!!T>, while
+        // subsequent value routing sees only the logical I<T?> semantic view.
+        witnesses.forEachIndexed(call::putClassTypeArgument)
+        call.type = typeOperand
     }
 
     // Common's temporary is a JVM-inliner code-shape constraint. A rehearsal-generic wrapper is
@@ -131,7 +201,7 @@ internal class DotNetSingleAbstractMethodLowering(
     override fun requiresCreatedObjectProxyArgumentTemporary(
         klass: IrClass,
         invokable: IrExpression,
-    ): Boolean = if (klass in physicalInterfacesByWrapper) {
+    ): Boolean = if (klass in naturalInterfacesByWrapper || klass in semanticInterfacesByWrapper) {
         false
     } else {
         super.requiresCreatedObjectProxyArgumentTemporary(klass, invokable)
@@ -178,10 +248,56 @@ internal class DotNetSingleAbstractMethodLowering(
         }
     }
 
-    private fun exactConstructionArguments(
+    private fun physicalPlan(
         type: IrType,
         interfaceClass: IrClass,
-    ): List<IrType> {
+    ): GenericSamWrapperPhysicalPlan {
+        if (exactConstructionArgumentsOrNull(type, interfaceClass) != null) {
+            return GenericSamWrapperPhysicalPlan.NATURAL
+        }
+        val physicalVariances = dotNetContext
+            .earlyAdmittedGenericSamNaturalAuthorityPlans[interfaceClass.symbol]
+            ?.selectedPhysicalVariances
+            ?: externalDeclarations
+                .publishedGenericInterfaceNaturalTypeParameterVariancesOrNull(interfaceClass)
+        check(semanticOpenNullableWitnessArgumentsOrNull(type, interfaceClass) != null &&
+                interfaceClass.typeParameters.singleOrNull()?.variance == Variance.IN_VARIANCE &&
+                physicalVariances == listOf(
+                    DotNetGenericOwnerPhysicalTypeParameterVariance.CONTRAVARIANT,
+                )
+        ) {
+            "Generic SAM construction '${type.render()}' has no verifier-nameable natural " +
+                    "TypeSpec and no truthful semantic-only contravariant wrapper plan"
+        }
+        return GenericSamWrapperPhysicalPlan.SEMANTIC_ONLY
+    }
+
+    private fun semanticOpenNullableWitnessArgumentsOrNull(
+        type: IrType,
+        interfaceClass: IrClass,
+    ): List<IrType>? {
+        val simple = type as? IrSimpleType ?: return null
+        if (simple.classifier != interfaceClass.symbol || simple.arguments.size != 1) return null
+        val projection = simple.arguments.single() as? IrTypeProjection ?: return null
+        if (projection.variance != Variance.INVARIANT) return null
+        val argument = projection.type as? IrSimpleType ?: return null
+        val parameter = (argument.classifier as? IrTypeParameterSymbol)?.owner
+        if (argument.nullability != SimpleTypeNullability.MARKED_NULLABLE ||
+            parameter == null || parameter.superTypes.isEmpty() ||
+            parameter.superTypes.any { bound -> bound.isNullable() }
+        ) {
+            return null
+        }
+        val witness = argument.makeNotNull()
+        return listOf(witness).takeIf {
+            !witness.hasUnsupportedDotNetInvariantConstructorArgument()
+        }
+    }
+
+    private fun exactConstructionArgumentsOrNull(
+        type: IrType,
+        interfaceClass: IrClass,
+    ): List<IrType>? {
         val simple = type as? IrSimpleType
             ?: error("Unsupported generic SAM construction: ${type.render()}")
         check(simple.classifier == interfaceClass.symbol &&
@@ -189,15 +305,17 @@ internal class DotNetSingleAbstractMethodLowering(
         ) {
             "Generic SAM construction '${type.render()}' disagrees with '${interfaceClass.name}'"
         }
-        return simple.arguments.map { argument ->
+        val result = mutableListOf<IrType>()
+        for (argument in simple.arguments) {
             val projection = argument as? IrTypeProjection
-                ?: error("Generic SAM construction '${type.render()}' has no exact CLR type argument")
-            check(projection.variance == Variance.INVARIANT &&
-                    !projection.type.hasUnsupportedDotNetInvariantConstructorArgument()
+                ?: return null
+            if (projection.variance != Variance.INVARIANT ||
+                projection.type.hasUnsupportedDotNetInvariantConstructorArgument()
             ) {
-                "Generic SAM construction '${type.render()}' has no verifier-nameable invariant TypeSpec"
+                return null
             }
-            projection.type
+            result += projection.type
         }
+        return result
     }
 }

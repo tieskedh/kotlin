@@ -63,10 +63,16 @@ abstract class SingleAbstractMethodLowering(val context: CommonBackendContext) :
     // name prefix "sam$i$".
     //
     // Coming from the frontend, every SAM interface is associated with exactly one function type
-    // (see SamType.getKotlinFunctionType). This is why we can cache implementations just based on
-    // the superType.
-    protected val cachedImplementations = mutableMapOf<IrType, IrClass>()
-    protected val inlineCachedImplementations = mutableMapOf<IrType, IrClass>()
+    // (see SamType.getKotlinFunctionType). Most targets therefore cache by erased supertype alone;
+    // a target may add a stable discriminator when that one logical classifier has several
+    // truthful physical wrapper plans.
+    protected data class CreatedObjectProxyCacheKey(
+        val erasedSuperType: IrType,
+        val targetDiscriminator: Any?,
+    )
+
+    protected val cachedImplementations = mutableMapOf<CreatedObjectProxyCacheKey, IrClass>()
+    protected val inlineCachedImplementations = mutableMapOf<CreatedObjectProxyCacheKey, IrClass>()
     protected var enclosingContainer: IrDeclarationContainer? = null
 
     abstract fun getWrapperVisibility(expression: IrTypeOperatorCall, scopes: List<ScopeWithIr>): DescriptorVisibility
@@ -90,6 +96,18 @@ abstract class SingleAbstractMethodLowering(val context: CommonBackendContext) :
     protected open fun postprocessCreatedObjectProxy(klass: IrClass) {}
 
     /**
+     * Distinguishes target-specific physical wrapper plans for one logical SAM classifier.
+     *
+     * Most targets retain the established single-wrapper cache. A target whose physical ABI has
+     * more than one truthful implementation plan may return a stable discriminator without
+     * making Common aware of that ABI or of individual SAM declarations.
+     */
+    protected open fun getCreatedObjectProxyCacheDiscriminator(
+        typeOperand: IrType,
+        erasedSuperType: IrType,
+    ): Any? = null
+
+    /**
      * Selects the supertype physically implemented by one cached SAM wrapper. A target may add
      * wrapper-owned type parameters here; the hook runs after [IrClass.parent] is set but before
      * the wrapper receiver and members are created.
@@ -97,6 +115,7 @@ abstract class SingleAbstractMethodLowering(val context: CommonBackendContext) :
     protected open fun configureCreatedObjectProxySuperType(
         klass: IrClass,
         superType: IrType,
+        typeOperand: IrType,
     ): IrType = superType
 
     /** Maps a SAM member type into the physical wrapper supertype selected above. */
@@ -176,8 +195,21 @@ abstract class SingleAbstractMethodLowering(val context: CommonBackendContext) :
                 return invokable
 
             val cache = if (inInlineFunctionScope) inlineCachedImplementations else cachedImplementations
-            val implementation = cache.getOrPut(erasedSuperType) {
-                createObjectProxy(erasedSuperType, getWrapperVisibility(expression, allScopes), expression)
+            val cacheKey = CreatedObjectProxyCacheKey(
+                erasedSuperType,
+                getCreatedObjectProxyCacheDiscriminator(expression.typeOperand, erasedSuperType),
+            )
+            val implementation = cache.getOrPut(cacheKey) {
+                val wrapperIndex = cache.keys.count { key ->
+                    key.erasedSuperType == erasedSuperType
+                }
+                createObjectProxy(
+                    erasedSuperType,
+                    expression.typeOperand,
+                    getWrapperVisibility(expression, allScopes),
+                    expression,
+                    wrapperIndex,
+                )
             }
 
             val resultType = getCreatedObjectProxyResultType(implementation, expression.typeOperand, superType)
@@ -212,12 +244,17 @@ abstract class SingleAbstractMethodLowering(val context: CommonBackendContext) :
         }
     }
 
-    private val SAM_WRAPPER_SUFFIX = "$0"
     private val FUNCTION_FIELD_NAME = "function"
 
     // Construct a class that wraps an invokable object into an implementation of an interface:
     //     class sam$n(private val invokable: F) : Interface { override fun method(...) = invokable(...) }
-    private fun createObjectProxy(superType: IrType, wrapperVisibility: DescriptorVisibility, createFor: IrElement): IrClass {
+    private fun createObjectProxy(
+        superType: IrType,
+        typeOperand: IrType,
+        wrapperVisibility: DescriptorVisibility,
+        createFor: IrElement,
+        wrapperIndex: Int,
+    ): IrClass {
         val superClass = superType.classifierOrFail.owner as IrClass
         // The language documentation prohibits casting lambdas to classes, but if it was allowed,
         // the `irDelegatingConstructorCall` in the constructor below would need to be modified.
@@ -225,7 +262,7 @@ abstract class SingleAbstractMethodLowering(val context: CommonBackendContext) :
 
         val superFqName = superClass.fqNameWhenAvailable!!.asString().replace('.', '_')
         val inlinePrefix = if (wrapperVisibility == DescriptorVisibilities.PUBLIC) "\$i" else ""
-        val wrapperName = Name.identifier("sam$inlinePrefix\$$superFqName$SAM_WRAPPER_SUFFIX")
+        val wrapperName = Name.identifier("sam$inlinePrefix\$$superFqName\$$wrapperIndex")
         // We need to have a view on the class before transformations made later in pipeline.
         // The generated class should override the original method, and further lowerings would transformation correctly, if needed.
         // Super class can be already transformed in case it is located in one of already processed files.
@@ -248,7 +285,11 @@ abstract class SingleAbstractMethodLowering(val context: CommonBackendContext) :
         }.apply {
             parent = enclosingContainer!!
         }
-        val implementationSuperType = configureCreatedObjectProxySuperType(subclass, superType)
+        val implementationSuperType = configureCreatedObjectProxySuperType(
+            subclass,
+            superType,
+            typeOperand,
+        )
         subclass.apply {
             createThisReceiverParameter()
             superTypes = listOf(implementationSuperType) memoryOptimizedPlus getAdditionalSupertypes(implementationSuperType)

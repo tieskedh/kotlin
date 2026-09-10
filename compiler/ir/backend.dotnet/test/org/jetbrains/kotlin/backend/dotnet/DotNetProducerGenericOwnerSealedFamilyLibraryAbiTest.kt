@@ -344,7 +344,7 @@ class DotNetProducerGenericOwnerSealedFamilyLibraryAbiTest {
         val first = DotNetLibraryAbiCodec.encode(declarations)
         val second = DotNetLibraryAbiCodec.encode(declarations.toList().asReversed().toMap())
         assertEquals(first, second)
-        assertEquals("69", DotNetLibraryAbiCodec.ABI_VERSION)
+        assertEquals("70", DotNetLibraryAbiCodec.ABI_VERSION)
 
         val decoded = DotNetLibraryAbiCodec.decode(first.toProperties())
         assertEquals(declarations, decoded)

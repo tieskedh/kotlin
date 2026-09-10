@@ -212,6 +212,8 @@ internal class DotNetIlEmitter(
     /** Producer-planned input domains for final local natural interface MethodDefs. */
     private val genericInterfaceNaturalMethodParameterDomains:
             Map<IrSimpleFunction, List<DotNetGenericOwnerPhysicalSlotDomain>> = emptyMap(),
+    private val genericSamWrapperSemanticPlans:
+            Map<IrClass, DotNetContravariantOpenNullableSamWrapperPlan> = emptyMap(),
     private val genericOwnerCapabilityInterfaces: Map<IrClass, IrClass> = emptyMap(),
     private val externalReifiedGenericInterfaceCapabilityProviders: Map<IrClass, IrClass> = emptyMap(),
     private val externalGenericOwnerCapabilitySupertypeProviders: Map<IrClass, List<IrClass>> = emptyMap(),
@@ -4544,7 +4546,43 @@ internal class DotNetIlEmitter(
         val additionalTypedInterfaceTypes =
             (directTypedInterfaceTypes + inheritedBridgeTypedInterfaceTypes +
                     reimplementedCanonicalInterfaceTypes).distinct()
-        val finalInterfaceTypes = (interfaceTypes + additionalTypedInterfaceTypes).distinct()
+        val semanticSamWitnessInterface = genericSamWrapperSemanticPlans[irClass]?.let { plan ->
+            check(genericOwnerRehearsal) {
+                "Internal .NET backend error: semantic SAM witness escaped its rehearsal epoch"
+            }
+            val witnessIndex = irClass.typeParameters.indexOfFirst { parameter ->
+                parameter.symbol == plan.witnessParameter
+            }
+            check(witnessIndex >= 0) {
+                "Internal .NET backend error: semantic SAM wrapper '${irClass.name}' lost its " +
+                        "recorded witness binder"
+            }
+            // A local interface has a declared view; an external interface binds its natural
+            // TypeDef directly from the producer record. Use the common authority query for
+            // both, rather than requiring the consumer to possess a local declared-view plan.
+            val naturalClass = typeMapper.genericOwnerNaturalRuntimeClassifierInfoOrNull(
+                plan.logicalInterface.owner.defaultType,
+            )
+                ?: dotNetUnsupported(
+                    "semantic SAM wrapper '${irClass.name}' has no admitted natural TypeDef anchor"
+                )
+            check(naturalClass.typeParameterCount == 1 &&
+                    naturalClass.typeParameterVariances == listOf(Variance.IN_VARIANCE)
+            ) {
+                "Internal .NET backend error: semantic SAM wrapper '${irClass.name}' no longer " +
+                        "targets one contravariant natural interface"
+            }
+            val witness = DotNetIlValueType.TypeParameter(
+                index = witnessIndex,
+                isMethodParameter = false,
+            )
+            DotNetRuntimeTypes.genericInterfaceContravariantOpenNullableViewType(
+                DotNetIlValueType.GenericInstance(naturalClass, listOf(witness)),
+            )
+        }
+        val finalInterfaceTypes = (
+                interfaceTypes + additionalTypedInterfaceTypes + listOfNotNull(semanticSamWitnessInterface)
+                ).distinct()
         val emittedTypeParameters = if (
             (splitGenericInfo == null || splitGenericInfo.canonicalClassInfo.typeParameterCount > 0) &&
             genericClassInfo == null

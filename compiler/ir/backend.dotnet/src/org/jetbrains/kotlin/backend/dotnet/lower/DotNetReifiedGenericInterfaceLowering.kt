@@ -92,14 +92,17 @@ import org.jetbrains.kotlin.ir.declarations.IrVariable
 import org.jetbrains.kotlin.ir.expressions.IrBlockBody
 import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.expressions.IrConstructorCall
+import org.jetbrains.kotlin.ir.expressions.IrContainerExpression
 import org.jetbrains.kotlin.ir.expressions.IrDelegatingConstructorCall
 import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrExpressionBody
 import org.jetbrains.kotlin.ir.expressions.IrGetField
 import org.jetbrains.kotlin.ir.expressions.IrGetValue
 import org.jetbrains.kotlin.ir.expressions.IrReturn
+import org.jetbrains.kotlin.ir.expressions.IrReturnableBlock
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperator
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperatorCall
+import org.jetbrains.kotlin.ir.expressions.IrWhen
 import org.jetbrains.kotlin.ir.expressions.impl.IrReturnImpl
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
@@ -110,6 +113,7 @@ import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.defaultType
 import org.jetbrains.kotlin.ir.types.isAny
 import org.jetbrains.kotlin.ir.types.isMarkedNullable
+import org.jetbrains.kotlin.ir.types.isNothing
 import org.jetbrains.kotlin.ir.types.isNullableAny
 import org.jetbrains.kotlin.ir.types.isPrimitiveType
 import org.jetbrains.kotlin.ir.types.isUnit
@@ -1019,6 +1023,18 @@ internal class DotNetReifiedGenericInterfaceLowering(
             candidate.resolveFakeOverride() ?: candidate.resolveFakeOverrideMaybeAbstract() ?: candidate
         }
 
+        // Only value-producing exits participate in a result's carrier join. Earlier statements,
+        // branch conditions, and bottom-typed control transfers cannot contaminate the result.
+        // This also covers Common's block/when encoding of Elvis without recognizing its origin.
+        fun IrExpression.resultAlternatives(): List<IrExpression> = when (this) {
+            // A returnable block also receives values from targeted returns. Its last statement
+            // alone is not a complete result spine; retain the preceding conservative fallback.
+            is IrReturnableBlock -> emptyList()
+            is IrContainerExpression -> listOfNotNull(statements.lastOrNull() as? IrExpression)
+            is IrWhen -> branches.map { branch -> branch.result }
+            else -> emptyList()
+        }.filterNot { result -> result.type.isNothing() }
+
         fun IrExpression.classifierErasedInterfaceOwnerOrNull(): IrClass? = when (this) {
             is IrCall -> checkNotNullArgumentOrNull()?.classifierErasedInterfaceOwnerOrNull()
                 ?: type.reifiedInterfaceOwnerOrNull().takeIf {
@@ -1038,7 +1054,9 @@ internal class DotNetReifiedGenericInterfaceLowering(
                     -> argument.classifierErasedInterfaceOwnerOrNull()
                 else -> null
             }
-            else -> null
+            else -> type.reifiedInterfaceOwnerOrNull().takeIf {
+                resultAlternatives().any { result -> result.classifierErasedInterfaceOwnerOrNull() != null }
+            }
         }
 
         fun IrType.sameInvariantTypeAs(other: IrType): Boolean {
@@ -1201,7 +1219,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
                             } == true
                 else -> false
             }
-            else -> false
+            else -> resultAlternatives().any { result -> result.readsSemanticInterfaceDeclaration() }
         }
 
         fun IrExpression.readsForeignDispatchDeclaration(): Boolean = when (this) {
@@ -1231,7 +1249,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
                                 operator == IrTypeOperator.SAFE_CAST ||
                                 operator == IrTypeOperator.IMPLICIT_CAST) &&
                                 type.reifiedInterfaceOwnerOrNull() != null)
-            else -> false
+            else -> resultAlternatives().any { result -> result.readsForeignDispatchDeclaration() }
         }
 
         // An interface-typed alias is exact only when its producer was already proven exact.

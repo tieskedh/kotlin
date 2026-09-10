@@ -15,7 +15,7 @@ Kotlin/.NET uses the repository's Common
 `SingleAbstractMethodLowering` as the semantic owner of Kotlin fun-interface
 conversion. A `fun interface` declaration remains the same ordinary
 Kotlin-owned interface selected by the generic-interface ABI. Each conversion
-creates an ordinary compiler-generated class which implements that interface
+creates an ordinary compiler-generated class which implements its selected physical view
 and stores the converted Kotlin `FunctionN` object:
 
 ```text
@@ -87,12 +87,66 @@ construction. The wrapper parameter is invariant even when the implemented
 interface parameter is variant: it names the wrapper's exact physical
 construction rather than advertising another variance conversion.
 
-This extension is enabled only by the generic-owner rehearsal and currently
-accepts the deliberately bounded one-parameter, unconstrained, direct-callable
-shape. The accepted erased production wrapper is unchanged. Wider bounds,
-multiple parameters, inherited SAM families, projections, or an operand which
-does not provide an exact verifier-nameable construction remain unproved and
-must fail closed rather than fall back to a plausible generic edge.
+This extension is enabled only by the generic-owner rehearsal and accepts the
+deliberately bounded one-parameter, unconstrained, direct-callable interface
+shape. The accepted erased production wrapper is unchanged. Wider interface
+bounds, multiple parameters, inherited SAM families, and projected operands
+remain unproved and fail closed.
+
+### Open-nullable contravariant conversion
+
+An open `Sink<T?>` conversion with a logically non-null `T` cannot generally
+name a natural CLR construction. `T = String` needs `Sink<string>`, whereas
+`T = Int` needs `Sink<Nullable<int>>`; neither `Sink<!T>` nor `Sink<object>`
+represents both. A split-nullable callable result does not solve this problem:
+the missing operation is a type-level nullable construction, not a method's
+payload/null-flag pair.
+
+For an admitted direct-callable interface whose sole parameter is logically
+and physically contravariant, the Common conversion object may instead use:
+
+```text
+private sealed sam$SinkNullable<W>
+    : FunctionAdapter, SinkSemantic,
+      GenericInterfaceContravariantOpenNullableView<Sink<W>>
+```
+
+It retains one raw `FunctionN` field and forwards the semantic input without
+inventing a natural `Sink<W>` InterfaceImpl. The ordinary class planner may
+also supply an assembly-private class capability. The invariant `W` is a
+runtime witness for the underlying non-null `T`, not the nullable argument and
+not an exact natural view. Each allocation binds it from the caller's actual
+MethodDef argument. `T : Any` remains logical KLIB authority; it adds neither
+a CLR `class` nor a CLR `valuetype` constraint.
+
+The empty metadata-public marker belongs to versioned compiler ABI. Its
+`Sink<W>` argument anchors the exact admitted natural TypeDef and underlying
+witness; it does **not** assert that the object implements that construction.
+Runtime matching requires both the expected semantic capability and the
+matching natural definition. A non-nullable value witness accepts that value
+type or its closed `Nullable` form. A reference witness accepts verifier-valid
+subtypes through contravariance. A nullable-value witness is rejected. No
+runtime `MakeGenericType`, representation-repair object, or shadow field is
+needed. Ordinary foreign implementations do not author the marker.
+
+The same BK-1 predicate handles `as`, `as?`, and admitted parameterized `is`;
+stars and wrapper equality remain classifier checks. Successful operations
+keep the original object on its semantic/object carrier, including across
+non-returnable container and conditional result joins. An Elvis null check
+does not prove an otherwise absent natural construction. Only result-producing
+paths participate; unrelated conditions/statements do not erase exact values.
+
+Common still owns wrapper creation and caching. A target-neutral cache
+discriminator separates the natural and semantic physical plans for one erased
+classifier; all other targets retain the default single plan. The same
+compilation may therefore contain both definitions, and equality over the same
+stored function remains symmetric between them. No wrapper plan, private field,
+or value-flow fact is inferred by a separate consumer: its DLL supplies the
+published interface identity and each callable's physical result carrier.
+
+This is a bounded representation proof, not a general nullable generic-owner
+ABI. Unconstrained nullable witnesses, other variance/member shapes, and wider
+generic-state substitutions require their own complete proofs.
 
 ## Wrapper equality and runtime capability
 
@@ -226,6 +280,8 @@ including:
   inheritance, default members, and suspend abstract methods;
 - the rehearsal-only invariant wrapper binder, exact closed and caller-
   MethodDef constructions, and the unchanged erased-production inverse;
+- local and separate-producer open-nullable contravariant conversions, their
+  witness-only InterfaceImpl, semantic dispatch, cast agreement, and result joins;
 - wrapper equality/hash behavior and negative cross-interface equality;
 - `is`/`as` through the ordinary interface identity;
 - physical absence of a CLR delegate base or extra public wrapper TypeDef;

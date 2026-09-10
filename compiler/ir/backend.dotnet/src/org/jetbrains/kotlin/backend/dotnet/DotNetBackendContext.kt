@@ -43,6 +43,7 @@ import org.jetbrains.kotlin.ir.declarations.isInlineClass
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrClassifierSymbol
 import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
+import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.symbols.IrValueSymbol
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeSystemContext
@@ -65,6 +66,18 @@ import org.jetbrains.kotlin.name.withClassId
 internal data class DotNetLoweredInterfaceDefaultImplementation(
     val helper: IrSimpleFunction,
     val bodyPlacement: DotNetInterfaceDefaultBodyPlacement,
+)
+
+/**
+ * A generated SAM owner whose logical `I<T?>` construction cannot be named as one CLR TypeSpec.
+ *
+ * The wrapper's own invariant [witnessParameter] carries the definitely-non-null `T`. The wrapper
+ * implements only [logicalInterface]'s semantic capability; a separate runtime-only marker uses
+ * the witness for BK-1 checks and is never a natural interface view or a value-carrier fact.
+ */
+internal data class DotNetContravariantOpenNullableSamWrapperPlan(
+    val logicalInterface: IrClassSymbol,
+    val witnessParameter: IrTypeParameterSymbol,
 )
 
 /** Pre-lowering authority for one source function which may acquire an object-input twin. */
@@ -265,6 +278,10 @@ internal class DotNetBackendContext(
         MutableMap<IrClassSymbol, DotNetGenericInterfaceCompleteNaturalAuthorityPlan> = linkedMapOf()
     /** Generated SAM implementation owners which consumed one exact natural interface binder. */
     val genericSamWrapperNaturalInterfaces: MutableMap<IrClass, IrClassSymbol> =
+        java.util.IdentityHashMap()
+    /** Generated SAM owners admitted to the bounded contravariant `I<T?>` capability-only plan. */
+    val genericSamWrapperSemanticPlans:
+        MutableMap<IrClass, DotNetContravariantOpenNullableSamWrapperPlan> =
         java.util.IdentityHashMap()
     val consumedEarlyGenericInterfaceNaturalAuthorityPlans: MutableSet<IrClassSymbol> = linkedSetOf()
     /** Explicitly admitted subset populated later by bounded reified-interface admission only. */

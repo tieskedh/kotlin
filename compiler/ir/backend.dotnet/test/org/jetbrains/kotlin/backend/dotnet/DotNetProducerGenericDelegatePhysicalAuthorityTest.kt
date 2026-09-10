@@ -215,7 +215,7 @@ class DotNetProducerGenericDelegatePhysicalAuthorityTest {
         ))
         val encoded = DotNetLibraryAbiCodec.encode(declarations)
 
-        assertEquals("69", DotNetLibraryAbiCodec.ABI_VERSION)
+        assertEquals("70", DotNetLibraryAbiCodec.ABI_VERSION)
         assertEquals(declarations, DotNetLibraryAbiCodec.decode(encoded.toProperties()))
 
         val entry = encoded.entries.single()

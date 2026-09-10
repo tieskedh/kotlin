@@ -23,7 +23,7 @@ For a true CLR-generic Kotlin-owned owner, an explicit parameterized `as` or
 `as?` with at least one non-star argument uses the runtime generic construction
 to check Kotlin subtyping when that argument relation is not already proved by
 the source type. An admitted parameterized `is` check uses the same predicate;
-the only currently general `is` form, `Producer<*>`, remains classifier-only.
+an ordinary star `is` form, such as `Producer<*>`, remains classifier-only.
 A star target such as `Producer<*>` is otherwise not in this entry. Neither are
 ordinary assignments, implicit conversions, declaration-site variance, or
 use-site projections.
@@ -39,6 +39,15 @@ multiple-parameter producer-property vector. Every argument is checked with
 the declaration's recorded variance. Unsupported owner/argument shapes remain
 outside the reified-owner proof; this entry does not authorize guessing their
 subtyping.
+
+The bounded contravariant direct-callable SAM form also checks ordinary natural
+constructions and the compiler-produced open-nullable witness described in the
+[SAM decision](fun-interfaces.md#open-nullable-contravariant-conversion).
+This does not broaden the source boundary. An object may truthfully carry the
+logical `Sink<T?>` view without implementing a natural `Sink<Nullable<T>>`:
+the runtime must then validate its recorded witness and semantic capability,
+not reject a valid Kotlin view solely because the natural InterfaceImpl is
+absent. Reified parameterized `is` uses the same predicate.
 
 ### Observable rule
 
@@ -99,8 +108,10 @@ Kotlin-variance predicate. It compares compatible natural constructions and
 returns the original object. It never creates a wrapper, copied store, shadow
 state, or fabricated `Producer<object>` value.
 
-Runtime surface level 39 owns this predicate. The behavior remains behind the
-generic-owner rehearsal epoch until the complete owner migration is admitted.
+The versioned Runtime surface owns this predicate, including its required
+semantic-capability argument for witness-backed instances. The behavior remains
+behind the generic-owner rehearsal epoch until the complete owner migration is
+admitted. Production-erased casts retain their preceding classifier-only result.
 
 ### Evidence and rollback
 

@@ -673,9 +673,11 @@ private class BackendCliDotNetFacade(
         validateGenericOwnerGenericSamWrapper(
             genericOwnerRehearsal = genericOwnerRehearsal,
             producesLibrary = loweredInput.configuration.dotNetProducesLibrary,
+            target = loweredInput.configuration.dotNetTarget,
             producer = completedOutput.output,
             declarations = completedOutput.declarations,
             testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
+            directory = testServices.getOrCreateTempDirectory("generic-owner-generic-sam-wrapper"),
         )
         validateGenericOwnerStateAuthorityCSharp(
             genericOwnerRehearsal = genericOwnerRehearsal,
@@ -17276,25 +17278,35 @@ private fun validateGenericOwnerCompleteNaturalInterfaceCSharp(
 }
 
 /**
- * Proves that Common's one-wrapper-per-SAM-classifier cache remains truthful after a Kotlin-owned
- * SAM interface becomes a CLR-generic TypeDef. The wrapper owns one invariant binder, every use
- * closes that binder from the original SAM operand, and equality stays classifier-only rather
- * than becoming asymmetric across legal contravariant constructions.
+ * Proves that Common's SAM-wrapper cache remains truthful after a Kotlin-owned SAM interface
+ * becomes a CLR-generic TypeDef. Exact operands use the natural wrapper; an open-nullable operand
+ * with no verifier-nameable `Sink<T?>` construction uses a distinct same-object semantic wrapper.
  */
 private fun validateGenericOwnerGenericSamWrapper(
     genericOwnerRehearsal: Boolean,
     producesLibrary: Boolean,
+    target: DotNetTarget,
     producer: File,
     declarations: Map<String, DotNetPhysicalDeclaration>,
     testDataFile: File,
+    directory: File,
 ) {
     if (GENERIC_OWNER_GENERIC_SAM_WRAPPER_CSHARP_PROBE_MARKER !in
         testDataFile.readText()
     ) return
 
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+    if (!producesLibrary) {
+        validateGenericOwnerGenericSamWrapperCasts(genericOwnerRehearsal, target, directory)
+    }
+
     val namespaceName = "generic.owner.sam.wrapper"
     val interfaceName = "Sink"
-    val wrapperBaseName = "sam\$generic_owner_sam_wrapper_Sink\$0"
+    val wrapperFamilyPrefix = "sam\$generic_owner_sam_wrapper_Sink\$"
+    val naturalWrapperBaseName = "${wrapperFamilyPrefix}0"
+    val witnessNamespace = "Kotlin.Runtime.Internal"
+    val witnessName = "GenericInterfaceContravariantOpenNullableView`1"
     val objectType = DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.OBJECT)
     val stringType = DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.STRING)
     val ownerParameter = DotNetClrTypeSignature.GenericParameter(
@@ -17324,6 +17336,51 @@ private fun validateGenericOwnerGenericSamWrapper(
         !type.isValueType && namesType(type.type, expectedNamespace, expectedName)
     } == true
 
+    fun interfaceSignature(
+        handle: org.jetbrains.kotlin.load.dotnet.DotNetClrMetadataHandle,
+    ): DotNetClrTypeSignature = metadata.typeSpecifications.singleOrNull { specification ->
+        specification.handle == handle
+    }?.signature ?: DotNetClrTypeSignature.Named(handle, isValueType = false)
+
+    fun namedTypeName(
+        handle: org.jetbrains.kotlin.load.dotnet.DotNetClrMetadataHandle,
+    ): String = metadata.typeDefinitions.singleOrNull { type ->
+        type.handle == handle
+    }?.let { type -> "${type.namespaceName}.${type.metadataName}" }
+        ?: metadata.typeReferences.singleOrNull { type ->
+            type.handle == handle
+        }?.let { type -> "${type.namespaceName}.${type.metadataName}" }
+        ?: handle.toString()
+
+    fun describeType(signature: DotNetClrTypeSignature): String = when (signature) {
+        is DotNetClrTypeSignature.Named -> namedTypeName(signature.type)
+        is DotNetClrTypeSignature.GenericInstance ->
+            namedTypeName(signature.genericType.type) + signature.arguments.joinToString(
+                prefix = "<",
+                postfix = ">",
+            )
+        else -> signature.toString()
+    }
+
+    fun isNaturalSink(signature: DotNetClrTypeSignature): Boolean {
+        val instance = signature as? DotNetClrTypeSignature.GenericInstance ?: return false
+        return !instance.genericType.isValueType &&
+                namesType(instance.genericType.type, namespaceName, "$interfaceName`1")
+    }
+
+    fun isOpenNullableWitness(signature: DotNetClrTypeSignature): Boolean {
+        val marker = signature as? DotNetClrTypeSignature.GenericInstance ?: return false
+        if (marker.genericType.isValueType ||
+            !namesType(marker.genericType.type, witnessNamespace, witnessName) ||
+            marker.arguments.size != 1
+        ) return false
+        val anchor = marker.arguments.single() as? DotNetClrTypeSignature.GenericInstance
+            ?: return false
+        return !anchor.genericType.isValueType &&
+                namesType(anchor.genericType.type, namespaceName, "$interfaceName`1") &&
+                anchor.arguments == listOf(ownerParameter)
+    }
+
     fun emittedIl(): String {
         val file = producer.resolveSibling("${producer.nameWithoutExtension}.il")
         check(file.isFile) {
@@ -17349,7 +17406,7 @@ private fun validateGenericOwnerGenericSamWrapper(
     }
 
     fun requireWrapper(generic: Boolean) {
-        val wrapperName = "$wrapperBaseName${if (generic) "`1" else ""}"
+        val wrapperName = "$naturalWrapperBaseName${if (generic) "`1" else ""}"
         val wrapper = checkNotNull(metadata.typeDefinitions.singleOrNull { type ->
             type.namespaceName == namespaceName && type.metadataName == wrapperName
         }) {
@@ -17424,6 +17481,14 @@ private fun validateGenericOwnerGenericSamWrapper(
             "Generated SAM wrapper '$wrapperName' fabricated or erased its sole natural Sink " +
                     "construction: $sinkEdges"
         }
+        check(metadata.interfaceImplementations
+            .filter { implementation -> implementation.implementingType == wrapper.handle }
+            .none { implementation ->
+                isOpenNullableWitness(interfaceSignature(implementation.interfaceType))
+            }
+        ) {
+            "Natural SAM wrapper '$wrapperName' unexpectedly retained the open-nullable witness"
+        }
 
         val fields = metadata.fieldDefinitions.filter { field ->
             field.declaringType == wrapper.handle
@@ -17469,34 +17534,200 @@ private fun validateGenericOwnerGenericSamWrapper(
 
         if (generic) {
             check(metadata.typeDefinitions.none { type ->
-                type.namespaceName == namespaceName && type.metadataName == wrapperBaseName
+                type.namespaceName == namespaceName && type.metadataName == naturalWrapperBaseName
             }) {
                 "The candidate emitted an arity-zero sibling for generic wrapper '$wrapperName'"
             }
         }
     }
 
+    fun requireSemanticWrapper(): String {
+        val wrappers = metadata.typeDefinitions.filter { type ->
+            type.namespaceName == namespaceName &&
+                    type.metadataName.startsWith(wrapperFamilyPrefix) &&
+                    type.metadataName.endsWith("`1")
+        }
+        val wrapper = checkNotNull(wrappers.singleOrNull { candidate ->
+            val edges = metadata.interfaceImplementations.filter { implementation ->
+                implementation.implementingType == candidate.handle
+            }
+            edges.none { implementation ->
+                isNaturalSink(interfaceSignature(implementation.interfaceType))
+            } && edges.count { implementation ->
+                isOpenNullableWitness(interfaceSignature(implementation.interfaceType))
+            } == 1
+        }) {
+            "${producer.name} has no unique semantic open-nullable Sink wrapper: " +
+                    wrappers.map { type -> type.metadataName }
+        }
+        check(wrapper.metadataName != "$naturalWrapperBaseName`1" &&
+                wrapper.visibility == DotNetClrTypeVisibility.NOT_PUBLIC &&
+                !wrapper.isInterface && wrapper.isSealed
+        ) {
+            "Semantic open-nullable Sink wrapper lost its distinct private final shape: $wrapper"
+        }
+        check(wrappers.size == 2 && wrappers.any { type ->
+            type.metadataName == "$naturalWrapperBaseName`1"
+        }) {
+            "The candidate did not emit exactly one natural and one semantic Sink wrapper: " +
+                    wrappers.map { type -> type.metadataName }
+        }
+
+        val parameters = metadata.genericParameterDefinitions.filter { parameter ->
+            parameter.owner == wrapper.handle
+        }
+        check(parameters.singleOrNull()?.let { parameter ->
+            parameter.number == 0 &&
+                    parameter.variance == DotNetClrGenericParameterVariance.INVARIANT &&
+                    !parameter.hasReferenceTypeConstraint &&
+                    !parameter.hasNotNullableValueTypeConstraint &&
+                    !parameter.hasDefaultConstructorConstraint &&
+                    metadata.genericParameterConstraints.none { constraint ->
+                        constraint.owner == parameter.handle
+                    }
+        } == true) {
+            "Semantic open-nullable Sink wrapper has no unconstrained invariant witness: $parameters"
+        }
+
+        val fields = metadata.fieldDefinitions.filter { field ->
+            field.declaringType == wrapper.handle
+        }
+        check(fields.singleOrNull()?.let { field ->
+            field.name == "function" && field.visibility == DotNetClrFieldVisibility.PRIVATE &&
+                    !field.isStatic && isNamedType(field.signature.fieldType, "Kotlin", "Function1")
+        } == true) {
+            "Semantic open-nullable Sink wrapper does not retain one raw Function1 field: $fields"
+        }
+        val constructors = metadata.methodDefinitions.filter { method ->
+            method.declaringType == wrapper.handle && method.name == ".ctor"
+        }
+        check(constructors.singleOrNull()?.let { constructor ->
+            constructor.visibility == DotNetClrMethodVisibility.ASSEMBLY &&
+                    !constructor.isStatic && constructor.signature.hasThis &&
+                    constructor.signature.genericParameterCount == 0 &&
+                    constructor.signature.returnType == DotNetClrTypeSignature.Void &&
+                    constructor.signature.parameterTypes.singleOrNull()?.let { parameter ->
+                        isNamedType(parameter, "Kotlin", "Function1")
+                    } == true
+        } == true) {
+            "Semantic open-nullable Sink wrapper does not retain one raw Function1 constructor: " +
+                    constructors
+        }
+        val accept = checkNotNull(metadata.methodDefinitions.singleOrNull { method ->
+            method.declaringType == wrapper.handle && method.name == "accept" &&
+                    method.visibility == DotNetClrMethodVisibility.PUBLIC &&
+                    !method.isStatic && !method.isAbstract && method.signature.hasThis &&
+                    method.signature.genericParameterCount == 0 &&
+                    method.signature.returnType == stringType &&
+                    method.signature.parameterTypes == listOf(objectType)
+        }) {
+            "Semantic open-nullable Sink wrapper has no string accept(object) body: " +
+                    metadata.methodDefinitions.filter { method ->
+                        method.declaringType == wrapper.handle
+                    }
+        }
+
+        val edges = metadata.interfaceImplementations.filter { implementation ->
+            implementation.implementingType == wrapper.handle
+        }
+        val witnessEdge = checkNotNull(edges.singleOrNull { implementation ->
+            isOpenNullableWitness(interfaceSignature(implementation.interfaceType))
+        }) {
+            "Semantic open-nullable Sink wrapper has no unique witness<Sink<!0>> edge: $edges"
+        }
+        val functionAdapterEdge = checkNotNull(edges.singleOrNull { implementation ->
+            isNamedType(
+                interfaceSignature(implementation.interfaceType),
+                "Kotlin.Runtime.Internal",
+                "FunctionAdapter",
+            )
+        }) {
+            "Semantic open-nullable Sink wrapper has no unique FunctionAdapter edge: $edges"
+        }
+        val capabilityEdges = edges.filterNot { implementation ->
+            implementation.handle == witnessEdge.handle ||
+                    implementation.handle == functionAdapterEdge.handle
+        }
+        check(edges.none { implementation ->
+            isNaturalSink(interfaceSignature(implementation.interfaceType))
+        } && edges.size == 4 && capabilityEdges.size == 2) {
+            "Semantic open-nullable Sink wrapper fabricated a natural view or extra state: " +
+                    edges.map { implementation ->
+                        describeType(interfaceSignature(implementation.interfaceType))
+                    }
+        }
+        // The ordinary generated-owner planner also emits one assembly-private class
+        // capability. It is distinct from the externally nameable Sink capability.
+        val classCapabilityEdge = checkNotNull(capabilityEdges.singleOrNull { implementation ->
+            metadata.typeDefinitions.singleOrNull { type ->
+                type.handle == implementation.interfaceType
+            }?.let { type ->
+                type.isInterface && type.visibility == DotNetClrTypeVisibility.NOT_PUBLIC &&
+                        metadata.genericParameterDefinitions.none { parameter ->
+                            parameter.owner == type.handle
+                        }
+            } == true
+        }) {
+            "Semantic SAM wrapper has no unique non-generic private class capability: $capabilityEdges"
+        }
+        val capabilityEdge = capabilityEdges.single { implementation ->
+            implementation.handle != classCapabilityEdge.handle
+        }
+        val capabilitySignature = interfaceSignature(capabilityEdge.interfaceType)
+        check(capabilitySignature is DotNetClrTypeSignature.Named &&
+                !capabilitySignature.isValueType
+        ) {
+            "Semantic open-nullable Sink wrapper capability is not one non-generic interface: " +
+                    capabilitySignature
+        }
+
+        val dispatchers = metadata.methodImplementations
+            .filter { implementation -> implementation.implementingType == wrapper.handle }
+            .mapNotNull { implementation ->
+                val body = metadata.methodDefinitions.singleOrNull { method ->
+                    method.handle == implementation.bodyMethod && method.declaringType == wrapper.handle
+                } ?: return@mapNotNull null
+                val declarationParent = metadata.memberReferences.singleOrNull { reference ->
+                    reference.handle == implementation.declarationMethod
+                }?.parent ?: metadata.methodDefinitions.singleOrNull { method ->
+                    method.handle == implementation.declarationMethod
+                }?.declaringType
+                body.takeIf {
+                    declarationParent == capabilityEdge.interfaceType && body.handle != accept.handle &&
+                            body.visibility == DotNetClrMethodVisibility.PRIVATE && !body.isStatic &&
+                            body.isVirtual && body.isFinal && !body.isAbstract &&
+                            body.signature.hasThis && body.signature.returnType == stringType &&
+                            body.signature.parameterTypes == listOf(objectType)
+                }
+            }
+        check(dispatchers.size == 1) {
+            "Semantic open-nullable Sink wrapper has no unique capability MethodImpl: $dispatchers"
+        }
+        return wrapper.metadataName.removeSuffix("`1")
+    }
+
     fun requireWrapperConstructorUse(
         methodName: String,
-        expectedArgument: String?,
+        expectedWrapperBaseName: String,
+        expectedArgumentFragments: List<String>,
         generic: Boolean,
     ) {
         val method = requireMethodWindow(emittedIl(), methodName)
-        val wrapperName = "$wrapperBaseName${if (generic) "`1" else ""}"
+        val wrapperName = "$expectedWrapperBaseName${if (generic) "`1" else ""}"
         val calls = method.lineSequence()
             .map(String::trim)
-            .filter { line -> "newobj" in line && wrapperBaseName in line }
+            .filter { line -> "newobj" in line && wrapperFamilyPrefix in line }
             .toList()
         check(calls.singleOrNull()?.let { call ->
-            if (!generic) {
-                "<" !in call.substringAfter(wrapperBaseName)
-            } else {
-                checkNotNull(expectedArgument) in call &&
-                        listOf("<!!0>", "<!0>").none { forbidden -> forbidden in call }
-            }
+            wrapperName in call && expectedArgumentFragments.all { fragment -> fragment in call } &&
+                    if (!generic) {
+                        "<" !in call.substringAfter(expectedWrapperBaseName)
+                    } else {
+                        "<!0>" !in call
+                    }
         } == true) {
             "Method '$methodName' did not construct the expected '$wrapperName' closure " +
-                    "($expectedArgument): $calls\n$method"
+                    "(${expectedArgumentFragments.joinToString()}): $calls\n$method"
         }
     }
 
@@ -17510,9 +17741,15 @@ private fun validateGenericOwnerGenericSamWrapper(
                 check(metadata.typeDefinitions.none { type ->
                     type.namespaceName == namespaceName &&
                             (type.metadataName == "$interfaceName`1" ||
-                                    type.metadataName == "$wrapperBaseName`1")
+                                    type.metadataName.startsWith("$wrapperFamilyPrefix") &&
+                                    type.metadataName != naturalWrapperBaseName)
                 }) {
-                    "The production-erased lib retained generic Sink/SAM TypeDefs"
+                    "The production-erased lib retained candidate Sink/SAM TypeDefs"
+                }
+                check(metadata.typeReferences.none { type ->
+                    type.namespaceName == witnessNamespace && type.metadataName == witnessName
+                }) {
+                    "The production-erased lib referenced the candidate witness ABI"
                 }
                 val sink = checkNotNull(metadata.typeDefinitions.singleOrNull { type ->
                     type.namespaceName == namespaceName && type.metadataName == interfaceName
@@ -17535,22 +17772,53 @@ private fun validateGenericOwnerGenericSamWrapper(
                     "The production-erased Sink surface is not string accept(object): $methods"
                 }
                 requireWrapper(generic = false)
-                requireWrapperConstructorUse("localOpenSink", null, generic = false)
+                requireWrapperConstructorUse(
+                    "localOpenSink",
+                    naturalWrapperBaseName,
+                    emptyList(),
+                    generic = false,
+                )
+                requireWrapperConstructorUse(
+                    "localOpenNullableSink",
+                    naturalWrapperBaseName,
+                    emptyList(),
+                    generic = false,
+                )
             }
             producer.name.equals("middle.dll", ignoreCase = true) -> {
                 check(metadata.typeDefinitions.none { type ->
-                    type.namespaceName == namespaceName && type.metadataName == "$wrapperBaseName`1"
+                    type.namespaceName == namespaceName &&
+                            type.metadataName.startsWith(wrapperFamilyPrefix) &&
+                            type.metadataName != naturalWrapperBaseName
                 }) {
-                    "The production-erased middle library retained a generic Sink SAM wrapper"
+                    "The production-erased middle library retained candidate SAM wrappers"
+                }
+                check(metadata.typeReferences.none { type ->
+                    type.namespaceName == witnessNamespace && type.metadataName == witnessName
+                }) {
+                    "The production-erased middle library referenced the candidate witness ABI"
+                }
+                check(metadata.typeReferences.none { type ->
+                    type.namespaceName == namespaceName && type.metadataName == "$interfaceName`1"
+                }) {
+                    "The production-erased middle library referenced candidate Sink`1"
                 }
                 requireWrapper(generic = false)
                 listOf(
                     "sharedAnySink",
                     "externalOpenSink",
+                    "externalOpenNullableSink",
                     "sharedStringSink",
                     "sharedIntSink",
+                    "sharedNullableIntSink",
+                    "sharedOpenNullableSink",
                 ).forEach { methodName ->
-                    requireWrapperConstructorUse(methodName, null, generic = false)
+                    requireWrapperConstructorUse(
+                        methodName,
+                        naturalWrapperBaseName,
+                        emptyList(),
+                        generic = false,
+                    )
                 }
             }
         }
@@ -17645,16 +17913,140 @@ private fun validateGenericOwnerGenericSamWrapper(
             }
 
             requireWrapper(generic = true)
-            requireWrapperConstructorUse("localOpenSink", "<!!1>", generic = true)
+            val semanticWrapperBaseName = requireSemanticWrapper()
+            requireWrapperConstructorUse(
+                "localOpenSink",
+                naturalWrapperBaseName,
+                listOf("<!!1>"),
+                generic = true,
+            )
+            requireWrapperConstructorUse(
+                "localOpenNullableSink",
+                semanticWrapperBaseName,
+                listOf("<!!1>"),
+                generic = true,
+            )
         }
         producer.name.equals("middle.dll", ignoreCase = true) -> {
             requireWrapper(generic = true)
-            requireWrapperConstructorUse("sharedAnySink", "<object>", generic = true)
-            requireWrapperConstructorUse("externalOpenSink", "<!!1>", generic = true)
-            requireWrapperConstructorUse("sharedStringSink", "<string>", generic = true)
-            requireWrapperConstructorUse("sharedIntSink", "<int32>", generic = true)
+            val semanticWrapperBaseName = requireSemanticWrapper()
+            requireWrapperConstructorUse(
+                "sharedAnySink",
+                naturalWrapperBaseName,
+                listOf("<object>"),
+                generic = true,
+            )
+            requireWrapperConstructorUse(
+                "externalOpenSink",
+                naturalWrapperBaseName,
+                listOf("<!!1>"),
+                generic = true,
+            )
+            requireWrapperConstructorUse(
+                "externalOpenNullableSink",
+                semanticWrapperBaseName,
+                listOf("<!!1>"),
+                generic = true,
+            )
+            requireWrapperConstructorUse(
+                "sharedOpenNullableSink",
+                semanticWrapperBaseName,
+                listOf("<!!0>"),
+                generic = true,
+            )
+            requireWrapperConstructorUse(
+                "sharedStringSink",
+                naturalWrapperBaseName,
+                listOf("<string>"),
+                generic = true,
+            )
+            requireWrapperConstructorUse(
+                "sharedIntSink",
+                naturalWrapperBaseName,
+                listOf("<int32>"),
+                generic = true,
+            )
+            requireWrapperConstructorUse(
+                "sharedNullableIntSink",
+                naturalWrapperBaseName,
+                listOf("<valuetype ", "System.Nullable`1<int32>"),
+                generic = true,
+            )
         }
     }
+}
+
+/** BK-1 is rehearsal-only; test both its rejection and the erased inverse explicitly. */
+private fun validateGenericOwnerGenericSamWrapperCasts(
+    genericOwnerRehearsal: Boolean,
+    target: DotNetTarget,
+    directory: File,
+) {
+    val lib = directory.resolve("lib.dll")
+    val middle = directory.resolve("middle.dll")
+    check(lib.isFile && middle.isFile) { "The SAM cast probe lacks its separate Kotlin libraries" }
+    val platformProperty = "kotlin.dotnet.test.platform.${target.description}.path"
+    val platform = System.getProperty(platformProperty)?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform property '$platformProperty'")
+    val runtime = platform.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platform.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    check(runtime.isFile && stdlib.isFile) { "The SAM cast probe lacks Runtime/Stdlib" }
+    val source = directory.resolve("GenericSamCastConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+            using generic.owner.sam.wrapper;
+
+            public static class GenericSamCastConsumer
+            {
+                private static void Check(object value, bool rejectsIncompatible)
+                {
+                    if (!Object.ReferenceEquals(contractsKt.safeNullableIntSink(value), value) ||
+                        !Object.ReferenceEquals(contractsKt.safeNonNullIntSink(value), value) ||
+                        !Object.ReferenceEquals(contractsKt.checkedNullableIntSink(value), value) ||
+                        !contractsKt.isNullableIntSink(value) ||
+                        !contractsKt.isSinkClassifier(value))
+                        throw new InvalidOperationException("SAM compatible casts lost identity or variance");
+                    if ((contractsKt.safeNullableStringSink(value) == null) != rejectsIncompatible ||
+                        (contractsKt.safeNullableAnySink(value) == null) != rejectsIncompatible ||
+                        contractsKt.checkedNullableStringSinkFails(value) != rejectsIncompatible ||
+                        contractsKt.isNullableStringSink(value) == rejectsIncompatible)
+                        throw new InvalidOperationException("SAM as/as?/is disagree with the selected epoch");
+                }
+
+                public static int Main()
+                {
+                    bool rejectsIncompatible = ${genericOwnerRehearsal.toString()};
+                    Check(contractsKt.localOpenNullableSink<int, int>(3), rejectsIncompatible);
+                    Check(factoriesKt.externalOpenNullableSink<string, int>("foreign"), rejectsIncompatible);
+                    Check(factoriesKt.sharedNullableIntSink(), rejectsIncompatible);
+                    Check(factoriesKt.sharedOpenNullableSink<int>(), rejectsIncompatible);
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val consumer = directory.resolve(
+        if (target == DotNetTarget.NET48) "GenericSamCastConsumer.exe" else "GenericSamCastConsumer.dll"
+    )
+    val references = listOf(lib, middle, runtime, stdlib)
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()),
+            source, consumer, references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()),
+            source, consumer, references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 -> error("The SAM cast consumer needs an executable profile")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    listOf(runtime, stdlib).forEach { dependency ->
+        dependency.copyTo(directory.resolve(dependency.name), overwrite = true)
+    }
+    executeSnapshotConsumer(target, consumer, directory)
 }
 
 /** Validates one declaration-independent direct result without giving it declaration-specific policy. */

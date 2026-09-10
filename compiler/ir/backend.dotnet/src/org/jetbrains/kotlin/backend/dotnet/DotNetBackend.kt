@@ -952,6 +952,7 @@ object DotNetBackend {
                         reifiedGenericInterfacePhysicalVariances,
                     genericInterfaceNaturalMethodParameterDomains =
                         context.genericInterfaceNaturalMethodParameterDomains,
+                    genericSamWrapperSemanticPlans = context.genericSamWrapperSemanticPlans,
                     genericOwnerCapabilityInterfaces = context.genericOwnerCapabilityInterfaces,
                     externalReifiedGenericInterfaceCapabilityProviders =
                         context.externalReifiedGenericInterfaceCapabilityProviders,
@@ -1129,6 +1130,7 @@ object DotNetBackend {
                     reifiedGenericInterfacePhysicalVariances,
                 genericInterfaceNaturalMethodParameterDomains =
                     context.genericInterfaceNaturalMethodParameterDomains,
+                genericSamWrapperSemanticPlans = context.genericSamWrapperSemanticPlans,
                 genericOwnerCapabilityInterfaces = context.genericOwnerCapabilityInterfaces,
                 externalReifiedGenericInterfaceCapabilityProviders =
                     context.externalReifiedGenericInterfaceCapabilityProviders,

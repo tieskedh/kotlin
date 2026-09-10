@@ -114,6 +114,17 @@ internal object DotNetRuntimeTypes {
         assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
     )
 
+    /**
+     * Dormant compiler/runtime ABI used to retain the natural construction which witnesses a
+     * contravariant SAM whose logical argument is an open `T?`. The marker parameter is
+     * deliberately invariant: the construction is evidence, not another variance conversion.
+     */
+    val genericInterfaceContravariantOpenNullableViewClass = DotNetIlClassInfo(
+        ilClassName = "Kotlin.Runtime.Internal.GenericInterfaceContravariantOpenNullableView`1",
+        typeParameterVariances = listOf(Variance.INVARIANT),
+        assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
+    )
+
     private fun runtimeInterface(
         canonicalName: String,
         hasRehearsalDeclaredView: Boolean = false,
@@ -1691,6 +1702,13 @@ internal object DotNetRuntimeTypes {
         val classInfo = typedArgumentsFunctionClasses[parameterTypes.size] ?: return null
         return DotNetIlValueType.GenericInstance(classInfo, parameterTypes)
     }
+
+    fun genericInterfaceContravariantOpenNullableViewType(
+        naturalAnchor: DotNetIlValueType,
+    ): DotNetIlValueType.GenericInstance = DotNetIlValueType.GenericInstance(
+        genericInterfaceContravariantOpenNullableViewClass,
+        listOf(naturalAnchor),
+    )
 
     /** Member-reference spelling of TypedArgumentsFunctionN.InvokeTyped. */
     fun typedArgumentsInvokeCallInstruction(typedArgumentsType: DotNetIlValueType.GenericInstance): String {

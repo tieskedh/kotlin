@@ -1704,6 +1704,7 @@ internal class DotNetIlExpressionCodegen(
                         emitReifiedGenericInterfaceConstructionMatch(
                             receiverSlot.index,
                             requestedConstruction,
+                            capabilityType,
                         )
                     } else {
                         emitReifiedGenericInterfaceClassifierMatch(
@@ -2237,14 +2238,17 @@ internal class DotNetIlExpressionCodegen(
     private fun emitReifiedGenericInterfaceConstructionMatch(
         receiverLocalIndex: Int,
         requestedConstruction: DotNetIlValueType.GenericInstance,
+        capabilityType: DotNetIlValueType.UserClass,
     ) {
         requestedConstruction.classInfo.assemblyName?.let(typeMapper::recordAssemblyReference)
+        capabilityType.classInfo.assemblyName?.let(typeMapper::recordAssemblyReference)
         methodContext.emit(loadLocalInstruction(receiverLocalIndex), pushes = 1)
         emitSystemTypeOrNull(requestedConstruction.nameInSignature)
+        emitSystemTypeOrNull(capabilityType.ilTypeRef)
         methodContext.emit(
             DotNetGenericInterfaceRuntime
                 .isCompatibleGenericOwnerInstanceCallInstruction(coreLibraryReference),
-            pops = 2,
+            pops = 3,
             pushes = 1,
         )
     }
@@ -2277,6 +2281,7 @@ internal class DotNetIlExpressionCodegen(
             emitReifiedGenericInterfaceConstructionMatch(
                 receiverSlot.index,
                 requestedConstruction,
+                capabilityType,
             )
         } else {
             emitReifiedGenericInterfaceClassifierMatch(
@@ -3804,7 +3809,15 @@ internal class DotNetIlExpressionCodegen(
             val argumentsFromCall = call.typeArguments.map { argument ->
                 argument?.let(constructorTypeMapper::toDotNetIlGenericArgumentType)
             }
-            val instanceType = (constructorTypeMapper.toDotNetIlValueType(call.type) as? DotNetIlValueType.GenericInstance)
+            val instanceType = (constructorTypeMapper.toDotNetIlValueType(call.type) as?
+                    DotNetIlValueType.GenericInstance)
+                ?.takeIf { instance ->
+                    // A constructor expression may deliberately select a different logical result
+                    // view from the owner it allocates (notably a semantic generic-SAM view).
+                    // A mapped GenericInstance is construction evidence only when it names this
+                    // constructor's actual TypeDef; otherwise use the independent class arguments.
+                    instance.classInfo.ilTypeRef == classInfo.ilTypeRef
+                }
                 ?: argumentsFromCall
                     .takeIf { arguments ->
                         arguments.size == irClass.typeParameters.size && arguments.all { it != null }

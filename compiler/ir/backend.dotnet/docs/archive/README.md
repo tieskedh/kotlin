@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-open-nullable-sam-2026-09-10.md`](generic-owner-open-nullable-sam-2026-09-10.md)
+  records the bounded contravariant nullable SAM witness, separate-producer
+  binding, semantic result joins, shared cast/equality behavior, focused
+  candidate/inverse and JVM evidence, and the fresh 2,817-test target gate.
 - [`upstream-sync-2026-09-05.md`](upstream-sync-2026-09-05.md) records the
   conflict-free 291-commit upstream integration, complete 733-patch
   preservation and 14-path overlap audit, three bounded post-rebase

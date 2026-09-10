@@ -329,8 +329,8 @@ producer-authoritative interface parameter with `W`. Every wrapper constructor
 use is then closed from the original exact SAM operand: a caller MethodDef's
 second parameter produces `sam$Sink<!!1>`, while closed operands produce their
 actual `object`, `string`, value-type, or other verifier-nameable argument. One
-cached wrapper TypeDef remains sufficient; choosing the first observed
-construction as its global representation is forbidden.
+cached natural wrapper TypeDef remains sufficient for those exact operands;
+choosing the first observed construction as its global representation is forbidden.
 
 Authority is established before the generated owner is built. A local
 interface uses the same bounded admission query later consumed by final
@@ -351,8 +351,14 @@ This rule does not introduce a representation-repair proxy or shadow state.
 The SAM wrapper is the conversion object already required by Common lowering
 and keeps its single raw `FunctionN` field. The current executable proof is
 deliberately bounded to one unconstrained interface parameter and the admitted
-direct-callable SAM shape. More parameters, bounds, inherited SAM families,
-projections, and non-exact construction arguments remain unproved.
+direct-callable SAM shape. The bounded open-nullable contravariant alternative
+is owned by the [SAM decision](fun-interfaces.md#open-nullable-contravariant-conversion):
+the same Common conversion object carries a semantic interface and an invariant
+underlying-type witness, without claiming a natural nullable construction.
+Natural and semantic wrapper plans have separate cache entries. The witness
+marker is not natural-view provenance and cannot authorize a typed call or
+field. More parameters, bounds, inherited SAM families, projections, and other
+non-exact construction arguments remain unproved.
 
 ## Callable contracts and split-nullable results
 

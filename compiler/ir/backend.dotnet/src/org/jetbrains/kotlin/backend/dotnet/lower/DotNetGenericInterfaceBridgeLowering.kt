@@ -246,6 +246,53 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                 localClasses,
             )
         }
+        for (entry in context.genericSamWrapperSemanticPlans.entries) {
+            val wrapper = entry.key
+            val interfaceSymbol = entry.value.logicalInterface
+            check(wrapper.superTypes.none { superType ->
+                (superType as? IrSimpleType)?.classifier == interfaceSymbol
+            }) {
+                "Internal .NET backend error: semantic-only SAM wrapper '${wrapper.name}' " +
+                        "fabricated a natural '${interfaceSymbol.owner.name}' supertype"
+            }
+            val localCapability = context.genericOwnerCapabilityInterfaces[interfaceSymbol.owner]
+            val hasLocalCapability = localCapability != null && wrapper.superTypes.any { superType ->
+                (superType as? IrSimpleType)?.classifier == localCapability.symbol
+            }
+            val hasExternalCapability = context
+                .externalGenericOwnerCapabilitySupertypeProviders[wrapper]
+                .orEmpty()
+                .isNotEmpty()
+            check(hasLocalCapability || hasExternalCapability) {
+                "Internal .NET backend error: semantic-only SAM wrapper '${wrapper.name}' has no " +
+                        "same-object semantic capability after generic-interface bridging"
+            }
+            val dispatcherSelections = context
+                .localGenericOwnerPhysicalInterfaceCapabilityDispatcherSelections
+                .filter { selection ->
+                    selection.implementationMember.owner.parent === wrapper &&
+                            selection.logicalInterfaceMember.owner.parent === interfaceSymbol.owner &&
+                            selection.dispatcher.owner.parent === wrapper
+                }
+            check(dispatcherSelections.size == 1) {
+                "Internal .NET backend error: semantic-only SAM wrapper '${wrapper.name}' has no " +
+                        "unique same-object capability dispatcher: $dispatcherSelections"
+            }
+            val selection = dispatcherSelections.single()
+            val implementation = selection.implementationMember.owner
+            check(implementation.overriddenSymbols.any { overridden ->
+                overridden == selection.logicalInterfaceMember
+            }) {
+                "Internal .NET backend error: semantic-only SAM implementation " +
+                        "'${implementation.name}' lost its logical bridge input prematurely"
+            }
+            // Common records the logical SAM slot so this pass can find the implementation.
+            // Once the non-generic capability MethodImpl is materialized, retaining that symbol
+            // would falsely ask the emitter to bind the body to a natural I<W> interface edge.
+            implementation.overriddenSymbols = implementation.overriddenSymbols.filterNot { overridden ->
+                overridden.owner.parent === interfaceSymbol.owner
+            }
+        }
     }
 
     private fun IrClass.classInheritanceDepth(): Int {
@@ -371,13 +418,24 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
             }
             val interfaceClass = slot.parent as? IrClass
                 ?: error("Internal .NET backend error: generic interface slot has no interface owner")
-            val typedSubstitutor = AbstractIrTypeSubstitutor.forSuperClass(
-                interfaceClass.symbol,
-                irClass.symbol.defaultType,
-            ) ?: error(
-                "Internal .NET backend error: '${irClass.name}' is not a subtype of " +
-                        "generic interface '${interfaceClass.name}'"
-            )
+            val typedSubstitutor = if (
+                context.genericSamWrapperSemanticPlans[irClass]?.logicalInterface == interfaceClass.symbol
+            ) {
+                IrTypeSubstitutor(
+                    interfaceClass.typeParameters.associate { parameter ->
+                        parameter.symbol to context.irBuiltIns.anyNType
+                    },
+                    allowEmptySubstitution = true,
+                )
+            } else {
+                AbstractIrTypeSubstitutor.forSuperClass(
+                    interfaceClass.symbol,
+                    irClass.symbol.defaultType,
+                ) ?: error(
+                    "Internal .NET backend error: '${irClass.name}' is not a subtype of " +
+                            "generic interface '${interfaceClass.name}'"
+                )
+            }
             val plan = BridgePlan(
                 implementingClass = irClass,
                 slot = slot,
@@ -388,6 +446,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                 slotIdentity = slot.dotNetGenericInterfaceCanonicalSlotId(),
                 typedSubstitutor = typedSubstitutor,
                 typedViews = when {
+                    irClass in context.genericSamWrapperSemanticPlans -> emptyList()
                     isErasedKotlinCarrier(irClass) -> emptyList()
                     interfaceClass.isDotNetComparableClass() -> {
                         // Comparable is an explicit BCL mapping rather than an ordinary

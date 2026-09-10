@@ -11,8 +11,8 @@ ADRs, and dated evidence in [`docs/archive`](docs/archive/README.md).
   local `dotnet` and `fork/dotnet` together.
 - Reviewed upstream base:
   `88a184ab89279617dbfe4e89ba9831ed1b43c863`.
-- Physical library ABI 69, generic-owner artifact schema 22, and compiler/
-  runtime surface 60 are current. Git owns the exact promoted commit identity.
+- Physical library ABI 70, generic-owner artifact schema 22, and compiler/
+  runtime surface 61 are current. Git owns the exact promoted commit identity.
 - The production-inert generic-owner authority consolidation is closed. It
   separates Kotlin logical authority, CLR declaration authority, per-value
   physical provenance, late operation routing, and producer-wide state.
@@ -49,17 +49,9 @@ Current representation rules are linked from the navigation section below.
 
 ## Latest verification
 
-The 291-commit upstream integration through
-`88a184ab89279617dbfe4e89ba9831ed1b43c863` completed on 2026-09-05. The
-conflict-free 733-patch replay retained every target patch; three bounded
-follow-up commits align the target-model build convention, reject null
-physical-ABI declarations, and accept upstream rich property-reference
-parameter names. The detailed preservation and shared-path evidence is in the
-[upstream-sync archive](docs/archive/upstream-sync-2026-09-05.md).
-
-The latest ABI-69/schema-22 target-wide aggregate includes the generated
-generic-SAM-wrapper slice. Direct JUnit XML audit found 212 suites and 2,817
-tests, with zero failures, errors, or skips:
+The 2026-09-10 ABI-70/schema-22 target-wide aggregate includes the bounded
+open-nullable contravariant SAM slice. Direct JUnit XML audit found 212 suites
+and 2,817 tests, with zero failures, errors, or skips:
 
 | Root | Suites | Tests |
 | --- | ---: | ---: |
@@ -68,25 +60,26 @@ tests, with zero failures, errors, or skips:
 | FIR2IR | 187 | 2,283 |
 | integration | 2 | 128 |
 
-FIR2IR and integration were rebuilt explicitly after their adaptations, then
-the public target aggregate completed with:
+The actual FIR2IR Test task was explicitly rerun without filters after the
+focused matrix, and the public target aggregate completed with:
 
 ```text
-.\gradlew.bat --max-workers=1 :compiler:backend.dotnet:dotNetTest -q
+.\gradlew.bat --max-workers=1 --no-configuration-cache -q :compiler:fir:fir2ir:dotNetTest --rerun :compiler:backend.dotnet:dotNetTest
 ```
 
-The focused post-rebase generic-owner matrix also passed in candidate and
-production-erased inverse modes through PSI and LightTree on .NET 10 and
-Framework 4.8. Exact commands, fixture scope, the one non-reproduced filesystem
-failure, and direct XML counts are preserved in the upstream-sync archive.
+The focused candidate and production-erased inverse each passed 12 tests
+through PSI and LightTree on .NET 10 and Framework 4.8. The shared SAM-cache
+boundary also passed 20 JVM tests. Scope, metadata/identity/cast evidence, and
+reproduction commands are in the
+[open-nullable SAM archive](docs/archive/generic-owner-open-nullable-sam-2026-09-10.md).
 
 ## Active work
 
 Resume the source-built Runtime/Stdlib generic-owner rehearsal census beyond
-the closed generated-SAM-owner case within phase 1 of the way forward. The next
-real failure selects the next structural provenance, placement, operation, or
-state rule. Do not add declaration, package, collection, `Map`, member-name,
-IR-origin, or stdlib exceptions.
+the closed exact and open-nullable contravariant SAM cases within phase 1 of
+the way forward. The next real failure selects the next structural provenance,
+placement, operation, or state rule. Do not add declaration, package,
+collection, `Map`, member-name, IR-origin, or stdlib exceptions.
 
 The next slice must preserve ordinary C# overrides and implementations: hidden
 semantic compiler ABI cannot become a second source-level obligation. It must
