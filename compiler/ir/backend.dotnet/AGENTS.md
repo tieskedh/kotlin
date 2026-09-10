@@ -183,6 +183,38 @@ work must be rebased or discarded explicitly.
 Preserve unrelated user changes and existing stashes. Never repurpose a user
 branch or mutate another worktree merely for convenience.
 
+### Worktree lifecycle and disk budget
+
+- Normally keep only the `dotnet` integration checkout and one active feature
+  worktree. Allow at most one additional temporary worktree for a named,
+  independent proof or immutable verification checkpoint. Reuse a suitable
+  existing checkout before creating another; worktrees are execution space,
+  not archives of completed work.
+- Before creating a worktree, inspect `git worktree list --porcelain`, its
+  purpose, and free space on the checkout, build, cache, and temporary volumes.
+  On this Windows workstation, create new worktrees under
+  `D:\CodexWorktrees\` with `codex/` branches. Do not silently fall back to C:
+  if D: is unavailable. Existing active checkouts need not move mid-feature.
+- Before a full compiler/test gate, require at least 25 GiB free on C: and on
+  every other volume that will receive substantial build/test output. This is
+  a minimum reserve, not an estimate of the run's size; raise it for a cold
+  build or evidence of greater consumption. Check space during long gates and
+  stop the owning run safely before exhaustion if the reserve is disappearing.
+- Remove an owned temporary worktree promptly after its feature is promoted
+  or its proof is finished and the required evidence is recorded. First check
+  for active processes, staged/unstaged changes, untracked files, and valuable
+  ignored artifacts. Preserve unique work before removal: retain branch/tag
+  reachability for detached commits and, for an abandoned owned experiment,
+  use a named stash including untracked files and record its object ID. Do not
+  archive another task's active work or alter existing stashes.
+- Resolve and verify each exact removal path; exclude the integration and
+  active feature checkouts. Use `git worktree remove` after preservation and
+  verify `git worktree list` afterwards. Prune only confirmed stale local
+  registrations; unavailable drives do not prove a worktree is obsolete.
+  Retain branches, commits, and recorded evidence; do not copy obsolete build
+  trees to another drive merely to keep them. Report what was removed and how
+  preserved source can be recovered.
+
 ## Upstream synchronization
 
 Before rebasing:
