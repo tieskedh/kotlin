@@ -501,6 +501,18 @@ dimension and must not affect convergence.
 - A parameter read is produced from the parameter's producer-recorded storage
   carrier and entry environment.
 
+For an admitted Kotlin-owned interface, a semantic receiver does not guarantee
+a natural owner-argument vector. Its direct owner-parameter result therefore
+retains the canonical `object` carrier, even when the substituted Kotlin result
+looks like a closed invariant interface. This transfer also applies when the
+retained canonical operation is resolved at emission rather than recorded as
+an eager IR call target. An absent target-cache entry is not evidence for a
+natural result. Such an object result may be an ordinary foreign implementation
+and need not implement a Kotlin capability. Fixed results and independent
+MethodDef parameters do not borrow this owner dependence. An explicitly
+selected callable contract remains authoritative; this transfer grants no
+construction and does not change exact receiver/state declarations.
+
 #### Immutable and mutable locals
 
 - An immutable local with one representation-preserving reaching definition may

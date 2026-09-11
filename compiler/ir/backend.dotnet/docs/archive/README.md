@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-semantic-owner-result-2026-09-11.md`](generic-owner-semantic-owner-result-2026-09-11.md)
+  records semantic owner-parameter result propagation, the reproduced invalid
+  nested construction, retained typed state, ordinary C# result/subclass
+  chains, and the focused candidate/inverse gate.
 - [`generic-owner-reference-in-constructor-2026-09-11.md`](generic-owner-reference-in-constructor-2026-09-11.md)
   records natural reference-contravariant constructors, retained typed state,
   separate Kotlin/C# construction, rejected bottom covariance, and the focused

@@ -1152,6 +1152,15 @@ internal class DotNetReifiedGenericInterfaceLowering(
                     context.genericOwnerFunctionInputEntryObjectParameters[function].orEmpty()
         }
 
+        fun IrCall.hasDirectReifiedInterfaceOwnerParameterResult(): Boolean {
+            val source = resolvedGenericOwnerSource()
+            val owner = source.parent as? IrClass ?: return false
+            if (!owner.isInterface || !owner.isReifiedInterfaceForCurrentEpoch()) return false
+            val parameter = (source.returnType as? IrSimpleType)?.classifier as? IrTypeParameterSymbol
+                ?: return false
+            return parameter.owner in owner.typeParameters
+        }
+
         fun IrExpression.readsSemanticInterfaceDeclaration(): Boolean = when (this) {
             is IrGetValue -> symbol.owner in context.genericOwnerCapabilityDeclarations &&
                     (symbol.owner as? IrValueParameter)
@@ -1172,7 +1181,13 @@ internal class DotNetReifiedGenericInterfaceLowering(
                                 context.genericOwnerCapabilityDeclarations,
                             )
                 } ?: resolvedGenericOwnerSource().let { source ->
-                    source.externalReturnCarrierOrNull() != null ||
+                    // A semantic interface receiver has no exact owner argument vector. Its
+                    // canonical owner-parameter result is object, even when substituting the
+                    // logical call type produces an exact-looking nested interface. A fixed
+                    // result or independent MethodDef parameter does not depend on that vector.
+                    (hasDirectReifiedInterfaceOwnerParameterResult() &&
+                            dispatchReceiver?.readsSemanticInterfaceDeclaration() == true) ||
+                            source.externalReturnCarrierOrNull() != null ||
                             substitutedOwnerParameterSemanticInterfaceOwnerOrNull() != null ||
                             source in context.genericOwnerCapabilityDeclarations ||
                             source.hasValueClassCarrierSourceIn(
@@ -1205,7 +1220,9 @@ internal class DotNetReifiedGenericInterfaceLowering(
                             selectedTarget.externalReturnCarrierOrNull() ==
                             DotNetGenericOwnerFunctionCarrierKind.OBJECT
                 } ?: resolvedGenericOwnerSource().let { source ->
-                    source in context.genericOwnerForeignDispatchDeclarations ||
+                    (hasDirectReifiedInterfaceOwnerParameterResult() &&
+                            dispatchReceiver?.readsSemanticInterfaceDeclaration() == true) ||
+                            source in context.genericOwnerForeignDispatchDeclarations ||
                             substitutedOwnerParameterSemanticInterfaceOwnerOrNull() != null ||
                             source.externalReturnCarrierOrNull() ==
                             DotNetGenericOwnerFunctionCarrierKind.OBJECT

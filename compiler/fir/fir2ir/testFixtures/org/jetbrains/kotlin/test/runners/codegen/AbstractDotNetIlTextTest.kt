@@ -715,6 +715,12 @@ private class BackendCliDotNetFacade(
             completedOutput.declarations, testServices.moduleStructure.originalTestDataFiles.single(),
             testServices.getOrCreateTempDirectory("generic-owner-abstract-foreign-output"),
         )
+        validateGenericOwnerSemanticIteratorResult(
+            genericOwnerRehearsal, loweredInput.configuration.dotNetProducesLibrary,
+            loweredInput.configuration.dotNetTarget, completedOutput.output,
+            completedOutput.declarations, testServices.moduleStructure.originalTestDataFiles.single(),
+            testServices.getOrCreateTempDirectory("generic-owner-semantic-iterator-result"),
+        )
         validateGenericOwnerForeignScalarResult(
             genericOwnerRehearsal, loweredInput.configuration.dotNetProducesLibrary,
             loweredInput.configuration.dotNetTarget, completedOutput.output,
@@ -20314,6 +20320,122 @@ private fun validateGenericOwnerForeignScalarResult(
             source, consumer, references = references, executable = true, warningsAsErrors = true,
         )
         DotNetTarget.NETSTANDARD_2_0 -> error("The scalar consumer needs an executable profile")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    listOf(runtime, stdlib).forEach { it.copyTo(directory.resolve(it.name), overwrite = true) }
+    executeSnapshotConsumer(target, consumer, directory)
+}
+
+private fun validateGenericOwnerSemanticIteratorResult(
+    genericOwnerRehearsal: Boolean,
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    declarations: Map<String, DotNetPhysicalDeclaration>,
+    testDataFile: File,
+    directory: File,
+) {
+    if ("DOTNET_GENERIC_OWNER_SEMANTIC_ITERATOR_RESULT_PROBE" !in testDataFile.readText()) return
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+    val metadata = DotNetClrMetadataReader.read(producer)
+    val namespaceName = "generic.owner.iterator.result"
+    if (!genericOwnerRehearsal) {
+        check(declarations.genericOwnerRehearsalEpochRecordIndexKeys().isEmpty())
+        check(metadata.typeDefinitions.none { it.namespaceName == namespaceName && '`' in it.metadataName })
+        return
+    }
+    if (producer.name.equals("lib.dll", true)) {
+        val ownerParameter = DotNetClrTypeSignature.GenericParameter(DotNetClrGenericParameterKind.TYPE, 0)
+        for (name in listOf("ValueAtom", "One", "DuplexValue", "InvariantValue")) {
+            val owner = metadata.typeDefinitions.single { it.namespaceName == namespaceName && it.metadataName == "$name`1" }
+            check(metadata.fieldDefinitions.single { it.declaringType == owner.handle && it.name == "stored" }
+                .signature.fieldType == ownerParameter) { "Semantic call result erased $name state" }
+        }
+        val duplex = metadata.typeDefinitions.single { it.namespaceName == namespaceName && it.metadataName == "Duplex" }
+        val independent = metadata.methodDefinitions.single {
+            it.declaringType == duplex.handle && it.name.startsWith("independent__KotlinErased__")
+        }
+        val methodParameter = DotNetClrTypeSignature.GenericParameter(DotNetClrGenericParameterKind.METHOD, 0)
+        check(independent.signature.returnType == methodParameter && independent.signature.parameterTypes == listOf(methodParameter))
+        val api = metadata.typeDefinitions.single { it.namespaceName == namespaceName && it.metadataName == "apiKt" }
+        val exact = metadata.methodDefinitions.single { it.declaringType == api.handle && it.name == "readExact" }
+        val iterator = exact.signature.parameterTypes.single() as DotNetClrTypeSignature.GenericInstance
+        val atom = iterator.arguments.single() as DotNetClrTypeSignature.GenericInstance
+        check(atom.arguments == listOf(DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.STRING)))
+    }
+    if (producesLibrary) return
+    val platform = System.getProperty("kotlin.dotnet.test.platform.${target.description}.path")?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform for semantic iterator results")
+    val runtime = platform.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platform.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    val lib = directory.resolve("lib.dll")
+    val source = directory.resolve("SemanticIteratorConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+            using System.Reflection;
+            using generic.owner.iterator.result;
+            public struct NumberAtom : Atom<int> { public int sample() { return 42; } }
+            public sealed class TextAtom : Atom<string> { public string sample() { return "text"; } }
+            public sealed class ForeignIterator<T> : Kotlin.Collections.Iterator<T>
+            {
+                private readonly T stored;
+                public ForeignIterator(T value) { stored = value; }
+                public bool HasNext() { return true; }
+                public T Next() { return stored; }
+            }
+            public struct InvariantNumber : InvariantAtom<int> { public int sample() { return 73; } }
+            public sealed class ForeignSource : InvariantSource<int>
+            {
+                public readonly InvariantAtom<int> Item = new InvariantNumber();
+                public override Kotlin.Collections.Iterator<InvariantAtom<int>> iterator()
+                {
+                    return new ForeignIterator<InvariantAtom<int>>(Item);
+                }
+            }
+            public static class SemanticIteratorConsumer
+            {
+                public static int Main()
+                {
+                    Atom<int> number = new NumberAtom();
+                    Atom<string> text = new TextAtom();
+                    var numbers = new ForeignIterator<Atom<int>>(number);
+                    var texts = new ForeignIterator<Atom<string>>(text);
+                    if (!Object.Equals(apiKt.read(numbers, number), 42) ||
+                        !Object.Equals(apiKt.read(texts, text), "text") || apiKt.readExact(texts) != "text")
+                        throw new InvalidOperationException("Natural-only foreign result or identity changed");
+                    var nested = new ForeignIterator<Kotlin.Collections.Iterator<Atom<int>>>(numbers);
+                    if (!Object.Equals(apiKt.readChain(nested, number), 42))
+                        throw new InvalidOperationException("Nested foreign result lost its semantic carrier");
+                    var invariant = new ForeignSource();
+                    if (!Object.Equals(apiKt.readInvariant(invariant, invariant.Item), 73))
+                        throw new InvalidOperationException("Invariant result fabricated a construction or identity");
+                    const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
+                    if (typeof(ValueAtom<int>).GetField("stored", Private).FieldType != typeof(int) ||
+                        typeof(One<Atom<int>>).GetField("stored", Private).FieldType != typeof(Atom<int>))
+                        throw new InvalidOperationException("Semantic results contaminated exact state");
+                    if (typeof(ForeignIterator<Atom<int>>).GetInterfaces().Length != 1 ||
+                        typeof(NumberAtom).GetInterfaces().Length != 1 || typeof(InvariantNumber).GetInterfaces().Length != 1)
+                        throw new InvalidOperationException("Foreign probe accidentally implements compiler ABI");
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val consumer = directory.resolve(if (target == DotNetTarget.NET48) "SemanticIteratorConsumer.exe" else "SemanticIteratorConsumer.dll")
+    val references = listOf(lib, runtime, stdlib)
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()),
+            source, consumer, references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()),
+            source, consumer, references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 -> error("The semantic-iterator consumer needs an executable profile")
     }
     check(compilation.exitCode == 0) { compilation.output }
     listOf(runtime, stdlib).forEach { it.copyTo(directory.resolve(it.name), overwrite = true) }

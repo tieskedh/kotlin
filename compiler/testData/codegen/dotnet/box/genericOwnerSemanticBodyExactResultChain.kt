@@ -1,5 +1,6 @@
-// A semantic body may accept a broad candidate while values produced exclusively from its exact
-// current receiver retain their natural CLR constructions through locals and nested calls.
+// Receiver-derived state stays typed, but an open producer's semantic result has no guaranteed
+// nested construction. Iterator<T>.next() must preserve that physical object result, not invent
+// MutableEntry<Any?, Any?> after semantic remapping widened the logical owner parameters.
 
 private class SingleMutableEntry<K, V>(
     override val key: K,
