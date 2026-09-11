@@ -49,39 +49,38 @@ Current representation rules are linked from the navigation section below.
 
 ## Latest verification
 
-The production callable value-class result repair passed the full target lane
-on 2026-09-11. Direct JUnit XML audit found no failures, errors, or skips:
+The callable physical-carrier InterfaceImpl fix passed the rehearsal-physical
+lane on 2026-09-11. Direct JUnit XML audit found no failures, errors, or skips:
 
 | Lane | Suites | Tests |
 | --- | ---: | ---: |
+| Focused candidate, both parsers and runtimes | 4 | 28 |
+| Same production-erased inverse | 4 | 28 |
 | Complete backend suite | 22 | 402 |
-| Physical CLI model | 1 | 6 |
-| Full FIR2IR, both parsers and runtimes | 187 | 2,327 |
-| CLI/library integration | 2 | 128 |
-| **Total** | **212** | **2,863** |
 
-The actual FIR2IR Test task was explicitly rerun without filters; the backend
-was rerun on the same final source, integration rebuilt, and the unchanged
-physical model remained up to date. This is a new production-erased full
-checkpoint, replacing the inherited `3a2384f636` gate. No public MethodDef,
-Runtime/Stdlib surface, shared compiler, or artifact schema changed.
+The inherited production-erased full checkpoint is `17676a90e1`: 212 suites,
+2,863 tests (backend 402, physical CLI model 6, full FIR2IR 2,327, integration
+128), all green. Its actual FIR2IR Test task was explicitly rerun without
+filters. This feature is not another full aggregate: only rehearsal-selected
+compiler-owned callable InterfaceImpl mapping and fixture-local checks changed.
+Production mapping, Runtime/Stdlib, shared compiler, and schemas are unchanged.
 
-The reproduced nominal-box defect, separate Kotlin/C# consumers, unchanged
-upstream fixtures, instruction-level forwarding checks, and exact commands are
-in the [callable value-class archive](docs/archive/value-class-callable-nominal-result-2026-09-11.md).
-Earlier rehearsal checkpoints remain indexed in the archive.
+The shared physical-carrier rule, exact state/result controls, ordinary C#
+implementation, InterfaceMap checks, and inverse are recorded in the
+[callable capture archive](docs/archive/generic-owner-callable-semantic-capture-2026-09-11.md).
+The independently fixed production nominal-box defect and full gate are in the
+[callable value-class archive](docs/archive/value-class-callable-nominal-result-2026-09-11.md).
 
 ## Active work
 
-Close the generated callable physical-view gap exposed after the private
-overload repair. The census no longer rejects the private overload in
-`AbstractMap`, but its lambda has no proven exact `ExactFunction1` construction.
-Reapply the safely parked feature and repeat its candidate/inverse matrix on
-the repaired nominal value-class baseline; retain the hostile value-class case.
-Public/top-level semantic overload families remain separate. The expanded
-matrix also retains the semantic iterator result repair:
-no closed invariant interface is fabricated from a widened logical result,
-and unrelated typed state stays typed.
+Investigate the next generated-owner inheritance boundary using the recorded
+owner plans. The census now passes the private overload and exact callable
+construction in `AbstractMap`, then rejects its anonymous keys object's generic
+base argument as unavailable. Establish whether an earlier enclosing-owner
+admission failure causes that missing binder before changing capture/base-edge
+rules. An open-nullable callable capturing a generic owner's getter remains an
+independent earlier-routing gap; its saved probe must not become a getter-name
+exception. Public/top-level semantic overload families also remain separate.
 
 Continue the source-built Runtime/Stdlib generic-owner rehearsal census within
 phase 1 of the way forward. SAM admission passes and the census reaches

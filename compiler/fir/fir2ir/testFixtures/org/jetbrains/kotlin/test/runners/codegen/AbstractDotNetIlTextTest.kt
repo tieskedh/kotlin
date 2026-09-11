@@ -734,6 +734,12 @@ private class BackendCliDotNetFacade(
             completedOutput.declarations, testServices.moduleStructure.originalTestDataFiles.single(),
             testServices.getOrCreateTempDirectory("generic-owner-semantic-iterator-result"),
         )
+        validateGenericOwnerCallableSemanticCapture(
+            genericOwnerRehearsal, loweredInput.configuration.dotNetProducesLibrary,
+            loweredInput.configuration.dotNetTarget, completedOutput.output,
+            completedOutput.declarations, testServices.moduleStructure.originalTestDataFiles.single(),
+            testServices.getOrCreateTempDirectory("generic-owner-callable-semantic-capture"),
+        )
         validateGenericOwnerForeignScalarResult(
             genericOwnerRehearsal, loweredInput.configuration.dotNetProducesLibrary,
             loweredInput.configuration.dotNetTarget, completedOutput.output,
@@ -20333,6 +20339,134 @@ private fun validateGenericOwnerForeignScalarResult(
             source, consumer, references = references, executable = true, warningsAsErrors = true,
         )
         DotNetTarget.NETSTANDARD_2_0 -> error("The scalar consumer needs an executable profile")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    listOf(runtime, stdlib).forEach { it.copyTo(directory.resolve(it.name), overwrite = true) }
+    executeSnapshotConsumer(target, consumer, directory)
+}
+
+private fun validateGenericOwnerCallableSemanticCapture(
+    genericOwnerRehearsal: Boolean,
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    declarations: Map<String, DotNetPhysicalDeclaration>,
+    testDataFile: File,
+    directory: File,
+) {
+    if ("DOTNET_GENERIC_OWNER_CALLABLE_SEMANTIC_CAPTURE_PROBE" !in testDataFile.readText()) return
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+    val metadata = DotNetClrMetadataReader.read(producer)
+    val namespaceName = "generic.owner.callable.capture"
+    if (!genericOwnerRehearsal) {
+        check(declarations.genericOwnerRehearsalEpochRecordIndexKeys().isEmpty())
+        check(metadata.typeDefinitions.none { it.namespaceName == namespaceName && '`' in it.metadataName })
+        return
+    }
+    if (producer.name.equals("lib.dll", true)) {
+        val ownerParameter = DotNetClrTypeSignature.GenericParameter(DotNetClrGenericParameterKind.TYPE, 0)
+        for (name in listOf("Value", "Plain")) {
+            val owner = metadata.typeDefinitions.single { it.namespaceName == namespaceName && it.metadataName == "$name`1" }
+            check(metadata.fieldDefinitions.single { it.declaringType == owner.handle && it.name == "stored" }
+                .signature.fieldType == ownerParameter) { "Callable capture erased $name state" }
+        }
+        val receiver = metadata.typeDefinitions.single { it.namespaceName == namespaceName && it.metadataName == "Receiver" }
+        check(metadata.fieldDefinitions.single { it.declaringType == receiver.handle && it.name == "source" }
+            .signature.fieldType == DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.OBJECT))
+    }
+    if (producesLibrary) return
+    val platform = System.getProperty("kotlin.dotnet.test.platform.${target.description}.path")?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform for callable semantic captures")
+    val runtime = platform.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platform.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    val lib = directory.resolve("lib.dll")
+    val source = directory.resolve("CallableCaptureConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+            using System.Reflection;
+            using generic.owner.callable.capture;
+            using Kotlin.Runtime.Internal;
+            public sealed class IntSource : Source<int> { public int read() { return 42; } }
+            public static class CallableCaptureConsumer
+            {
+                private static void CheckMap(object value, Type capability, Type result, params Type[] parameters)
+                {
+                    var map = value.GetType().GetInterfaceMap(capability);
+                    if (map.TargetMethods.Length != 1 || map.TargetMethods[0].ReturnType != result)
+                        throw new InvalidOperationException("Callable result MethodImpl mismatch");
+                    var actual = map.TargetMethods[0].GetParameters();
+                    if (actual.Length != parameters.Length)
+                        throw new InvalidOperationException("Callable parameter arity mismatch");
+                    for (int i = 0; i < actual.Length; i++)
+                        if (actual[i].ParameterType != parameters[i])
+                            throw new InvalidOperationException("Callable parameter MethodImpl mismatch");
+                }
+                public static int Main()
+                {
+                    var source = new IntSource();
+                    var receiver = new Receiver(source);
+                    var consumer = receiver.consumer();
+                    var exact = (ExactFunction1<object, int>)consumer;
+                    if (!Object.ReferenceEquals(consumer, exact) || exact.InvokeExact(source) != 42)
+                        throw new InvalidOperationException("Semantic input lost typed result or identity");
+                    CheckMap(consumer, typeof(ExactFunction1<object, int>), typeof(int), typeof(object));
+                    var producer = receiver.producer();
+                    var exactProducer = (ExactFunction0<object>)producer;
+                    if (!Object.ReferenceEquals(producer, exactProducer) ||
+                        !Object.ReferenceEquals(exactProducer.InvokeExact(), source))
+                        throw new InvalidOperationException("Semantic result changed source identity");
+                    CheckMap(producer, typeof(ExactFunction0<object>), typeof(object));
+                    var mixed = receiver.mixed();
+                    var mixedExact = (ExactFunction2<object, int, long>)mixed;
+                    var arguments = (TypedArgumentsFunction2<object, int>)mixed;
+                    if (!Object.ReferenceEquals(mixed, mixedExact) || !Object.ReferenceEquals(mixed, arguments) ||
+                        mixedExact.InvokeExact(source, 73) != 73L || !Object.Equals(arguments.InvokeTyped(source, 74), 74L))
+                        throw new InvalidOperationException("Mixed callable capability changed typed arguments");
+                    CheckMap(mixed, typeof(ExactFunction2<object, int, long>), typeof(long), typeof(object), typeof(int));
+                    CheckMap(mixed, typeof(TypedArgumentsFunction2<object, int>), typeof(object), typeof(object), typeof(int));
+                    var nominal = receiver.nominal();
+                    if (((ExactFunction1<object, Id>)nominal).InvokeExact(source) == null)
+                        throw new InvalidOperationException("Nominal value-class result was lost");
+                    CheckMap(nominal, typeof(ExactFunction1<object, Id>), typeof(Id), typeof(object));
+                    var plain = new Plain<int>(42);
+                    var choose = plain.choose();
+                    var typed = (ExactFunction2<int, bool, int>)choose;
+                    if (!Object.ReferenceEquals(choose, typed) || typed.InvokeExact(73, true) != 42 || typed.InvokeExact(73, false) != 73)
+                        throw new InvalidOperationException("Exact owner capture lost its real construction");
+                    CheckMap(choose, typeof(ExactFunction2<int, bool, int>), typeof(int), typeof(int), typeof(bool));
+                    var nullableProducer = receiverKt.nullableProducer<int>();
+                    if (((ExactFunction0<object>)nullableProducer).InvokeExact() != null)
+                        throw new InvalidOperationException("Open-nullable callable result changed");
+                    CheckMap(nullableProducer, typeof(ExactFunction0<object>), typeof(object));
+                    var nullableConsumer = receiverKt.nullableConsumer<int>();
+                    var nullableExact = (ExactFunction1<object, bool>)nullableConsumer;
+                    if (!nullableExact.InvokeExact(null) || nullableExact.InvokeExact(73))
+                        throw new InvalidOperationException("Open-nullable callable input changed");
+                    CheckMap(nullableConsumer, typeof(ExactFunction1<object, bool>), typeof(bool), typeof(object));
+                    const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
+                    if (typeof(Plain<int>).GetField("stored", Private).FieldType != typeof(int) ||
+                        typeof(IntSource).GetInterfaces().Length != 1)
+                        throw new InvalidOperationException("State or ordinary foreign surface changed");
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val consumer = directory.resolve(if (target == DotNetTarget.NET48) "CallableCaptureConsumer.exe" else "CallableCaptureConsumer.dll")
+    val references = listOf(lib, runtime, stdlib)
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()),
+            source, consumer, references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()),
+            source, consumer, references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 -> error("The callable-capture consumer needs an executable profile")
     }
     check(compilation.exitCode == 0) { compilation.output }
     listOf(runtime, stdlib).forEach { it.copyTo(directory.resolve(it.name), overwrite = true) }

@@ -14,6 +14,9 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-callable-semantic-capture-2026-09-11.md`](generic-owner-callable-semantic-capture-2026-09-11.md)
+  records callable physical-carrier InterfaceImpl binding, retained independent
+  typed state/results, actual C# InterfaceMaps, and the production inverse.
 - [`value-class-callable-nominal-result-2026-09-11.md`](value-class-callable-nominal-result-2026-09-11.md)
   records the reproduced production callable boxing defect, shared nominal
   MethodDef authority, separate Kotlin/C# execution, and PE forwarding checks.

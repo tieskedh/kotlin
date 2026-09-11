@@ -151,6 +151,26 @@ Consumers may not assume widening causes a callable to expose the widened
 exact interface. Optional execution never changes object identity or adds
 required members to `FunctionN`.
 
+The compiler-owned exact and typed-arguments interfaces are parameterized by
+physical invocation carriers, not by a Kotlin classifier identity. In the
+generic-owner rehearsal, their InterfaceImpl constructions bind the individual
+arguments through the selected generic-slot mapper. An erased captured owner's
+semantic interface input may therefore select `object` while an independent
+primitive input/result stays typed. It does not erase the entire capability.
+The linked physical graph and emitted InterfaceImpl use the same construction;
+the existing MethodImpl binder must then authenticate every parameter/result
+against the Runtime declaration. Missing or incompatible carriers still fail
+closed. Ordinary Kotlin and retained foreign generic constructions receive no
+such permission to replace their logical arguments.
+
+This selection changes neither callable identity nor state placement, and
+cannot infer a natural `Source<object>` view from a semantic source object.
+Nominal value-class and nullable generic-slot rules continue to apply. An
+object-carried open-nullable callable result is not silently converted into a
+different split-result MethodDef: its Runtime invocation contract is physical
+authority. Broader capture/getter routing and reference metadata remain
+separate closure requirements.
+
 ### Property references reuse callable identity
 
 Non-generic Kotlin-owned `KPropertyN` and `KMutablePropertyN` identities carry

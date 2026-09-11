@@ -2030,6 +2030,17 @@ internal class DotNetIlTypeMapper private constructor(
      */
     fun toDotNetIlImplementedInterfaceType(type: IrSimpleType): DotNetIlValueType? {
         val irClass = (type.classifier as? IrClassSymbol)?.owner ?: return null
+        if (genericOwnerRehearsal &&
+            (irClass.dotNetExactFunctionArity != null || irClass.dotNetTypedArgumentsFunctionArity != null)
+        ) {
+            // These compiler-owned ABI interfaces are parameterized by the callable's physical
+            // carriers, not by a Kotlin generic classifier identity. Bind each argument through
+            // the existing generic-slot mapper before constructing the real InterfaceImpl. An
+            // erased captured owner may make one argument object; it does not erase the whole
+            // capability or unrelated typed arguments/results. Ordinary Kotlin and foreign
+            // interface constructions still follow their existing logical-type mapping below.
+            return toUserClassTypeOrNull(type)
+        }
         return if (classifierInfo(irClass).isCharSequence) {
             DotNetRuntimeTypes.charSequenceImplementationType.also(::recordAssemblyReferences)
         } else {
