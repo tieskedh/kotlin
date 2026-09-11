@@ -600,6 +600,13 @@ private class BackendCliDotNetFacade(
                     overwrite = true,
                 )
         }
+        validateValueClassCallableResult(
+            loweredInput.configuration.dotNetProducesLibrary,
+            loweredInput.configuration.dotNetTarget,
+            completedOutput.output,
+            testServices.moduleStructure.originalTestDataFiles.single(),
+            testServices.getOrCreateTempDirectory("value-class-callable-result"),
+        )
         validateGenericOwnerHardestModelPrototype(
             genericOwnerRehearsal,
             completedOutput.genericOwnerPrototypes,
@@ -33554,6 +33561,89 @@ private data class SnapshotCSharpCompilation(
     val exitCode: Int,
     val output: String,
 )
+
+private fun validateValueClassCallableResult(
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    testDataFile: File,
+    directory: File,
+) {
+    if (!producesLibrary || testDataFile.name != "valueClassCallableResult.kt") return
+    directory.mkdirs()
+    val lib = directory.resolve(producer.name)
+    producer.copyTo(lib, overwrite = true)
+    val platform = System.getProperty("kotlin.dotnet.test.platform.${target.description}.path")?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform for value-class callable results")
+    val runtime = platform.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platform.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    val source = directory.resolve("ValueClassConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+            using Kotlin;
+            using Kotlin.Runtime.Internal;
+            using values.callable;
+            public static class ValueClassConsumer
+            {
+                static void CheckId(object value, int expected)
+                {
+                    if (value == null || value.GetType() != typeof(Id) || libraryKt.readId(value) != expected)
+                        throw new Exception("erased callable lost nominal Id");
+                }
+                public static int Main()
+                {
+                    var supplier = libraryKt.supplier();
+                    CheckId(supplier.Invoke(), 42);
+                    CheckId(((ExactFunction0<Id>)supplier).InvokeExact(), 42);
+                    var mapping = libraryKt.mapping();
+                    CheckId(mapping.Invoke(73), 73);
+                    CheckId(((ExactFunction1<int, Id>)mapping).InvokeExact(73), 73);
+                    CheckId(((TypedArgumentsFunction1<int>)mapping).InvokeTyped(73), 73);
+                    CheckId(libraryKt.manual().Invoke(), 51);
+                    CheckId(libraryKt.nominalCallable().Invoke(libraryKt.input()), 7);
+                    object text = libraryKt.text().Invoke();
+                    if (!(text is Text) || libraryKt.readText(text) != "OK")
+                        throw new Exception("erased callable lost nominal Text");
+                    object maybe = libraryKt.maybe().Invoke();
+                    if (!(maybe is Maybe) || libraryKt.readMaybe(maybe) != null || libraryKt.absent().Invoke() != null)
+                        throw new Exception("nullable underlying value confused with outer absence");
+                    var map = supplier.GetType().GetInterfaceMap(typeof(Function0));
+                    if (map.TargetMethods.Length != 1 || map.TargetMethods[0].ReturnType != typeof(object))
+                        throw new Exception("canonical callable MethodDef changed");
+                    var code = map.TargetMethods[0].GetMethodBody().GetILAsByteArray();
+                    if (code.Length != 7 || code[0] != 0x02 || code[1] != 0x6f || code[6] != 0x2a)
+                        throw new Exception("nominal forwarding must be ldarg.0, callvirt, ret without reboxing");
+                    var forwarded = (System.Reflection.MethodInfo)map.TargetMethods[0].Module.ResolveMethod(
+                        BitConverter.ToInt32(code, 2));
+                    if (forwarded.ReturnType != typeof(Id))
+                        throw new Exception("canonical bridge does not forward the nominal MethodDef");
+                    var exact = supplier.GetType().GetInterfaceMap(typeof(ExactFunction0<Id>));
+                    if (exact.TargetMethods.Length != 1 || exact.TargetMethods[0].ReturnType != typeof(Id))
+                        throw new Exception("exact callable MethodDef lost nominal generic argument");
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val consumer = directory.resolve(if (target == DotNetTarget.NET48) "ValueClassConsumer.exe" else "ValueClassConsumer.dll")
+    val references = listOf(lib, runtime, stdlib)
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()),
+            source, consumer, references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()),
+            source, consumer, references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 -> error("The callable consumer needs an executable profile")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    listOf(runtime, stdlib).forEach { it.copyTo(directory.resolve(it.name), overwrite = true) }
+    executeSnapshotConsumer(target, consumer, directory)
+}
 
 private fun compileFrameworkSnapshotCSharp(
     frameworkCompiler: File,

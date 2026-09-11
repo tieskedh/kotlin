@@ -14,6 +14,9 @@ Use:
 
 Archived snapshots:
 
+- [`value-class-callable-nominal-result-2026-09-11.md`](value-class-callable-nominal-result-2026-09-11.md)
+  records the reproduced production callable boxing defect, shared nominal
+  MethodDef authority, separate Kotlin/C# execution, and PE forwarding checks.
 - [`generic-owner-runtime-semantic-overloads-2026-09-11.md`](generic-owner-runtime-semantic-overloads-2026-09-11.md)
   records Runtime descriptor authority in the shared private naming rule,
   two reproduced collisions, separate Kotlin/C# execution, the advanced

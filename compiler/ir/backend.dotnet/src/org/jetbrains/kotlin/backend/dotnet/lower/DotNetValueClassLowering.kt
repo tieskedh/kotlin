@@ -17,6 +17,7 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetValueClassOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetValueClassGenericBoundarySlotOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetValueClassConstructorImplementationSourceOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetValueClassImplementationSourceOrNull
+import org.jetbrains.kotlin.backend.dotnet.hasDotNetNominalGenericValueClassResult
 import org.jetbrains.kotlin.backend.dotnet.isDotNetErasedObjectResult
 import org.jetbrains.kotlin.backend.dotnet.isDotNetErasedCallableInvoke
 import org.jetbrains.kotlin.backend.dotnet.isDotNetErasedPropertyAccess
@@ -447,12 +448,12 @@ internal class DotNetValueClassAutoboxingLowering(
 
             override fun IrExpression.useAsReturnValue(returnTarget: IrReturnTargetSymbol): IrExpression {
                 val function = (returnTarget as? IrSimpleFunctionSymbol)?.owner
-                val slot = function?.dotNetValueClassGenericBoundarySlotOrNull()
-                val slotOwner = slot?.parent as? IrClass
-                if (function != null && slotOwner != null &&
-                    slot.returnType.referencesTypeParameterOf(slotOwner) &&
-                    function.returnType.dotNetValueClassOrNull() != null
+                if (function != null &&
+                    (function.isDotNetErasedObjectResult() || function.hasDotNetNominalGenericValueClassResult())
                 ) {
+                    // The logical return type can remain V even when the MethodDef returns
+                    // object or nominal V. In particular, the erased callable bridge must not
+                    // unbox an already nominal InvokeExact result and then CLR-box its primitive.
                     return useAs(context.irBuiltIns.anyNType)
                 }
                 return when (returnTarget) {
@@ -596,6 +597,7 @@ internal class DotNetValueClassAutoboxingLowering(
                     }
                 }
                 if (this is IrCall && symbol.owner.hasErasedKotlinOwnerResult()) return null
+                if (this is IrCall && symbol.owner.hasDotNetNominalGenericValueClassResult()) return null
                 if (this is IrCall && returnsReifiedTypeParameterInstantiatedWithValueClass()) return null
                 return type.dotNetUnboxedValueClassTypeOrNull()
             }

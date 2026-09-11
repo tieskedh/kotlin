@@ -284,6 +284,13 @@ internal fun IrSimpleFunction.dotNetValueClassGenericBoundarySlotOrNull(): IrSim
     }
 }
 
+/** Whether this constructed generic slot returns V's nominal box, not its exact carrier. */
+internal fun IrSimpleFunction.hasDotNetNominalGenericValueClassResult(): Boolean {
+    val slot = dotNetValueClassGenericBoundarySlotOrNull() ?: return false
+    val owner = slot.parent as? IrClass ?: return false
+    return returnType.dotNetValueClassOrNull() != null && slot.returnType.referencesTypeParameterOf(owner)
+}
+
 /**
  * Thrown while rendering a single function into IL when a construct the prototype .NET backend
  * cannot compile is encountered. The emitter catches it, discards the partial render, skips the
@@ -309,9 +316,7 @@ internal fun IrSimpleFunction.dotNetSignature(typeMapper: DotNetIlTypeMapper): D
     }
     val typedGenericInterfaceSlot = dotNetValueClassGenericBoundarySlotOrNull()
     val typedGenericInterfaceOwner = typedGenericInterfaceSlot?.parent as? IrClass
-    val boxesTypedGenericInterfaceReturn = typedGenericInterfaceOwner != null &&
-            typedGenericInterfaceSlot.returnType.referencesTypeParameterOf(typedGenericInterfaceOwner) &&
-            returnType.dotNetValueClassOrNull() != null
+    val boxesTypedGenericInterfaceReturn = hasDotNetNominalGenericValueClassResult()
     val splitNullableResultPayloadType = typeMapper.splitNullableResultPayloadType(this)
     val hasSplitNullableResult = splitNullableResultPayloadType != null
     val ilReturnType = if (splitNullableResultPayloadType != null) {

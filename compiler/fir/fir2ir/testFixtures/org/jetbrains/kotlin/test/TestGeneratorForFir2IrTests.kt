@@ -154,7 +154,10 @@ fun main(args: Array<String>) {
                     recursive = false,
                 )
                 model("box/inlineClasses/boxReturnValueOnOverride", pattern = "^(uncastInlineClassToAnyAndBack)\\.kt$")
-                model("box/inlineClasses/boxReturnValueInLambda", pattern = "^(boxNullableAny|boxNullableAnyNull)\\.kt$")
+                model(
+                    "box/inlineClasses/boxReturnValueInLambda",
+                    pattern = "^(boxInt|boxString|boxNullableIntNullGeneric2|boxNullableAny|boxNullableAnyNull)\\.kt$",
+                )
                 model(
                     "box/inlineClasses/callableReferences",
                     pattern = "^(boundInlineClassMemberFun|constructorWithInlineClassParameters|equalsHashCodeToString)\\.kt$",
@@ -312,7 +315,10 @@ fun main(args: Array<String>) {
                     recursive = false,
                 )
                 model("box/inlineClasses/boxReturnValueOnOverride", pattern = "^(uncastInlineClassToAnyAndBack)\\.kt$")
-                model("box/inlineClasses/boxReturnValueInLambda", pattern = "^(boxNullableAny|boxNullableAnyNull)\\.kt$")
+                model(
+                    "box/inlineClasses/boxReturnValueInLambda",
+                    pattern = "^(boxInt|boxString|boxNullableIntNullGeneric2|boxNullableAny|boxNullableAnyNull)\\.kt$",
+                )
                 model(
                     "box/inlineClasses/callableReferences",
                     pattern = "^(boundInlineClassMemberFun|constructorWithInlineClassParameters|equalsHashCodeToString)\\.kt$",
@@ -470,7 +476,10 @@ fun main(args: Array<String>) {
                     recursive = false,
                 )
                 model("box/inlineClasses/boxReturnValueOnOverride", pattern = "^(uncastInlineClassToAnyAndBack)\\.kt$")
-                model("box/inlineClasses/boxReturnValueInLambda", pattern = "^(boxNullableAny|boxNullableAnyNull)\\.kt$")
+                model(
+                    "box/inlineClasses/boxReturnValueInLambda",
+                    pattern = "^(boxInt|boxString|boxNullableIntNullGeneric2|boxNullableAny|boxNullableAnyNull)\\.kt$",
+                )
                 model(
                     "box/inlineClasses/callableReferences",
                     pattern = "^(boundInlineClassMemberFun|constructorWithInlineClassParameters|equalsHashCodeToString)\\.kt$",
@@ -628,7 +637,10 @@ fun main(args: Array<String>) {
                     recursive = false,
                 )
                 model("box/inlineClasses/boxReturnValueOnOverride", pattern = "^(uncastInlineClassToAnyAndBack)\\.kt$")
-                model("box/inlineClasses/boxReturnValueInLambda", pattern = "^(boxNullableAny|boxNullableAnyNull)\\.kt$")
+                model(
+                    "box/inlineClasses/boxReturnValueInLambda",
+                    pattern = "^(boxInt|boxString|boxNullableIntNullGeneric2|boxNullableAny|boxNullableAnyNull)\\.kt$",
+                )
                 model(
                     "box/inlineClasses/callableReferences",
                     pattern = "^(boundInlineClassMemberFun|constructorWithInlineClassParameters|equalsHashCodeToString)\\.kt$",

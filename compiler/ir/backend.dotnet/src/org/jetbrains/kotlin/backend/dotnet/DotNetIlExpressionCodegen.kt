@@ -387,8 +387,11 @@ internal class DotNetIlExpressionCodegen(
                 !expression.symbol.owner.isDotNetErasedObjectResult() &&
                 ((!expression.symbol.owner.isErasedGenericInterfaceMember() &&
                         !expression.symbol.owner.isErasedGenericClassMember()) ||
-                        hasAuthoritativeObjectResult)
+                        hasAuthoritativeObjectResult || resolvedSource.hasDotNetNominalGenericValueClassResult())
             ) {
+                // A nominal generic-boundary result stays nominal even when its declaring
+                // class is erased. Reconstructing logical V here would unbox that MethodDef's
+                // result before an enclosing object destination CLR-boxes the primitive.
                 val resolved = resolveCall(expression)
                 if (resolved.info.signature.hasSplitNullableResult) {
                     // The physical call pushes only its producer-selected payload, but ordinary

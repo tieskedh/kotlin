@@ -49,39 +49,35 @@ Current representation rules are linked from the navigation section below.
 
 ## Latest verification
 
-The latest Runtime-declared private overload fix passed the rehearsal-physical
-lane on 2026-09-11. Direct JUnit XML audit found no failures, errors, or skips:
+The production callable value-class result repair passed the full target lane
+on 2026-09-11. Direct JUnit XML audit found no failures, errors, or skips:
 
 | Lane | Suites | Tests |
 | --- | ---: | ---: |
-| Focused candidate, both parsers and runtimes | 4 | 24 |
-| Same production-erased inverse | 4 | 24 |
 | Complete backend suite | 22 | 402 |
+| Physical CLI model | 1 | 6 |
+| Full FIR2IR, both parsers and runtimes | 187 | 2,327 |
+| CLI/library integration | 2 | 128 |
+| **Total** | **212** | **2,863** |
 
-The inherited production-erased target-wide base is `3a2384f636`: 212 suites,
-2,821 tests (backend 400, `dotnet.ir` 6, FIR2IR 2,287, integration 128), all
-green. Its actual FIR2IR Test task was explicitly rerun without filters. This
-feature is not a new full aggregate: only rehearsal-selected unbound private
-method naming and fixture-local checks changed;
-production ABI, Runtime/Stdlib, shared compiler, and artifact schemas are
-unchanged.
+The actual FIR2IR Test task was explicitly rerun without filters; the backend
+was rerun on the same final source, integration rebuilt, and the unchanged
+physical model remained up to date. This is a new production-erased full
+checkpoint, replacing the inherited `3a2384f636` gate. No public MethodDef,
+Runtime/Stdlib surface, shared compiler, or artifact schema changed.
 
-The reproduced Runtime-interface overload collisions, shared logical name
-selection, separate Kotlin/C# execution, inverse, census advancement, and
-commands are in the
-[Runtime overload archive](docs/archive/generic-owner-runtime-semantic-overloads-2026-09-11.md).
-The initial custom-interface proof and unchanged public/exact controls are in
-the [private overload archive](docs/archive/generic-owner-private-semantic-overloads-2026-09-11.md).
-The independently repaired result-chain regression is recorded in the
-[semantic result archive](docs/archive/generic-owner-semantic-owner-result-2026-09-11.md).
-The inherited full gate is recorded in the
-[invariant nullable SAM archive](docs/archive/generic-owner-invariant-nullable-sam-2026-09-11.md).
+The reproduced nominal-box defect, separate Kotlin/C# consumers, unchanged
+upstream fixtures, instruction-level forwarding checks, and exact commands are
+in the [callable value-class archive](docs/archive/value-class-callable-nominal-result-2026-09-11.md).
+Earlier rehearsal checkpoints remain indexed in the archive.
 
 ## Active work
 
 Close the generated callable physical-view gap exposed after the private
 overload repair. The census no longer rejects the private overload in
 `AbstractMap`, but its lambda has no proven exact `ExactFunction1` construction.
+Reapply the safely parked feature and repeat its candidate/inverse matrix on
+the repaired nominal value-class baseline; retain the hostile value-class case.
 Public/top-level semantic overload families remain separate. The expanded
 matrix also retains the semantic iterator result repair:
 no closed invariant interface is fabricated from a widened logical result,

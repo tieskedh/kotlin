@@ -136,6 +136,16 @@ same boundary classifier in both directions; otherwise a bridge can correctly
 declare nominal `V` while its body incorrectly unboxes the argument before the
 call.
 
+The same rule applies to results inside generated adapters. An erased
+`FunctionN.Invoke`, reflective invocation, or property-get MethodDef returns
+the nominal box even when its logical IR return remains `V`. A call to a
+constructed generic slot returning nominal `V` already produces that box;
+forwarding it to `object` preserves it. The adapter must neither unpack and
+CLR-box the underlying primitive nor unpack and immediately recreate a nominal
+box. Both the produced-value classifier and return-destination adaptation use
+the signature mapper's existing generic-boundary facts. Exact source bodies
+still calculate with the underlying carrier and box only at the boundary.
+
 Masked default dispatchers are the deliberate inverse case. An omitted
 argument is accompanied by an authoritative mask bit and cannot be observed
 before the dispatcher replaces it. Its physical placeholder is the CLR zero
