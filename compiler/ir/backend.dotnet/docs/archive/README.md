@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-canonical-state-reference-2026-09-11.md`](generic-owner-canonical-state-reference-2026-09-11.md)
+  records nominal canonical dependency fields, preserved enclosing generics,
+  BOUND/final state and writer seals, separate Kotlin/C# inheritance, and the
+  focused candidate/inverse gate with its inherited full checkpoint.
 - [`generic-owner-invariant-nullable-sam-2026-09-11.md`](generic-owner-invariant-nullable-sam-2026-09-11.md)
   records invariant nullable SAM witnesses, strict invariant cast matching,
   valid projections, physical result forwarding, reverse wrapper-cache order,

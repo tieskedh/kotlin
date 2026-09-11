@@ -1262,6 +1262,15 @@ class DotNetGenericOwnerPhysicalValueModelTest {
                 observedNested,
                 expectedArguments.reversed(),
             ),
+            DotNetGenericOwnerObservedMethodCarrier.LocalConstruction(
+                DotNetGenericOwnerObservedLocalTypeDef(
+                    observedNested.physicalKey,
+                    nestedIdentity,
+                    genericArity = 0,
+                    category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+                ),
+                expectedArguments,
+            ),
         ).forEach { hostileCarrier ->
             val failure = assertFailsWith<IllegalStateException> { seal(hostileCarrier) }
             assertTrue("changed its exact construction" in failure.message.orEmpty())
@@ -2892,6 +2901,82 @@ class DotNetGenericOwnerPhysicalValueModelTest {
         assertEquals(boundCarrier(fixture.declarations, expectedSwapped), swapped.carrier)
         assertEquals(view(expectedSwapped), swapped.view)
         assertNotEquals(ordered, swapped)
+    }
+
+    @Test
+    fun `canonical local class arguments cannot contaminate an enclosing exact carrier`() {
+        val generic = exactLocalCarrierFixture()
+        val canonical = generic.copy(declarations = boundDeclarationIndex(
+            listOf(
+                typeDescription(generic.ownerIdentity, 2, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+                typeDescription(generic.pairIdentity, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+                typeDescription(generic.holderIdentity, 1, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+            ),
+            emptyList(),
+        ))
+        val first = generic.owner.typeParameters[0].defaultType
+        val second = generic.owner.typeParameters[1].defaultType
+        val projected = generic.pairType(first, second, firstVariance = Variance.OUT_VARIANCE)
+        val starred = IrSimpleTypeImpl(
+            generic.pair.symbol,
+            SimpleTypeNullability.NOT_SPECIFIED,
+            listOf(IrStarProjectionImpl, makeTypeProjection(second, Variance.INVARIANT)),
+            annotations = emptyList(),
+        )
+        val expected = boundConstruction(canonical.declarations, canonical.pairIdentity, emptyList())
+        for (logicalType in listOf(generic.pairType(first, second), generic.pairType(second, first), projected, starred)) {
+            assertEquals(expected, canonical.bind(logicalType).carrier.type)
+            assertEquals(
+                boundConstruction(canonical.declarations, canonical.holderIdentity, listOf(expected)),
+                canonical.bind(canonical.holderType(logicalType)).carrier.type,
+            )
+        }
+        assertEquals(DotNetGenericOwnerPhysicalBindingResult.Unavailable, generic.bindResult(projected))
+        assertEquals(DotNetGenericOwnerPhysicalBindingResult.Unavailable, generic.bindResult(starred))
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            bindExactLocalGenericOwnerDependentCarrierOrError(
+                starred, canonical.owner, canonical.ownerIdentity, canonical.declarations,
+            ) { null },
+        )
+        // An erased capability interface is not authority for the logical class's nominal value.
+        val wrongCategory = canonical.copy(declarations = boundDeclarationIndex(
+            listOf(
+                typeDescription(generic.ownerIdentity, 2, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+                typeDescription(generic.pairIdentity, 0, DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE),
+            ),
+            emptyList(),
+        ))
+        assertEquals(DotNetGenericOwnerPhysicalBindingResult.Unavailable, wrongCategory.bindResult(starred))
+    }
+
+    @Test
+    fun `canonical class role requires a selected zero arity class identity`() {
+        val fixture = exactLocalCarrierFixture()
+        val canonical = DotNetLocalGenericOwnerPhysicalTypeInput(
+            fixture.pairIdentity,
+            "CanonicalDependency",
+            emptyList(),
+            DotNetLocalGenericOwnerPhysicalTypeRole.CANONICAL_CLASS,
+        )
+        assertEquals(0, canonical.genericArity)
+        assertEquals(DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS, canonical.category)
+        assertFailsWith<IllegalArgumentException> {
+            DotNetLocalGenericOwnerPhysicalTypeInput(
+                fixture.pairIdentity,
+                "StillGeneric",
+                dotNetInvariantUnconstrainedPhysicalGenericParameters(2),
+                DotNetLocalGenericOwnerPhysicalTypeRole.CANONICAL_CLASS,
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            DotNetLocalGenericOwnerPhysicalTypeInput(
+                DotNetGenericOwnerPhysicalTypeDefIdentity.Local(fixture.pair.symbol, DotNetGenericInterfaceView.DECLARED),
+                "NaturalView",
+                emptyList(),
+                DotNetLocalGenericOwnerPhysicalTypeRole.CANONICAL_CLASS,
+            )
+        }
     }
 
     @Test

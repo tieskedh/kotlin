@@ -131,6 +131,11 @@ other state or calls through `object`. State is selected before local value
 provenance; exact local facts may optimize access to the selected field but may
 not specialize or duplicate it.
 
+A dependency fixed on its non-generic canonical class is a nominal reference,
+not a reason to erase the containing owner. Logical type-argument dependence
+does not imply physical GenericParam dependence. The bounded evidence and
+exclusions belong to the [FieldDef authority grammar](draft-adr-generic-owner-physical-authority.md#bounded-stage-6-fielddef-authority).
+
 Typed and semantic accessors operate on the same field. Required conversions
 occur at the real boundary selected by the callable contract. No typed cache,
 erased mirror, shadow state, lazy synchronization, wrapper, or proxy may repair

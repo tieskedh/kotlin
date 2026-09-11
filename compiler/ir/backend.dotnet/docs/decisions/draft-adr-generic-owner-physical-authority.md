@@ -296,7 +296,12 @@ backing fields, including fields for `val`, are emitted non-init-only today.
 For typed state, the exact logical field type must bind either to one direct
 owner parameter or to one exact invariant construction of already admitted
 local class/natural-interface TypeDefs whose recursive leaves are declaration-
-independent carriers or parameters of the same physical owner. Semantic state
+independent carriers or parameters of the same physical owner. A same-compilation
+class fixed on its canonical non-generic TypeDef is also an exact nominal
+reference: its logical arguments (including stars/projections) do not create
+physical GenericParams. A field may therefore mention the enclosing owner's
+logical `T` without physically containing `!T`. This does not erase the
+containing owner or its unrelated `!T` fields. Semantic state
 selects `object` explicitly. Each target field retains its own full carrier and
 writer lineage; evidence for `!K`, `!V`, or `C<!K>` cannot authorize another
 field or construction. Every slot must already be classified independently as
@@ -312,6 +317,19 @@ for a private or executable-local TypeDef. BOUND validation then rebinds the
 same shape against the declaration index, and final emission compares the
 complete recursive FieldDef carrier. This is compilation-local physical
 identity, not portable producer authority.
+
+Only an intrinsic declaration-wide exclusion from the generic rehearsal can
+establish that canonical class coordinate during planning. A provisional
+failure to resolve another owner's state cannot: that owner may still become
+generic in the same fixpoint. BOUND records the selected zero-arity local class
+identity, and final emission must agree on the nominal FieldDef and every typed
+writer parameter, including the referenced TypeDef's arity. No imaginary
+`C<object>` construction or `object` approximation substitutes for that class.
+A logical semantic-view request on a parameter is not itself a physical
+capability declaration; it cannot invalidate the selected nominal reference
+when that canonical local class has no capability. Actual capability and
+object-domain entries remain barriers. This does not extend external-state
+authority or the detached diagnostic snapshot grammar.
 
 For this grammar, a field has one of two initialization shapes. It either has
 one implicit `POSITIONAL_CONSTRUCTOR_PARAMETER` initializer, or it has no
@@ -330,8 +348,9 @@ owner-level priority/disposition summary cannot conceal
 `COMPLETE_ACCESS_GRAPH_REQUIRED` or
 `TYPED_WRITE_VALUE_PROVENANCE_REQUIRED`. Exact invariant local constructions
 are admitted, and CLR-reference nullability may retain the same verifier
-carrier. Stars/projections, nullable bare owner parameters, substitution-
-dependent value/value-class nullability, arrays, volatile fields, open writer
+carrier. Stars/projections in physical generic constructions, nullable bare
+owner parameters, substitution-dependent value/value-class nullability,
+arrays, volatile fields, open writer
 graphs, external state authority, and declaration-independent slots remain
 outside this grammar.
 

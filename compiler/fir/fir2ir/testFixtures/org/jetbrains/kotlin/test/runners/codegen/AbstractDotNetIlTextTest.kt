@@ -696,6 +696,13 @@ private class BackendCliDotNetFacade(
             testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
             directory = testServices.getOrCreateTempDirectory("generic-owner-state-authority"),
         )
+        validateGenericOwnerCanonicalState(
+            genericOwnerRehearsal, loweredInput.configuration.dotNetProducesLibrary,
+            loweredInput.configuration.dotNetTarget, completedOutput.output,
+            completedOutput.declarations, completedOutput.genericOwnerPhysicalStateEmissionSnapshots,
+            testServices.moduleStructure.originalTestDataFiles.single(),
+            testServices.getOrCreateTempDirectory("generic-owner-canonical-state"),
+        )
         validateGenericOwnerRuntimeIteratorCSharp(
             genericOwnerRehearsal = genericOwnerRehearsal,
             producesLibrary = loweredInput.configuration.dotNetProducesLibrary,
@@ -20144,12 +20151,133 @@ private fun validateGenericOwnerSplitNullableResultCSharp(
 }
 
 /**
- * Proves that one producer-wide FieldDef decision remains authoritative through separate
- * compilation: an exact owner-dependent state is emitted as `!T`, a widened-write state is
- * emitted as `object`, memberless generic children inherit that one state without shadows, and
- * an inherited semantic override promotes its separately compiled child's written state before
- * the BOUND FieldDef epoch is selected.
+ * A fixed canonical dependency must not erase its containing generic owner. Check both state
+ * seals and actual PE fields, then exercise separately compiled Kotlin/C# inheritance on the
+ * same receiver without hidden ABI or duplicate state.
  */
+private fun validateGenericOwnerCanonicalState(
+    genericOwnerRehearsal: Boolean,
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    declarations: Map<String, DotNetPhysicalDeclaration>,
+    stateEmissions: List<DotNetGenericOwnerPhysicalStateEmissionSnapshot>,
+    testDataFile: File,
+    directory: File,
+) {
+    if ("DOTNET_GENERIC_OWNER_CANONICAL_STATE_CSHARP_PROBE" !in testDataFile.readText()) return
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+    val metadata = DotNetClrMetadataReader.read(producer)
+    val namespaceName = "generic.owner.canonical.state"
+    if (!genericOwnerRehearsal) {
+        check(declarations.genericOwnerRehearsalEpochRecordIndexKeys().isEmpty())
+        check(stateEmissions.isEmpty())
+        check(metadata.typeDefinitions.none { it.namespaceName == namespaceName && '`' in it.metadataName })
+    }
+    if (producer.name.equals("lib.dll", true)) {
+        fun requireType(name: String) = metadata.typeDefinitions.single {
+            it.namespaceName == namespaceName && it.metadataName == name
+        }
+        val helper = requireType("LibraryData")
+        check(metadata.genericParameterDefinitions.none { it.owner == helper.handle })
+        val observer = requireType(if (genericOwnerRehearsal) "Observer`1" else "Observer")
+        val fields = metadata.fieldDefinitions.filter { it.declaringType == observer.handle }
+        check(fields.size == 2 && fields.all { it.visibility == DotNetClrFieldVisibility.PRIVATE && !it.isStatic })
+        val sourceType = fields.single { it.name == "source" }.signature.fieldType
+        check(sourceType == DotNetClrTypeSignature.Named(helper.handle, isValueType = false)) {
+            "A fixed canonical reference must retain its real class, not object or a fabricated construction: $sourceType"
+        }
+        val valueType = if (genericOwnerRehearsal) {
+            DotNetClrTypeSignature.GenericParameter(DotNetClrGenericParameterKind.TYPE, 0)
+        } else {
+            DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.OBJECT)
+        }
+        check(fields.single { it.name == "value" }.signature.fieldType == valueType)
+        if (genericOwnerRehearsal) {
+            val seals = stateEmissions.filter { it.ownerName == "$namespaceName.Observer" }
+            check(seals.size == 2 && seals.all {
+                it.requirement == DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN
+            } && seals.single { it.logicalFieldName == "source" }.carrierKind ==
+                    DotNetGenericOwnerPhysicalStateEmissionCarrierKind.CONSTRUCTED &&
+                    seals.single { it.logicalFieldName == "value" }.carrierKind ==
+                    DotNetGenericOwnerPhysicalStateEmissionCarrierKind.OWNER_TYPE_PARAMETER
+            ) { "Both fields require BOUND-to-final FieldDef authority: $stateEmissions" }
+        }
+    }
+    if (producesLibrary || !genericOwnerRehearsal) return
+    val lib = directory.resolve("lib.dll")
+    val middle = directory.resolve("middle.dll")
+    check(lib.isFile && middle.isFile)
+    val platform = System.getProperty("kotlin.dotnet.test.platform.${target.description}.path")?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform for the canonical-state probe")
+    val runtime = platform.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platform.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    val source = directory.resolve("CanonicalStateConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+            using System.Reflection;
+            using generic.owner.canonical.state;
+
+            public sealed class StringInput : Input<string>
+            {
+                public string read() { return "from C#"; }
+            }
+            public sealed class CsObserver : InheritedObserver<int>
+            {
+                public CsObserver(LibraryData data) : base(data, 91) { }
+                public override string describe() { return "C# override"; }
+            }
+            public static class CanonicalStateConsumer
+            {
+                public static int Main()
+                {
+                    const BindingFlags Flags = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
+                    var open = typeof(Observer<>);
+                    if (open.GetFields(Flags).Length != 2 ||
+                        open.GetField("source", Flags).FieldType != typeof(LibraryData) ||
+                        open.GetField("value", Flags).FieldType != open.GetGenericArguments()[0] ||
+                        typeof(Observer<int>).GetField("value", Flags).FieldType != typeof(int) ||
+                        typeof(Observer<string>).GetField("value", Flags).FieldType != typeof(string) ||
+                        typeof(Observer<int>).BaseType != typeof(Parent<int>) ||
+                        typeof(InheritedObserver<int>).BaseType != typeof(Observer<int>) ||
+                        typeof(InheritedObserver<>).GetFields(Flags).Length != 0 ||
+                        typeof(CsObserver).GetFields(Flags).Length != 0)
+                        throw new InvalidOperationException("Canonical state contaminated typed storage or inheritance");
+                    var data = new LibraryData(new StringInput());
+                    var instance = new CsObserver(data);
+                    instance.write(92);
+                    if (inheritedKt.inheritedRead(instance) != 92 ||
+                        ownersKt.describeInt(instance) != "C# override" ||
+                        !Object.ReferenceEquals(instance.sourceIdentity(), data) ||
+                        !Object.ReferenceEquals((Parent<int>)instance, instance) ||
+                        !Object.Equals(data.peek(), "from C#"))
+                        throw new InvalidOperationException("Separate C#/Kotlin dispatch or identity failed");
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val consumer = directory.resolve(if (target == DotNetTarget.NET48) "CanonicalStateConsumer.exe" else "CanonicalStateConsumer.dll")
+    val references = listOf(lib, middle, runtime, stdlib)
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()),
+            source, consumer, references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()),
+            source, consumer, references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 -> error("The canonical-state consumer needs an executable profile")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    listOf(runtime, stdlib).forEach { it.copyTo(directory.resolve(it.name), overwrite = true) }
+    executeSnapshotConsumer(target, consumer, directory)
+}
+
 private fun validateGenericOwnerStateAuthorityCSharp(
     genericOwnerRehearsal: Boolean,
     producesLibrary: Boolean,

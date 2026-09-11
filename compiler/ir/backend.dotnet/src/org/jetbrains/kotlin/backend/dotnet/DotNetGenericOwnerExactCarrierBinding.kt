@@ -31,10 +31,11 @@ internal data class DotNetGenericOwnerExactCarrierBinding(
  * Binds an invariant owner-dependent type without consulting the general IL type mapper.
  *
  * The current owner's parameters come only from [physicalOwnerIdentity]. Every constructed type
- * must be selected by [localDefinitionOrNull] and already exist in [declarations]. Projections,
- * stars, nullable owner parameters/value carriers, foreign constructions, and unresolved
- * classifiers remain unavailable. CLR-reference nullability does not change a fixed leaf or
- * constructed carrier; a declaration-index contradiction remains a conflict.
+ * must be selected by [localDefinitionOrNull] and already exist in [declarations]. Projections
+ * and stars remain unavailable for physical generic constructions; a selected canonical class
+ * has no physical arguments to bind. Nullable owner parameters/value carriers, foreign
+ * constructions, and unresolved classifiers remain unavailable. CLR-reference nullability does
+ * not change a fixed leaf or constructed carrier; a declaration-index contradiction is a conflict.
  */
 internal fun bindExactLocalGenericOwnerDependentCarrierOrError(
     type: IrType,
@@ -115,14 +116,22 @@ internal fun bindExactLocalGenericOwnerDependentCarrierOrError(
             "an exact local carrier selector returned an unrelated physical TypeDef",
         )
     }
-    if (declarations.typeDescriptionOrNull(identity)?.category !in setOf(
+    val definition = declarations.typeDescriptionOrNull(identity)
+        ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+    if (definition.category !in setOf(
             DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
             DotNetGenericOwnerPhysicalNamedTypeCategory.INTERFACE,
         )) {
         return DotNetGenericOwnerPhysicalBindingResult.Unavailable
     }
     val arguments = mutableListOf<DotNetGenericOwnerSymbolicCarrierReference>()
-    for (argument in simple.arguments) {
+    // Only the selected physical declaration can discard logical arguments. A frozen
+    // canonical class has no GenericParams: all its Kotlin projections denote that same
+    // nominal reference. A generic class/interface still requires the complete invariant
+    // vector below; neither the source type nor this binder may invent C<object>.
+    val retainsLogicalArguments = definition.category != DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS ||
+            definition.genericParameters.isNotEmpty()
+    for (argument in if (retainsLogicalArguments) simple.arguments else emptyList()) {
         val projection = argument as? IrTypeProjection
             ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
         if (projection.variance != Variance.INVARIANT) {

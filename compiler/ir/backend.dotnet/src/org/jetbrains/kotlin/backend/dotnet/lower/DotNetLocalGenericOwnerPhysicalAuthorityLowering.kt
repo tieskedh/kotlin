@@ -67,6 +67,7 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetPhysicalValueStableName
 import org.jetbrains.kotlin.backend.dotnet.declarationIndependentLeafCarrierOrNull
 import org.jetbrains.kotlin.backend.dotnet.genericOwnerDeclarationIndependentLeafPrototypeOrNull
 import org.jetbrains.kotlin.backend.dotnet.genericOwnerPrototypePhysicalGenericParameters
+import org.jetbrains.kotlin.backend.dotnet.allowsGenericOwnerRehearsalAfterStateResolution
 import org.jetbrains.kotlin.backend.dotnet.isReifiedByGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.isDotNetStdlibImplementation
 import org.jetbrains.kotlin.backend.dotnet.markBoundGenericOwnerStateWrites
@@ -313,7 +314,18 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
                     role = DotNetLocalGenericOwnerPhysicalTypeRole.SEMANTIC_CAPABILITY,
                 )
             }
-        val additionalInputs = (naturalInputs + capabilityInputs)
+        val canonicalInputs = context.genericOwnerArchitecturePlans.values.mapNotNull { plan ->
+            if (plan.owner.kind != ClassKind.CLASS || plan.owner.isValue ||
+                plan.disposition.allowsGenericOwnerRehearsalAfterStateResolution()
+            ) return@mapNotNull null
+            DotNetLocalGenericOwnerPhysicalTypeInput(
+                identity = DotNetGenericOwnerPhysicalTypeDefIdentity.Local(plan.owner.symbol, view = null),
+                logicalOwnerName = plan.owner.dotNetPhysicalValueStableName(),
+                genericParameters = emptyList(),
+                role = DotNetLocalGenericOwnerPhysicalTypeRole.CANONICAL_CLASS,
+            )
+        }
+        val additionalInputs = (naturalInputs + capabilityInputs + canonicalInputs)
             .distinctBy(DotNetLocalGenericOwnerPhysicalTypeInput::identity)
         val inputsByIdentity = (classInputs + additionalInputs)
             .associateBy(DotNetLocalGenericOwnerPhysicalTypeInput::identity)
@@ -728,10 +740,11 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
 
     /**
      * First exact state grammar: every owner-dependent field is one private instance slot whose
-     * non-null invariant carrier can be bound recursively from admitted local TypeDefs, fixed
-     * leaves, and this owner's own GenericParams. Each field binds independently; projected,
-     * logically nullable, foreign, and unresolved-writer shapes remain unavailable rather than
-     * being guessed. Semantic state continues to select object explicitly.
+     * carrier can be bound recursively from admitted local TypeDefs, fixed leaves, and this
+     * owner's own GenericParams. Canonical local classes have no physical arguments; generic
+     * constructions require invariant arguments. Each field binds independently; unsupported
+     * nullability, foreign, and unresolved-writer shapes stay unavailable rather than guessed.
+     * Semantic state continues to select object explicitly.
      */
     private data class BoundStateFamilySelection(
         val family: DotNetLocalGenericOwnerPhysicalStateFamilyInput,
@@ -787,8 +800,7 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
                         declarations,
                         inputsByIdentity,
                     ) ?: return null
-                    if (!binding.referencesCurrentOwnerParameter(ownerIdentity) ||
-                        binding !is DotNetGenericOwnerSymbolicCarrierReference.Parameter &&
+                    if (binding !is DotNetGenericOwnerSymbolicCarrierReference.Parameter &&
                         binding !is DotNetGenericOwnerSymbolicCarrierReference.Constructed
                     ) return null
                     binding
@@ -1012,8 +1024,8 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
         if (writer.parent !== plan.owner || parameter.kind != IrParameterKind.Regular ||
             writer in context.genericOwnerCapabilityDeclarations ||
             writer in context.genericOwnerForeignDispatchDeclarations ||
-            parameter in context.genericOwnerCapabilityDeclarations ||
-            parameter in context.genericOwnerForeignDispatchDeclarations
+            parameter in context.genericOwnerForeignDispatchDeclarations ||
+            parameter in context.genericOwnerReflectionCapabilityDeclarations
         ) return null
         val isStrictPhysicalInput = when (writer) {
             is IrConstructor -> {
@@ -1037,13 +1049,25 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
             }
         }
         if (!isStrictPhysicalInput) return null
-        return bindExactStateCarrierOrNull(
+        val carrier = bindExactStateCarrierOrNull(
             parameter.type,
             plan.owner,
             ownerIdentity,
             declarations,
             inputsByIdentity,
-        )
+        ) ?: return null
+        if (parameter in context.genericOwnerCapabilityDeclarations) {
+            // A request for a semantic view does not create a capability TypeDef. For a local
+            // declaration fixed on its canonical class, the mapper retains that nominal class
+            // when no capability exists. Bind that same physical truth; a real capability or an
+            // object-domain entry must never borrow the logical parameter's exact carrier.
+            val definition = (carrier as? DotNetGenericOwnerSymbolicCarrierReference.Constructed)
+                ?.definition as? DotNetGenericOwnerPhysicalTypeDefIdentity.Local ?: return null
+            if (inputsByIdentity[definition]?.role != DotNetLocalGenericOwnerPhysicalTypeRole.CANONICAL_CLASS ||
+                definition.owner.owner in context.genericOwnerCapabilityInterfaces
+            ) return null
+        }
+        return carrier
     }
 
     private fun bindExactStateCarrierOrNull(
@@ -1071,8 +1095,10 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
                 DotNetGenericInterfaceView.DECLARED,
             )
             when {
-                inputsByIdentity[classIdentity]?.role ==
-                        DotNetLocalGenericOwnerPhysicalTypeRole.GENERIC_CLASS -> classIdentity
+                inputsByIdentity[classIdentity]?.role in setOf(
+                    DotNetLocalGenericOwnerPhysicalTypeRole.GENERIC_CLASS,
+                    DotNetLocalGenericOwnerPhysicalTypeRole.CANONICAL_CLASS,
+                ) -> classIdentity
                 inputsByIdentity[naturalIdentity]?.role ==
                         DotNetLocalGenericOwnerPhysicalTypeRole.NATURAL_INTERFACE -> naturalIdentity
                 else -> null

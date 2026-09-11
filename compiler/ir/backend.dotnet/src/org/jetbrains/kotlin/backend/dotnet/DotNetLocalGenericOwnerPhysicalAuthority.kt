@@ -26,6 +26,7 @@ import java.util.IdentityHashMap
 /** Bounded compilation-local role of one selected CLR TypeDef. */
 internal enum class DotNetLocalGenericOwnerPhysicalTypeRole {
     GENERIC_CLASS,
+    CANONICAL_CLASS,
     NATURAL_INTERFACE,
     SEMANTIC_CAPABILITY,
 }
@@ -52,6 +53,8 @@ internal class DotNetLocalGenericOwnerPhysicalTypeInput(
                         genericParameters.all { parameter ->
                             parameter.variance == DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT
                         }
+            DotNetLocalGenericOwnerPhysicalTypeRole.CANONICAL_CLASS ->
+                identity.view == null && genericParameters.isEmpty()
             DotNetLocalGenericOwnerPhysicalTypeRole.NATURAL_INTERFACE ->
                 identity.view == DotNetGenericInterfaceView.DECLARED && genericParameters.isNotEmpty()
             DotNetLocalGenericOwnerPhysicalTypeRole.SEMANTIC_CAPABILITY ->
@@ -62,6 +65,8 @@ internal class DotNetLocalGenericOwnerPhysicalTypeInput(
     val category: DotNetGenericOwnerPhysicalNamedTypeCategory
         get() = when (role) {
             DotNetLocalGenericOwnerPhysicalTypeRole.GENERIC_CLASS ->
+                DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS
+            DotNetLocalGenericOwnerPhysicalTypeRole.CANONICAL_CLASS ->
                 DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS
             DotNetLocalGenericOwnerPhysicalTypeRole.NATURAL_INTERFACE,
             DotNetLocalGenericOwnerPhysicalTypeRole.SEMANTIC_CAPABILITY,
@@ -1612,8 +1617,10 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
                                     DotNetGenericInterfaceView.DECLARED,
                                 )
                                 when {
-                                    mergedInputs[classIdentity]?.role ==
-                                            DotNetLocalGenericOwnerPhysicalTypeRole.GENERIC_CLASS -> classIdentity
+                                    mergedInputs[classIdentity]?.role in setOf(
+                                        DotNetLocalGenericOwnerPhysicalTypeRole.GENERIC_CLASS,
+                                        DotNetLocalGenericOwnerPhysicalTypeRole.CANONICAL_CLASS,
+                                    ) -> classIdentity
                                     mergedInputs[naturalIdentity]?.role ==
                                             DotNetLocalGenericOwnerPhysicalTypeRole.NATURAL_INTERFACE -> naturalIdentity
                                     else -> null
@@ -1696,6 +1703,9 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
                 -> DotNetGenericOwnerPhysicalValueShadowCarrierKind.LOCAL_OWNER_CONSTRUCTION
                 DotNetLocalGenericOwnerPhysicalTypeRole.SEMANTIC_CAPABILITY ->
                     DotNetGenericOwnerPhysicalValueShadowCarrierKind.SEMANTIC_CAPABILITY
+                // This diagnostic grammar still describes constructions over local binders.
+                // Canonical dependency carriers are instead checked by the FieldDef seal.
+                DotNetLocalGenericOwnerPhysicalTypeRole.CANONICAL_CLASS -> return null
             },
             localOwnerName = input.logicalOwnerName,
             localTypeDefView = localIdentity.view?.toShadowView(),

@@ -75,6 +75,7 @@ import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericClassDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericInterfaceDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetComparableClass
 import org.jetbrains.kotlin.backend.dotnet.isReifiedByGenericOwnerRehearsal
+import org.jetbrains.kotlin.backend.dotnet.allowsGenericOwnerRehearsalAfterStateResolution
 import org.jetbrains.kotlin.backend.dotnet.isDotNetResolutionOnlyStdlibDeclaration
 import org.jetbrains.kotlin.backend.dotnet.referencesTypeParameterOf
 import org.jetbrains.kotlin.descriptors.Modality
@@ -5213,6 +5214,20 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                     ?.let(TypedWriteCarrierCoordinate::OwnerParameter)
             }
             val classifier = (simple.classifier as? IrClassSymbol)?.owner ?: return null
+            if (!classifier.isValue && classifier.kind == ClassKind.CLASS &&
+                context.genericOwnerArchitecturePlans[classifier]?.disposition
+                    ?.allowsGenericOwnerRehearsalAfterStateResolution() == false
+            ) {
+                // An intrinsic declaration-wide exclusion fixes one non-generic CLR owner.
+                // Logical arguments and projections cannot change that reference carrier.
+                // An owner which is merely awaiting state proof is not such authority: it may
+                // still become generic during the current fixed point.
+                return TypedWriteCarrierCoordinate.LocalConstruction(
+                    classifier.symbol,
+                    org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+                    emptyList(),
+                )
+            }
             if (classifier.fqNameWhenAvailable?.asString() == "kotlin.Array") {
                 val projection = simple.arguments.singleOrNull() as? IrTypeProjection ?: return null
                 if (projection.variance != Variance.INVARIANT) return null

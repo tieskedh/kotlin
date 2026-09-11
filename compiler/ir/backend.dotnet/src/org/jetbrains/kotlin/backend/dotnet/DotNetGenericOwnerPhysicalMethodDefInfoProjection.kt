@@ -102,10 +102,10 @@ internal fun DotNetGenericOwnerSymbolicCarrierReference.projectBoundLocalCarrier
             ?: dotNetUnsupported(
                 "BOUND $authorityDescription contains an unavailable local CLR construction",
             )
-        check(constructionOwner.typeParameterCount == arguments.size && arguments.isNotEmpty()) {
+        check(constructionOwner.typeParameterCount == arguments.size) {
             "Internal .NET backend error: BOUND $authorityDescription construction changed arity"
         }
-        DotNetIlValueType.GenericInstance(
+        if (arguments.isEmpty()) DotNetIlValueType.UserClass(constructionOwner) else DotNetIlValueType.GenericInstance(
             constructionOwner,
             arguments.map { argument ->
                 argument.projectBoundLocalCarrierToIlType(

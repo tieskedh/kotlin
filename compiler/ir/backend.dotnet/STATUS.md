@@ -49,37 +49,36 @@ Current representation rules are linked from the navigation section below.
 
 ## Latest verification
 
-The 2026-09-11 ABI-71/schema-22 target-wide aggregate includes the bounded
-open-nullable invariant SAM extension. Direct JUnit XML audit found 212 suites
-and 2,821 tests, with zero failures, errors, or skips:
+The latest canonical-state reference feature passed the rehearsal-physical
+lane on 2026-09-11. Direct JUnit XML audit found no failures, errors, or skips:
 
-| Root | Suites | Tests |
+| Lane | Suites | Tests |
 | --- | ---: | ---: |
-| backend | 22 | 400 |
-| `dotnet.ir` | 1 | 6 |
-| FIR2IR | 187 | 2,287 |
-| integration | 2 | 128 |
+| Focused candidate, both parsers and runtimes | 4 | 16 |
+| Same production-erased inverse | 4 | 16 |
+| Complete backend suite | 22 | 402 |
 
-The actual FIR2IR Test task was explicitly rerun without filters after the
-focused matrix, and the public target aggregate completed with:
+The inherited production-erased target-wide base is `3a2384f636`: 212 suites,
+2,821 tests (backend 400, `dotnet.ir` 6, FIR2IR 2,287, integration 128), all
+green. Its actual FIR2IR Test task was explicitly rerun without filters. This
+feature is not a new full aggregate: only rehearsal-selected state authority
+and its model/fixture changed; production ABI, Runtime/Stdlib, shared compiler,
+and artifact schemas are unchanged.
 
-```text
-.\gradlew.bat --max-workers=1 --no-configuration-cache -q :compiler:fir:fir2ir:dotNetTest --rerun :compiler:backend.dotnet:dotNetTest
-```
-
-The focused candidate and production-erased inverse each passed 16 tests
-through PSI and LightTree on .NET 10 and Framework 4.8, including the existing
-contravariant SAM and natural-interface interop regressions. Scope,
-metadata/identity/cast evidence, and reproduction commands are in the
+The exact delta, FieldDef/parameter seals, separate Kotlin/C# evidence, inverse,
+and commands are in the
+[canonical-state archive](docs/archive/generic-owner-canonical-state-reference-2026-09-11.md).
+The inherited full gate is recorded in the
 [invariant nullable SAM archive](docs/archive/generic-owner-invariant-nullable-sam-2026-09-11.md).
 
 ## Active work
 
 Continue the source-built Runtime/Stdlib generic-owner rehearsal census within
-phase 1 of the way forward. SAM admission now passes and the census reaches
-emission. Isolate the first physical inheritance/MethodDef-view mismatch in a
-declaration-independent reproducer; the dated archive records the newly visible
-failure groups without treating cascading diagnostics as independent bugs.
+phase 1 of the way forward. SAM admission passes and the census reaches
+emission. A fixed canonical reference field no longer erases its enclosing
+generic owner or its unrelated typed state. Rerun the census from this green
+checkpoint and isolate the next physical inheritance/MethodDef-view mismatch;
+the archives distinguish proven custom shapes from unresolved stdlib closure.
 Do not add declaration, package, collection, `Map`, member-name, IR-origin,
 or stdlib exceptions.
 

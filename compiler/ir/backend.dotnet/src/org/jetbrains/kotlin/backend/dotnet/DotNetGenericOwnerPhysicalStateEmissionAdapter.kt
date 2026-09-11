@@ -225,6 +225,7 @@ private fun DotNetGenericOwnerSymbolicCarrierReference.matchesFinalStateCarrier(
         val actual = observed as? DotNetGenericOwnerObservedMethodCarrier.LocalConstruction
             ?: return false
         actual.definition.aliases.any(expectedDefinition::sameLocalTypeIdentityAs) &&
+                actual.definition.genericArity == arguments.size &&
                 actual.arguments.size == arguments.size && arguments.zip(actual.arguments).all { pair ->
                     pair.first.matchesFinalStateCarrier(pair.second, stateOwner, physicalStateOwner)
                 }
