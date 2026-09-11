@@ -71,6 +71,7 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetPrimitiveTypeParameterUpperBoun
 import org.jetbrains.kotlin.backend.dotnet.dotNetIlMethodName
 import org.jetbrains.kotlin.backend.dotnet.dotNetPhysicalValueStableName
 import org.jetbrains.kotlin.backend.dotnet.genericOwnerDeclarationIndependentLeafPrototypeOrNull
+import org.jetbrains.kotlin.backend.dotnet.hasIdenticalPrototypeInputCarriers
 import org.jetbrains.kotlin.backend.dotnet.genericOwnerConditionalSupertypeParameterIndices
 import org.jetbrains.kotlin.backend.dotnet.genericOwnerPrototypePhysicalGenericParameters
 import org.jetbrains.kotlin.backend.dotnet.genericOwnerPrototypeStateType
@@ -2391,12 +2392,11 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
 
     /**
      * The virtual probe compares MethodDefs and therefore does not consume the source arguments.
-     * Its dispatcher may forward any number of binder-independent fixed leaves because their
-     * natural and semantic carriers are identical. `DECLARATION_INDEPENDENT` alone is not such a
-     * proof: a fixed covariant `I<Any?>` input is owner-independent but may still require the
-     * object-domain semantic carrier. Owner-relative or broad inputs need an independent
-     * conversion and MethodSpec-constraint proof. In particular a non-generic capability's
-     * `!!R : object` cannot satisfy a natural `<R : !T>` slot merely because both value carriers
+     * Its dispatcher may forward inputs with identical natural and semantic prototype carriers,
+     * subject to the final emitted MethodDef equality check. Neither a logical owner dependency
+     * nor `DECLARATION_INDEPENDENT` alone decides that equality. Broad candidate policies and
+     * different-carrier inputs still need an independent conversion proof. A non-generic
+     * capability's `!!R : object` cannot satisfy a natural `<R : !T>` slot merely because both value carriers
      * are `!!R`.
      */
     private fun DotNetGenericOwnerMemberFamilyPlan.supportsDirectForeignOverrideProbe(): Boolean {
@@ -2426,13 +2426,18 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             result.nullability == SimpleTypeNullability.MARKED_NULLABLE &&
                     (result.classifier as? IrTypeParameterSymbol)?.owner?.parent === source.parent
         } == true
-        val supportsDeclarationIndependentArguments =
+        val supportsIdenticalCarrierArguments =
             (!mayUseSplitNullableResult || hasDirectNullableOwnerResult) && source.typeParameters.isEmpty() &&
-                    source.parameters.drop(1).size == parameterSlotDomains.size &&
-                    source.parameters.drop(1).zip(parameterSlotDomains).all { pair ->
-                        pair.second == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
-                                pair.first.type
-                                    .genericOwnerDeclarationIndependentLeafPrototypeOrNull() != null
+                    if (context.configuration.dotNetGenericOwnerRehearsal) {
+                        DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT !in parameterSlotDomains &&
+                                hasIdenticalPrototypeInputCarriers()
+                    } else {
+                        source.parameters.drop(1).size == parameterSlotDomains.size &&
+                                source.parameters.drop(1).zip(parameterSlotDomains).all { pair ->
+                                    pair.second == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
+                                            pair.first.type
+                                                .genericOwnerDeclarationIndependentLeafPrototypeOrNull() != null
+                                }
                     }
         val methodParameter = source.typeParameters.singleOrNull()
         val explicitParameter = source.parameters.drop(1).singleOrNull()
@@ -2466,7 +2471,7 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
         // unconstrained capability MethodSpec. This is still an early candidate, not physical
         // authority: emission seals equality of the resulting typed/semantic binder vectors
         // before it may issue the natural MethodSpec call.
-        return supportsDeclarationIndependentArguments ||
+        return supportsIdenticalCarrierArguments ||
                 supportsErasedOwnerRelativeMethodArgumentCandidate
     }
 

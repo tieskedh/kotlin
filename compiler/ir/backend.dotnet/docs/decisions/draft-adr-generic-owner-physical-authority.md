@@ -627,15 +627,26 @@ changing that serialized policy requires a physical-library ABI advance.
 
 For an open class family, semantic-result routing must still observe an ordinary
 C# subclass which overrides only the natural typed MethodDef. The virtual
-MethodDef probe may forward any count of binder-independent fixed-leaf
-arguments whose natural and semantic carriers are already proven identical;
-the broader `DECLARATION_INDEPENDENT` domain is not sufficient evidence. An
-argument requiring an unproved broad/owner-relative conversion keeps the class
-owner erased. A protected compiler hook is never an extra C# authoring
+MethodDef probe may forward any count of arguments whose natural and semantic
+carriers are proven identical. The early candidate compares the same per-role
+input prototypes used to bind member records; it does not infer equality from
+the logical `DECLARATION_INDEPENDENT` domain or infer inequality merely because
+an input references an owner parameter. An open-nullable owner input can have
+the ordinary object invocation carrier in both roles without changing its
+logical Kotlin type or erasing unrelated fields and results. The final emitted
+MethodDef vectors and generic constraints must still match before forwarding;
+an early prototype is not authority to rewrite either signature.
+
+Unknown prototypes, unbound logical classifier placeholders, separately mapped
+primitive-bound slots, different-carrier inputs, and unclosed broad-candidate
+policies do not obtain this forwarding proof. They require their own complete
+physical conversion/policy evidence.
+No `object -> !K` conversion is inferred from logical `K` or from the existence
+of a typed receiver. A protected compiler hook is never an extra C# authoring
 obligation.
 
 The input proof and result layout remain independent. With those already-equal
-fixed input carriers, a direct owner-nullable natural result may forward its
+input carriers, a direct owner-nullable natural result may forward its
 actual split payload and trailing `out bool` into a private local pair, then
 reconstruct the object-domain result through the shared nullable conversion.
 The payload is the selected MethodDef's physical result, bound in its own
@@ -644,16 +655,18 @@ remaps it. The emitted call consumes the complete physical parameter vector,
 including the flag address. Only a detected foreign override uses this path:
 the Kotlin semantic body keeps its wider authoritative state and must not be
 forced through a natural wrapper which narrows a legal widened value. This
-does not admit owner-dependent/broad inputs, refined or nested split results,
-or split results with owner-relative MethodSpec constraints. Those need their
-own complete input/slot proofs, not an additional combined member role.
+does not admit different-carrier or unclosed broad inputs, refined or nested
+split results, or split results with owner-relative MethodSpec constraints.
+It also does not enlarge the separately admitted natural-interface input
+grammar. Those require their own complete input/slot proofs, not an additional
+combined member role.
 
 When a compiler-owned natural wrapper and its semantic body have identical
 physical boundaries, the natural virtual operation can itself implement the
 class capability. No override probe or object-result convention is necessary:
 ordinary CLR virtual dispatch observes both Kotlin and foreign overrides. This
 requires the proven `SEMANTIC_BODY_WITH_NATURAL_WRAPPER` placement, identical
-fixed input carriers, no method binders or split-result channel, and no
+physical input carriers, no method binders or split-result channel, and no
 semantic-result conversion. A declaration-independent result domain is only
 an admission candidate, not physical authority. Emission must seal the same
 physical owner and complete final MethodDef signature for the natural entry,

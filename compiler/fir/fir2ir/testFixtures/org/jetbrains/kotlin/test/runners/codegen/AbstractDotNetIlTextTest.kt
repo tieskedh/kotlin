@@ -765,6 +765,12 @@ private class BackendCliDotNetFacade(
             testServices.moduleStructure.originalTestDataFiles.single(),
             testServices.getOrCreateTempDirectory("generic-owner-foreign-owner-input"),
         )
+        validateGenericOwnerForeignNullableInput(
+            genericOwnerRehearsal, loweredInput.configuration.dotNetProducesLibrary,
+            loweredInput.configuration.dotNetTarget, completedOutput.output,
+            completedOutput.declarations, testServices.moduleStructure.originalTestDataFiles.single(),
+            testServices.getOrCreateTempDirectory("generic-owner-foreign-nullable-input"),
+        )
         validateGenericOwnerRuntimeIteratorCSharp(
             genericOwnerRehearsal = genericOwnerRehearsal,
             producesLibrary = loweredInput.configuration.dotNetProducesLibrary,
@@ -20320,6 +20326,159 @@ private fun validateGenericOwnerForeignOwnerInput(
     check(incompatible.exitCode != 0 && "CS1503" in incompatible.output && "Lookup" in incompatible.output) {
         "Different invariant native constructions must not be presented as the same physical contract: ${incompatible.output}"
     }
+}
+
+private fun validateGenericOwnerForeignNullableInput(
+    genericOwnerRehearsal: Boolean,
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    declarations: Map<String, DotNetPhysicalDeclaration>,
+    testDataFile: File,
+    directory: File,
+) {
+    if ("DOTNET_GENERIC_OWNER_FOREIGN_NULLABLE_INPUT_PROBE" !in testDataFile.readText()) return
+    val metadata = DotNetClrMetadataReader.read(producer)
+    val namespaceName = "generic.owner.foreign.nullable.input"
+    if (!genericOwnerRehearsal) {
+        check(declarations.genericOwnerRehearsalEpochRecordIndexKeys().isEmpty())
+        check(metadata.typeDefinitions.none { it.namespaceName == namespaceName && '`' in it.metadataName })
+        return
+    }
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+    if (producer.name.equals("lib.dll", true)) {
+        val owner = metadata.typeDefinitions.single { it.namespaceName == namespaceName && it.metadataName == "Reader`2" }
+        val natural = metadata.methodDefinitions.single { it.declaringType == owner.handle && it.name == "read" }
+        val objectType = DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.OBJECT)
+        val boolType = DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.BOOLEAN)
+        val first = DotNetClrTypeSignature.GenericParameter(DotNetClrGenericParameterKind.TYPE, 0)
+        val second = DotNetClrTypeSignature.GenericParameter(DotNetClrGenericParameterKind.TYPE, 1)
+        check(natural.isVirtual && natural.visibility == DotNetClrMethodVisibility.PUBLIC &&
+                natural.signature.parameterTypes == listOf(objectType, boolType) && natural.signature.returnType == second)
+        val fields = metadata.fieldDefinitions.filter { it.declaringType == owner.handle }
+        check(fields.size == 3 && fields.single { it.name == "anchor" }.signature.fieldType == first &&
+                fields.single { it.name == "alternative" }.signature.fieldType == second &&
+                fields.single { it.name == "value" }.signature.fieldType == objectType) {
+            "Equal input forwarding changed authoritative state: $fields"
+        }
+        for (blocked in listOf("UnequalInput", "BroadInput", "NamedInput", "NullableLookup")) {
+            check(metadata.typeDefinitions.any { it.namespaceName == namespaceName && it.metadataName == blocked } &&
+                    metadata.typeDefinitions.none { it.namespaceName == namespaceName && it.metadataName.startsWith("$blocked`") }) {
+                "Unproved input/interface policy was admitted: $blocked"
+            }
+        }
+    }
+    if (producesLibrary) return
+    val platform = System.getProperty("kotlin.dotnet.test.platform.${target.description}.path")?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform for nullable foreign inputs")
+    val runtime = platform.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platform.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    val source = directory.resolve("NullableInputConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+            using generic.owner.foreign.nullable.input;
+            public class CsDirect : Reader<int, int>
+            {
+                public CsDirect() : base(7, 41, 43) { }
+                public override int read(object key, bool alternate) { return key == null ? 101 : alternate ? 103 : 109; }
+                public override int readArray(Array keys, bool alternate) { return keys.Length == 0 ? 107 : alternate ? 105 : 111; }
+            }
+            public sealed class CsGrandchild : CsDirect
+            {
+                public override int read(object key, bool alternate) { return key == null ? 201 : alternate ? 203 : 209; }
+            }
+            public sealed class CsInherited : MiddleReader<int, int>
+            {
+                public CsInherited() : base(7, 47, 53) { }
+                public override int read(object key, bool alternate) { return key == null ? 301 : alternate ? 303 : 309; }
+            }
+            public sealed class CsKotlinChild : KotlinReader
+            {
+                public CsKotlinChild() : base(47) { }
+                public override int read(object key, bool alternate) { return key == null ? 401 : alternate ? 403 : 409; }
+            }
+            public sealed class CsReference : Reader<string, string>
+            {
+                public CsReference() : base("key", "value", "alternative") { }
+                public override string read(object key, bool alternate) { return "reference-null"; }
+            }
+            public sealed class CsNullable : Reader<int?, int?>
+            {
+                public CsNullable() : base(null, 0, 1) { }
+                public override int? read(object key, bool alternate) { return alternate ? (int?)53 : null; }
+            }
+            public sealed class CsNominal : Reader<Id, Id>
+            {
+                public readonly Id Result;
+                public CsNominal(Id value) : base(value, (Id)lookupKt.id(), (Id)lookupKt.id()) { Result = value; }
+                public override Id read(object key, bool alternate) { return Result; }
+            }
+            public static class NullableInputConsumer
+            {
+                private static void Check(Reader<int, int> value, int tag)
+                {
+                    if (lookupKt.readExact(value, 7, false) != tag + 9 || lookupKt.readExact(value, null, false) != tag + 1 ||
+                        lookupKt.readExact(value, 7, true) != tag + 3 ||
+                        !Object.Equals(lookupKt.readWide(value, 7, false), tag + 9) ||
+                        !Object.Equals(lookupKt.readWide(value, null, false), tag + 1) ||
+                        !Object.Equals(lookupKt.readWide(value, 7, true), tag + 3) ||
+                        !Object.Equals(lookupKt.readStar(value), tag + 1) || !lookupKt.sameReader(value, value))
+                        throw new Exception("Nullable input lost arguments, identity, or foreign dispatch");
+                }
+                public static int Main()
+                {
+                    var method = typeof(Reader<int, int>).GetMethod("read");
+                    if (method.ReturnType != typeof(int) || method.GetParameters().Length != 2 ||
+                        method.GetParameters()[0].ParameterType != typeof(object) || method.GetParameters()[1].ParameterType != typeof(bool))
+                        throw new Exception("Natural MethodDef changed its independent input/result carriers");
+                    var direct = new CsDirect();
+                    Check(direct, 100);
+                    var arrayMethod = typeof(Reader<int, int>).GetMethod("readArray");
+                    if (arrayMethod.ReturnType != typeof(int) || arrayMethod.GetParameters()[0].ParameterType != typeof(Array) ||
+                        lookupKt.readArrayExact(direct, new int[] { 7 }, false) != 111 ||
+                        !Object.Equals(lookupKt.readArrayWide(direct, new int[] { 7 }, true), 105) ||
+                        !Object.Equals(lookupKt.readArrayWide(direct, new int[0], false), 107))
+                        throw new Exception("Equal System.Array carriers lost foreign dispatch or arguments");
+                    Check(new CsGrandchild(), 200);
+                    Check(new CsInherited(), 300);
+                    var child = new CsKotlinChild();
+                    Check(child, 400);
+                    if (child.parent(null, false) != 59 || child.parent(7, false) != 47)
+                        throw new Exception("Nonvirtual Kotlin super entered the foreign override");
+                    if (!Object.Equals(lookupKt.readStar(new CsReference()), "reference-null"))
+                        throw new Exception("Reference override");
+                    var nullable = new CsNullable();
+                    if (lookupKt.readStar(nullable) != null || nullable.read(7, true) != 53 ||
+                        typeof(Reader<int?, int?>).GetMethod("read").ReturnType != typeof(int?))
+                        throw new Exception("Nullable value override");
+                    var nominal = new CsNominal((Id)lookupKt.id());
+                    if (!Object.ReferenceEquals(lookupKt.readStar(nominal), nominal.Result) || lookupKt.readId(nominal.Result) != 53 ||
+                        typeof(Reader<Id, Id>).GetMethod("read").ReturnType != typeof(Id))
+                        throw new Exception("Nominal value-class override");
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val consumer = directory.resolve(if (target == DotNetTarget.NET48) "NullableInputConsumer.exe" else "NullableInputConsumer.dll")
+    val references = listOf(directory.resolve("lib.dll"), directory.resolve("middle.dll"), runtime, stdlib)
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()),
+            source, consumer, references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()),
+            source, consumer, references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 -> error("The nullable input consumer needs an executable profile")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    listOf(runtime, stdlib).forEach { it.copyTo(directory.resolve(it.name), overwrite = true) }
+    executeSnapshotConsumer(target, consumer, directory)
 }
 
 private fun validateGenericOwnerForeignSplitResult(

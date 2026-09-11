@@ -6309,14 +6309,61 @@ private fun DotNetGenericOwnerConstructorPlan.exactPrototypePathUnboundSignature
     )
 }
 
-private fun DotNetGenericOwnerMemberFamilyPlan.exactPrototypePathUnboundSignatures(
+private fun DotNetGenericOwnerMemberFamilyPlan.prototypeParameterSlots(
     owner: IrClass,
     logicalClassifierKey: (IrClass) -> String?,
-): Map<DotNetGenericOwnerMemberFamilyRole, DotNetGenericOwnerPrototypeMethodSignatureSnapshot>? {
+    eraseOwnerDependentCarrier: Boolean,
+): List<DotNetGenericOwnerPrototypeValueSlotSnapshot>? {
     val explicitParameters = source.parameters.filter { parameter ->
         parameter.kind != IrParameterKind.DispatchReceiver
     }
     if (explicitParameters.size != parameterSlotDomains.size) return null
+    return explicitParameters.mapIndexed { index, parameter ->
+        val physicalType = if (eraseOwnerDependentCarrier && index in semanticObjectParameterIndices) {
+            DotNetGenericOwnerPrototypeTypeSnapshot.objectType()
+        } else {
+            parameter.type.genericOwnerPrototypeType(
+                owner = owner,
+                logicalClassifierKey = logicalClassifierKey,
+                use = DotNetGenericOwnerPrototypeTypeUse.CALLABLE,
+                method = source,
+                eraseOwnerDependentCarrier = eraseOwnerDependentCarrier,
+            ) ?: return null
+        }
+        val domain = parameterSlotDomains[index]
+        if (physicalType.kind == DotNetGenericOwnerPrototypeTypeKind.VOID ||
+                domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
+                physicalType.referencesOwnerParameter()
+        ) return null
+        DotNetGenericOwnerPrototypeValueSlotSnapshot(
+            domain = domain,
+            type = physicalType,
+            nullableReferenceFlags = DotNetNullableMetadata.flags(parameter.type, physicalType),
+        )
+    }
+}
+
+/**
+ * Early input-forwarding candidate over the same prototypes later bound into member records.
+ * This permits no conversion and does not replace the emitter's complete MethodDef equality
+ * check. A primitive-bound shortcut has a separate live carrier and is not proved by this query.
+ * Unbound logical classifier placeholders do not establish an existing physical input carrier.
+ */
+internal fun DotNetGenericOwnerMemberFamilyPlan.hasIdenticalPrototypeInputCarriers(): Boolean {
+    val owner = source.parent as? IrClass ?: return false
+    if (source.parameters.any { it.type.dotNetPrimitiveTypeParameterUpperBoundOrNull() != null }) return false
+    val natural = prototypeParameterSlots(owner, logicalClassifierKey = { null }, eraseOwnerDependentCarrier = false)
+        ?: return false
+    val semantic = prototypeParameterSlots(owner, logicalClassifierKey = { null }, eraseOwnerDependentCarrier = true)
+        ?: return false
+    return natural.map { it.type } == semantic.map { it.type }
+}
+
+private fun DotNetGenericOwnerMemberFamilyPlan.exactPrototypePathUnboundSignatures(
+    owner: IrClass,
+    logicalClassifierKey: (IrClass) -> String?,
+): Map<DotNetGenericOwnerMemberFamilyRole, DotNetGenericOwnerPrototypeMethodSignatureSnapshot>? {
+    if (source.parameters.count { it.kind != IrParameterKind.DispatchReceiver } != parameterSlotDomains.size) return null
     return roles.associateWith { role ->
         val eraseOwnerDependentCarrier = role != DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY
         val returnType = if (eraseOwnerDependentCarrier && requiresSemanticResultCapability) {
@@ -6337,31 +6384,8 @@ private fun DotNetGenericOwnerMemberFamilyPlan.exactPrototypePathUnboundSignatur
         if (returnSlotDomain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
                 returnType.referencesOwnerParameter()
         ) return null
-        val parameterSlots = explicitParameters.mapIndexed { index, parameter ->
-            val physicalType = if (eraseOwnerDependentCarrier &&
-                index in semanticObjectParameterIndices
-            ) {
-                DotNetGenericOwnerPrototypeTypeSnapshot.objectType()
-            } else {
-                parameter.type.genericOwnerPrototypeType(
-                    owner = owner,
-                    logicalClassifierKey = logicalClassifierKey,
-                    use = DotNetGenericOwnerPrototypeTypeUse.CALLABLE,
-                    method = source,
-                    eraseOwnerDependentCarrier = eraseOwnerDependentCarrier,
-                ) ?: return null
-            }
-            val domain = parameterSlotDomains[index]
-            if (physicalType.kind == DotNetGenericOwnerPrototypeTypeKind.VOID ||
-                    domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
-                    physicalType.referencesOwnerParameter()
-            ) return null
-            DotNetGenericOwnerPrototypeValueSlotSnapshot(
-                domain = domain,
-                type = physicalType,
-                nullableReferenceFlags = DotNetNullableMetadata.flags(parameter.type, physicalType),
-            )
-        }
+        val parameterSlots = prototypeParameterSlots(owner, logicalClassifierKey, eraseOwnerDependentCarrier)
+            ?: return null
         DotNetGenericOwnerPrototypeMethodSignatureSnapshot(
             isInstance = true,
             genericArity = source.typeParameters.size,

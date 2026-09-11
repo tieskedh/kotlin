@@ -14,6 +14,9 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-equal-input-forwarding-2026-09-11.md`](generic-owner-equal-input-forwarding-2026-09-11.md)
+  records shared physical input-vector proof, nullable/array foreign override
+  forwarding, typed independent state/results, excluded inputs, and the inverse.
 - [`foreign-kotlin-interface-reference-graph-2026-09-11.md`](foreign-kotlin-interface-reference-graph-2026-09-11.md)
   isolates the incoming Kotlin/foreign declaration-graph gap in both epochs,
   records exact resolver evidence, and preserves the unpromoted red probe.

@@ -49,23 +49,28 @@ Current representation rules are linked from the navigation section below.
 
 ## Latest verification
 
-Nullable callable captures passed the rehearsal-physical lane on
+Identical input-carrier forwarding passed the rehearsal-physical lane on
 2026-09-11. Direct JUnit XML audit found no failures, errors, or skips:
 
 | Lane | Suites | Tests |
 | --- | ---: | ---: |
-| Focused candidate, both parsers and runtimes | 4 | 24 |
-| Same production-erased inverse | 4 | 24 |
+| Focused candidate, both parsers and runtimes | 4 | 40 |
+| Same production-erased inverse | 4 | 40 |
 | Complete backend suite | 22 | 402 |
 
 The inherited production-erased full checkpoint is `17676a90e1`: 212 suites,
 2,863 tests (backend 402, physical CLI model 6, full FIR2IR 2,327, integration
 128), all green. Its actual FIR2IR Test task was explicitly rerun without
 filters. This is not another full aggregate: the delta changes rehearsal-only
-physical-supertype admission, nullable entry facts, and compiler-callable
-InterfaceImpl binding. Production admission/mapping, Runtime/Stdlib, shared
-compiler, and schemas are unchanged. Prototype diagnostics consume the
-planner's conditional-edge decision; the production plan retains its old rule.
+foreign-override admission to compare the existing per-role input prototypes.
+The production fixed-leaf rule and extracted parameter-slot construction are
+unchanged. Emitter, production mapping, Runtime/Stdlib, shared compiler, and
+schemas are unchanged; final emitted MethodDef equality remains mandatory.
+
+The reproduced physical admission failure, ordinary C# override chains,
+nullable/array inputs, typed independent fields/results, negative cases, and
+stable source hashes are recorded in the
+[equal-input archive](docs/archive/generic-owner-equal-input-forwarding-2026-09-11.md).
 
 The two reproduced causes, preserved exact/mixed captures, physical fields,
 C# InterfaceMaps, and final gates are recorded in the
@@ -89,9 +94,11 @@ reference to the existing KLIB classifier. See the
 [reference-graph evidence](docs/archive/foreign-kotlin-interface-reference-graph-2026-09-11.md).
 This is not an input-conversion failure. Complete incoming binding remains
 open; neither that failure nor the outward contract proof justifies general
-`object -> !K` entry casts. Continue foreign-input forwarding first where the
-natural and semantic physical parameter contracts agree, retaining final
-MethodDef equality checks. Different-carrier conversion requires its own proof.
+`object -> !K` entry casts. Foreign-input forwarding now covers proven equal
+natural/semantic carriers, including boxed-or-null owner inputs and projected
+arrays. Different-carrier conversion, unbound named carriers, and unclosed
+broad-input policies require their own proof. The natural-interface grammar
+for nullable owner inputs with split-nullable results remains separate.
 Nullable callable capture is now closed for the selected fixed invocation
 contracts without a getter exception. Broader callable-reference metadata and
 nested nullable generic constructions remain separate requirements.
@@ -100,9 +107,10 @@ The census
 established that `AbstractMap` and `AbstractCollection` are blocked at foreign
 semantic override admission; their anonymous children's unavailable generic
 base binders are downstream, not permission for another capture exception.
-Split-result forwarding with proven fixed inputs is now closed. Owner-relative
-inputs and Common broad-candidate inputs still need their own complete physical
-conversion/semantic policy; a logical strict `K` alone is not that proof.
+Split-result forwarding with proven equal input carriers is now closed.
+Different-carrier owner-relative inputs and Common broad-candidate inputs
+still need their own complete physical conversion/semantic policy; a logical
+strict `K` alone is not that proof.
 Public/top-level semantic overload families also remain separate.
 
 Continue the source-built Runtime/Stdlib generic-owner rehearsal census within
