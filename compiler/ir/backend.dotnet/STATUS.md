@@ -49,36 +49,39 @@ Current representation rules are linked from the navigation section below.
 
 ## Latest verification
 
-The latest semantic owner-parameter result fix passed the rehearsal-physical
+The latest private semantic-overload identity fix passed the rehearsal-physical
 lane on 2026-09-11. Direct JUnit XML audit found no failures, errors, or skips:
 
 | Lane | Suites | Tests |
 | --- | ---: | ---: |
-| Focused candidate, both parsers and runtimes | 4 | 36 |
-| Same production-erased inverse | 4 | 36 |
+| Focused candidate, both parsers and runtimes | 4 | 40 |
+| Same production-erased inverse | 4 | 40 |
 | Complete backend suite | 22 | 402 |
 
 The inherited production-erased target-wide base is `3a2384f636`: 212 suites,
 2,821 tests (backend 400, `dotnet.ir` 6, FIR2IR 2,287, integration 128), all
 green. Its actual FIR2IR Test task was explicitly rerun without filters. This
-feature is not a new full aggregate: only rehearsal-selected semantic result
-propagation and fixture-local checks changed;
+feature is not a new full aggregate: only rehearsal-selected unbound private
+method naming and fixture-local checks changed;
 production ABI, Runtime/Stdlib, shared compiler, and artifact schemas are
 unchanged.
 
-The reproduced invalid constructed cast, retained typed state, separate-assembly
-Kotlin/C# result chains, nullable/value-class payloads, inverse, and commands
-are in the
+The reproduced overload collision, stable logical discriminators, unchanged
+public/exact entries, separate Kotlin/C# execution, inverse, and commands are
+in the
+[private overload archive](docs/archive/generic-owner-private-semantic-overloads-2026-09-11.md).
+The independently repaired result-chain regression is recorded in the
 [semantic result archive](docs/archive/generic-owner-semantic-owner-result-2026-09-11.md).
 The inherited full gate is recorded in the
 [invariant nullable SAM archive](docs/archive/generic-owner-invariant-nullable-sam-2026-09-11.md).
 
 ## Active work
 
-Resume the preserved private-overload naming change against this green base.
-The expanded matrix's semantic iterator result regression is repaired: no
-closed invariant interface is fabricated from a widened logical result, and
-unrelated typed state stays typed.
+Rerun the census after the private-overload identity repair. Public semantic
+overload families and callable-reference closure remain outside that bounded
+fix. The expanded matrix also retains the semantic iterator result repair:
+no closed invariant interface is fabricated from a widened logical result,
+and unrelated typed state stays typed.
 
 Continue the source-built Runtime/Stdlib generic-owner rehearsal census within
 phase 1 of the way forward. SAM admission passes and the census reaches

@@ -6,6 +6,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZATION_EN
 import org.jetbrains.kotlin.backend.dotnet.lower.dotNetGenericInterfaceBridgeMemberViewOrNull
 import org.jetbrains.kotlin.backend.dotnet.lower.isDotNetExternalObjectInstanceField
 import org.jetbrains.kotlin.backend.dotnet.serialization.DotNetIrMangler
+import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.descriptors.ValueClassBackendAgnosticApi
 import org.jetbrains.kotlin.ir.IrBuiltIns
@@ -612,6 +613,32 @@ internal fun IrSimpleFunction.dotNetAbiMethodNameOrNull(
     return dotNetErasedCarrierMethodNameOrNull(isErasedGenericClass, physicalBaseMethodName)
         ?: dotNetValueClassCarrierMethodNameOrNull(physicalBaseMethodName)
         ?: selectedBaseMethodName
+}
+
+/**
+ * A private method has no foreign/virtual slot to preserve, but its logical overload identity
+ * must survive a rehearsal interface parameter becoming object. Select the discriminator even
+ * when no competing overload exists. The caller must exclude already-bound physical identities
+ * and keep an existing exception/erased/value-class ABI name, which already hashes the signature.
+ * This is name selection, not permission to change the selected parameter carrier.
+ */
+internal fun IrSimpleFunction.dotNetPrivateSemanticInterfaceMethodNameOrNull(
+    signature: DotNetIlMethodSignature,
+    isReifiedGenericInterface: (IrClass) -> Boolean,
+): String? {
+    if (visibility != DescriptorVisibilities.PRIVATE || modality != Modality.FINAL ||
+        overriddenSymbols.isNotEmpty() || (parent as? IrClass)?.isInterface != false
+    ) return null
+    val losesInterfaceIdentity = parameters.withIndex().any { [index, parameter] ->
+        parameter.kind != IrParameterKind.DispatchReceiver &&
+                signature.parameterTypes.getOrNull(index) == DotNetIlValueType.Object &&
+                parameter.type.classOrNull?.owner?.let(isReifiedGenericInterface) == true
+    }
+    if (!losesInterfaceIdentity) return null
+    val logicalSignature = with(DotNetIrMangler) {
+        this@dotNetPrivateSemanticInterfaceMethodNameOrNull.signatureString(compatibleMode = false)
+    }
+    return "${dotNetIlMethodName()}__KotlinSemantic__${DotNetLibraryAbiCodec.logicalIdentityDigest(logicalSignature)}"
 }
 
 /** The Kotlin Any member and the CLR System.Object virtual slot that physically represents it. */

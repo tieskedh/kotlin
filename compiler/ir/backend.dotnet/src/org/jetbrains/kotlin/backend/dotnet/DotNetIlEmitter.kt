@@ -1342,7 +1342,15 @@ internal class DotNetIlEmitter(
                             member.dotNetGenericInterfaceCanonicalMethodName()
                         else -> member.dotNetAbiMethodNameOrNull(
                             isErasedGenericClass = typeMapper::isErasedGenericClass,
-                        )
+                        ) ?: if (genericOwnerRehearsal && boundCurrentMethod == null &&
+                            methodImplReservation == null &&
+                            genericOwnerPhysicalMethodDefEmissionBindings[member] == null
+                        ) {
+                            member.dotNetPrivateSemanticInterfaceMethodNameOrNull(
+                                signature,
+                                typeMapper::isReifiedGenericInterface,
+                            )
+                        } else null
                     }
                     // CLR method identity includes the generic ARITY (see
                     // dotNetIlGenericAritySuffix), for member methods as well as the facade gate

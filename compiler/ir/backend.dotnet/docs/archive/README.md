@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-private-semantic-overloads-2026-09-11.md`](generic-owner-private-semantic-overloads-2026-09-11.md)
+  records stable private overload identities after interface-to-object mapping,
+  unchanged public/exact contracts, separate Kotlin/C# execution, and the
+  focused candidate/inverse gate with callable-reference gaps left explicit.
 - [`generic-owner-semantic-owner-result-2026-09-11.md`](generic-owner-semantic-owner-result-2026-09-11.md)
   records semantic owner-parameter result propagation, the reproduced invalid
   nested construction, retained typed state, ordinary C# result/subclass

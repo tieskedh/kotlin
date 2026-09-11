@@ -207,6 +207,20 @@ Later Kotlin substitution may require a bridge to that slot; it may not rewrite
 the inherited slot as though it had originally been emitted with the substituted
 signature.
 
+Private, final, non-overriding class methods which have no BOUND MethodDef or
+MethodImpl reservation may select a logical-signature discriminator when a
+direct Kotlin-owned generic-interface parameter is physically `object` in the
+rehearsal. The name is selected before local MethodDef reservation, whether or
+not another overload currently collides. Declaration order and unrelated
+overloads cannot change it. Existing exception/erased/value-class names already
+carry the complete logical discriminator and remain unchanged. Kotlin IR names,
+callable-reference identity, parameter carriers, and KLIB stay logical/physical
+authority in their respective domains; call sites use the registered MethodDef.
+This does not rename public natural entries, virtual slots, producer/foreign
+endpoints, or already-bound compiler methods. It does not admit colliding
+constructors or general nested/capability-carrier overloads. Those require their
+own complete declaration-family naming contract, not collision-order suffixes.
+
 ### 3. Callable contracts compose independent policies
 
 Every admitted physical callable has one producer-owned contract containing at

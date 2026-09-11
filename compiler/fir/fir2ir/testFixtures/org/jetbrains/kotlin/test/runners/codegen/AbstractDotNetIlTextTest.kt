@@ -696,6 +696,12 @@ private class BackendCliDotNetFacade(
             testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
             directory = testServices.getOrCreateTempDirectory("generic-owner-state-authority"),
         )
+        validateGenericOwnerSemanticOverloads(
+            genericOwnerRehearsal, loweredInput.configuration.dotNetProducesLibrary,
+            loweredInput.configuration.dotNetTarget, completedOutput.output,
+            completedOutput.declarations, testServices.moduleStructure.originalTestDataFiles.single(),
+            testServices.getOrCreateTempDirectory("generic-owner-semantic-overloads"),
+        )
         validateGenericOwnerClosedConstructorInput(
             genericOwnerRehearsal, loweredInput.configuration.dotNetProducesLibrary,
             loweredInput.configuration.dotNetTarget, completedOutput.output,
@@ -20593,6 +20599,110 @@ private fun validateGenericOwnerAbstractForeignOutput(
             source, consumer, references = references, executable = true, warningsAsErrors = true,
         )
         DotNetTarget.NETSTANDARD_2_0 -> error("The abstract-output consumer needs an executable profile")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    listOf(runtime, stdlib).forEach { it.copyTo(directory.resolve(it.name), overwrite = true) }
+    executeSnapshotConsumer(target, consumer, directory)
+}
+
+private fun validateGenericOwnerSemanticOverloads(
+    genericOwnerRehearsal: Boolean,
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    declarations: Map<String, DotNetPhysicalDeclaration>,
+    testDataFile: File,
+    directory: File,
+) {
+    if ("DOTNET_GENERIC_OWNER_SEMANTIC_OVERLOAD_PROBE" !in testDataFile.readText()) return
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+    val metadata = DotNetClrMetadataReader.read(producer)
+    val prefix = "render__KotlinSemantic__"
+    if (!genericOwnerRehearsal) {
+        check(declarations.genericOwnerRehearsalEpochRecordIndexKeys().isEmpty())
+        check(metadata.methodDefinitions.none { it.name.startsWith(prefix) })
+        check(metadata.typeDefinitions.none { it.namespaceName == "generic.owner.semantic.overloads" && '`' in it.metadataName })
+        return
+    }
+    if (producer.name.equals("lib.dll", true)) {
+        val objectType = DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.OBJECT)
+        val selectedNames = listOf("Renderer", "Reordered", "Single", "StarRenderer").map { name ->
+            val owner = metadata.typeDefinitions.single {
+                it.namespaceName == "generic.owner.semantic.overloads" && it.metadataName == name
+            }
+            val methods = metadata.methodDefinitions.filter { it.declaringType == owner.handle }
+            val renamed = methods.single { it.name.startsWith(prefix) }
+            check(renamed.visibility == DotNetClrMethodVisibility.PRIVATE && !renamed.isVirtual)
+            check(renamed.signature.parameterTypes == listOf(objectType))
+            check(methods.filter { it.visibility != DotNetClrMethodVisibility.PRIVATE }.none { "__KotlinSemantic__" in it.name })
+            if (name != "Single") {
+                check(methods.single { it.name == "render" && it.signature.parameterTypes == listOf(objectType) }
+                    .visibility == DotNetClrMethodVisibility.PRIVATE)
+            }
+            renamed.name
+        }
+        check(selectedNames.take(3).distinct().size == 1) {
+            "Private physical names depend on owner/order/overload set: $selectedNames"
+        }
+        check(selectedNames.last() != selectedNames.first()) { "Star and open Kotlin signatures collapsed" }
+        val exact = metadata.typeDefinitions.single { it.metadataName == "ExactRenderer" }
+        val exactMethods = metadata.methodDefinitions.filter { it.declaringType == exact.handle }
+        check(exactMethods.none { "__KotlinSemantic__" in it.name })
+        check(exactMethods.count { it.name == "render" } == 2)
+        check(exactMethods.single { it.name == "render" && it.signature.parameterTypes.single() is DotNetClrTypeSignature.GenericInstance }
+            .visibility == DotNetClrMethodVisibility.PRIVATE)
+    }
+    if (producesLibrary) return
+    val lib = directory.resolve("lib.dll")
+    val platform = System.getProperty("kotlin.dotnet.test.platform.${target.description}.path")?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform for semantic overloads")
+    val runtime = platform.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platform.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    val source = directory.resolve("SemanticOverloadConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+            using System.Reflection;
+            using generic.owner.semantic.overloads;
+            public sealed class IntSource : Source<int> { public int read() { return 7; } }
+            public sealed class StringSource : Source<string> { public string read() { return "text"; } }
+            public static class SemanticOverloadConsumer
+            {
+                public static int Main()
+                {
+                    var value = new IntSource();
+                    var renderer = new Renderer(value);
+                    if (renderer.result() != "source:other" || renderer.defaultResult() != "source" ||
+                        renderer.publicEntry(value) != "source" || new Reordered(value).result() != "source:other:string" ||
+                        new generic.owner.semantic.overloads.Single(value).result() != "source" ||
+                        new StarRenderer(value).result() != "star:other" ||
+                        new ExactRenderer().result(new StringSource()) != "text:other")
+                        throw new InvalidOperationException("Private overload dispatch changed");
+                    const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
+                    if (!Object.ReferenceEquals(typeof(Renderer).GetField("source", Private).GetValue(renderer), value))
+                        throw new InvalidOperationException("Overload routing changed receiver state/identity");
+                    foreach (var method in typeof(Renderer).GetMethods(BindingFlags.Public | BindingFlags.Instance))
+                        if (method.Name.Contains("__KotlinSemantic__"))
+                            throw new InvalidOperationException("Private name escaped into the public CLR contract");
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val consumer = directory.resolve(if (target == DotNetTarget.NET48) "SemanticOverloadConsumer.exe" else "SemanticOverloadConsumer.dll")
+    val references = listOf(lib, runtime, stdlib)
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()),
+            source, consumer, references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()),
+            source, consumer, references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 -> error("The semantic-overload consumer needs an executable profile")
     }
     check(compilation.exitCode == 0) { compilation.output }
     listOf(runtime, stdlib).forEach { it.copyTo(directory.resolve(it.name), overwrite = true) }
