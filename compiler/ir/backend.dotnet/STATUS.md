@@ -49,43 +49,39 @@ Current representation rules are linked from the navigation section below.
 
 ## Latest verification
 
-Identical input-carrier forwarding passed the rehearsal-physical lane on
-2026-09-11. Direct JUnit XML audit found no failures, errors, or skips:
+The full production-erased aggregate passed on 2026-09-11 after correcting
+array-factory result widening. Direct JUnit XML audit found no failures,
+errors, or skips:
 
 | Lane | Suites | Tests |
 | --- | ---: | ---: |
-| Focused candidate, both parsers and runtimes | 4 | 40 |
-| Same production-erased inverse | 4 | 40 |
-| Complete backend suite | 22 | 402 |
+| Backend | 22 | 402 |
+| Physical CLI model | 1 | 6 |
+| Full FIR2IR, both parsers and runtimes | 187 | 2,351 |
+| CLI/library integration | 2 | 128 |
+| **Full production total** | **212** | **2,887** |
+| Focused array-result candidate | 4 | 4 |
 
-The inherited production-erased full checkpoint is `17676a90e1`: 212 suites,
-2,863 tests (backend 402, physical CLI model 6, full FIR2IR 2,327, integration
-128), all green. Its actual FIR2IR Test task was explicitly rerun without
-filters. This is not another full aggregate: the delta changes rehearsal-only
-foreign-override admission to compare the existing per-role input prototypes.
-The production fixed-leaf rule and extracted parameter-slot construction are
-unchanged. Emitter, production mapping, Runtime/Stdlib, shared compiler, and
-schemas are unchanged; final emitted MethodDef equality remains mandatory.
+This supersedes the inherited full checkpoint `17676a90e1`. The actual FIR2IR
+Test task was explicitly rerun without filters and without the rehearsal
+property. The unchanged physical CLI dependency remained up to date; its full
+six-test XML was audited too. Candidate execution covers PSI and LightTree on
+Framework 4.8 and .NET 10. The full production corpus includes the same fixture.
 
-The reproduced physical admission failure, ordinary C# override chains,
-nullable/array inputs, typed independent fields/results, negative cases, and
-stable source hashes are recorded in the
-[equal-input archive](docs/archive/generic-owner-equal-input-forwarding-2026-09-11.md).
-
-The two reproduced causes, preserved exact/mixed captures, physical fields,
-C# InterfaceMaps, and final gates are recorded in the
-[nullable capture archive](docs/archive/generic-owner-nullable-callable-capture-2026-09-11.md).
-
-The exact/nested input signatures, rejected native construction, and open
-incoming evidence gap are recorded in the
-[foreign input archive](docs/archive/generic-owner-foreign-input-contracts-2026-09-11.md).
-The actual split MethodDef payload, preserved typed/semantic state, ordinary
-C# override chains, InterfaceMap checks, and inverse are recorded in the
-[foreign split-result archive](docs/archive/generic-owner-foreign-split-result-2026-09-11.md).
-The independently fixed production nominal-box defect and full gate are in the
-[callable value-class archive](docs/archive/value-class-callable-nominal-result-2026-09-11.md).
+The reproduced failures, unchanged factory MethodDefs, separate-assembly
+execution, source hashes, and full gate are recorded in the
+[array-result archive](docs/archive/array-factory-object-results-2026-09-11.md).
+Earlier bounded feature evidence remains indexed in the
+[archive](docs/archive/README.md); this full gate does not establish complete
+candidate Runtime/Stdlib closure or authorize a production generic-owner switch.
 
 ## Active work
+
+Canonical array factories now accept an instruction-free widening of their
+actual Iterator/Iterable result to an already-selected object destination.
+Rerun the source-built candidate census from this green checkpoint. Exact array
+operands passed to generic constructors remain an independent proof candidate;
+do not infer their physical construction from the logical result type.
 
 The incoming DLL investigation isolates a missing Kotlin/foreign reference
 graph in both candidate and production: a C# MethodDef can reference a

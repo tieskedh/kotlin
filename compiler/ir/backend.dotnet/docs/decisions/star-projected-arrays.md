@@ -117,6 +117,16 @@ to foreign objects.
 No operation copies or wraps the vector. Aliasing, mutation by an exact view,
 and reference equality remain observable through every star view.
 
+Iterator/iterable factory MethodDefs retain their recorded physical result
+carriers. An intrinsic may place that reference in a destination to which the
+actual carrier is instruction-free assignable, including an already-selected
+semantic `object` result. The destination does not rewrite the factory's
+return signature, and a logical `Iterator<T>` or `Iterable<T>` result does not
+prove a natural CLR-generic construction. No extra result wrapper, cast, or
+boxing instruction repairs this reference widening. The same rule applies to
+the exact-vector factories; primitive iterator factories retain their exact
+primitive iterator class contract.
+
 ## Scope boundary
 
 This decision does not admit:

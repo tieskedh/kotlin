@@ -14,6 +14,9 @@ Use:
 
 Archived snapshots:
 
+- [`array-factory-object-results-2026-09-11.md`](array-factory-object-results-2026-09-11.md)
+  records actual factory-result reference widening, separate-library array
+  iteration, the four-lane candidate, and the fresh full production checkpoint.
 - [`generic-owner-equal-input-forwarding-2026-09-11.md`](generic-owner-equal-input-forwarding-2026-09-11.md)
   records shared physical input-vector proof, nullable/array foreign override
   forwarding, typed independent state/results, excluded inputs, and the inverse.

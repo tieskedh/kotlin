@@ -1761,7 +1761,10 @@ private class DotNetIlArrayIteratorIntrinsic(
             }
             ?: dotNetUnsupported("'iterator' has unsupported array receiver ${receiver.type.render()}")
         if (arrayType is DotNetIlValueType.ErasedGenericArray) {
-            if (expectedType != DotNetRuntimeTypes.iteratorType) {
+            // The factory's fixed MethodDef remains authority even when a semantic caller has
+            // already selected object storage. Permit only an actual reference widening; the
+            // logical Iterator<T> result cannot invent a constructed return from this factory.
+            if (!DotNetRuntimeTypes.iteratorType.isDotNetAssignableTo(expectedType)) {
                 dotNetUnsupported(
                     "erased Array<*>.iterator produces ${DotNetRuntimeTypes.iteratorType.nameInSignature}, " +
                             "not ${expectedType.nameInSignature}"
@@ -1801,7 +1804,7 @@ private class DotNetIlArrayIteratorIntrinsic(
             )
             return true
         }
-        if (expectedType != DotNetRuntimeTypes.iteratorType) return false
+        if (!DotNetRuntimeTypes.iteratorType.isDotNetAssignableTo(expectedType)) return false
         val elementType = arrayType.elementTypeForArrayProducer("iterator")
         codegen.emitExpression(receiver, arrayType)
         codegen.stdlibAssemblyName?.let(codegen::recordAssemblyReference)
@@ -1825,7 +1828,7 @@ private class DotNetIlArrayAsIterableIntrinsic(
         codegen: DotNetIlExpressionCodegen,
         expectedType: DotNetIlValueType,
     ): Boolean {
-        if (expectedType != DotNetRuntimeTypes.iterableType || call.arguments.size != 1) return false
+        if (!DotNetRuntimeTypes.iterableType.isDotNetAssignableTo(expectedType) || call.arguments.size != 1) return false
         val receiver = call.arguments.single()
             ?: dotNetUnsupported("missing array receiver for 'asIterable'")
         val arrayType = fixedArrayType ?: codegen.toDotNetIlValueType(receiver.type)
