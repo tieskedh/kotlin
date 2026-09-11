@@ -68,6 +68,7 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerPhysicalMemberName
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerPhysicalForeignOverrideProbeName
 import org.jetbrains.kotlin.backend.dotnet.dotNetDirectOwnerRelativeMethodBoundsOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetPrimitiveTypeParameterUpperBoundOrNull
+import org.jetbrains.kotlin.backend.dotnet.genericOwnerInvariantArrayElementOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetIlMethodName
 import org.jetbrains.kotlin.backend.dotnet.dotNetPhysicalValueStableName
 import org.jetbrains.kotlin.backend.dotnet.genericOwnerDeclarationIndependentLeafPrototypeOrNull
@@ -4741,7 +4742,13 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 // unresolved and casts/widening preserve their producer provenance.
                 val simple = candidate as? IrSimpleType ?: continue
                 val classifier = (simple.classifier as? IrClassSymbol)?.owner ?: continue
-                val hasNaturalConstruction = classifier.hasNaturalPhysicalConstruction()
+                // An invariant native vector has its existing element carrier even though
+                // Kotlin Array has no emitted generic TypeDef. A nominal-owner test must not
+                // mark an exact T[] boundary as a capability merely for that missing TypeDef.
+                // Equality below still forbids deriving another vector from a widened view.
+                val hasNaturalConstruction = classifier.hasNaturalPhysicalConstruction() ||
+                        context.configuration.dotNetGenericOwnerRehearsal &&
+                        candidate.genericOwnerInvariantArrayElementOrNull() != null
                 if (hasNaturalConstruction &&
                     (candidate == expected || candidate.sameInvariantTypeAs(expected))
                 ) return true
@@ -4816,6 +4823,15 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 val parameter = simple.classifier as? IrTypeParameterSymbol
                 if (parameter != null &&
                     parameter in candidate.dotNetGenericOwnerParameterDependencies(genericOwner)
+                ) return true
+                // Native vectors have an element carrier, not a Kotlin Array TypeDef. The root
+                // is already exact and both invariant array types are identical; recursively
+                // validate the element's existing authority without inventing covariance or
+                // exactifying an open-nullable/projected array view.
+                val arrayElement = candidate.genericOwnerInvariantArrayElementOrNull()
+                if (context.configuration.dotNetGenericOwnerRehearsal && arrayElement != null &&
+                    !arrayElement.hasUnsupportedDotNetExactGenericOwnerDependency(genericOwner) &&
+                    arrayElement.hasAdmittedExactPhysicalView(arrayElement, genericOwner)
                 ) return true
                 val classifier = (simple.classifier as? IrClassSymbol)?.owner
                 if (candidate.dotNetGenericOwnerParameterDependencies(genericOwner).isEmpty() ||

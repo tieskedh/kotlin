@@ -2904,6 +2904,59 @@ class DotNetGenericOwnerPhysicalValueModelTest {
     }
 
     @Test
+    fun `native array carriers bind their element without a nominal Array TypeDef`() {
+        val fixture = exactLocalCarrierFixture()
+        val first = fixture.owner.typeParameters[0].defaultType
+        val second = fixture.owner.typeParameters[1].defaultType
+        val parameter = boundTypeParameter(fixture.declarations, fixture.ownerIdentity, 0)
+        val vector = DotNetGenericOwnerSymbolicCarrierReference.SzArray(parameter)
+        val pair = fixture.pairType(second, first)
+        val cases = listOf(
+            nativeArrayType(first) to vector,
+            nativeArrayType(first, nullable = true) to vector,
+            nativeArrayType(nativeArrayType(first)) to DotNetGenericOwnerSymbolicCarrierReference.SzArray(vector),
+            nativeArrayType(pair) to DotNetGenericOwnerSymbolicCarrierReference.SzArray(fixture.bind(pair).carrier.type),
+        )
+        for ([logical, expected] in cases) {
+            val bound = fixture.bind(logical)
+            assertEquals(boundCarrier(fixture.declarations, expected), bound.carrier)
+            assertNull(bound.view, "a native vector is not a nominal constructed-class view")
+        }
+        assertEquals(
+            boundConstruction(fixture.declarations, fixture.holderIdentity, listOf(vector)),
+            fixture.bind(fixture.holderType(nativeArrayType(first))).carrier.type,
+        )
+    }
+
+    @Test
+    fun `native arrays do not exactify projected nullable or unbound elements`() {
+        val fixture = exactLocalCarrierFixture()
+        val first = fixture.owner.typeParameters[0].defaultType
+        val nullableParameter = IrSimpleTypeImpl(
+            fixture.owner.typeParameters[0].symbol,
+            SimpleTypeNullability.MARKED_NULLABLE,
+            arguments = emptyList(),
+            annotations = emptyList(),
+        )
+        val unsupported = listOf(
+            nativeArrayType(null),
+            nativeArrayType(first, variance = Variance.OUT_VARIANCE),
+            nativeArrayType(first, variance = Variance.IN_VARIANCE),
+            nativeArrayType(nullableParameter),
+            nativeArrayType(fixture.pair.typeParameters[0].defaultType),
+            nativeArrayType(fixture.pairType(first, first, firstVariance = Variance.OUT_VARIANCE)),
+        )
+        for (logical in unsupported) {
+            assertEquals(DotNetGenericOwnerPhysicalBindingResult.Unavailable, fixture.bindResult(logical))
+        }
+        fixture.holder.isValue = true
+        assertEquals(
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable,
+            fixture.bindResult(nativeArrayType(fixture.holderType(first))),
+        )
+    }
+
+    @Test
     fun `canonical local class arguments cannot contaminate an enclosing exact carrier`() {
         val generic = exactLocalCarrierFixture()
         val canonical = generic.copy(declarations = boundDeclarationIndex(
@@ -6902,6 +6955,27 @@ class DotNetGenericOwnerPhysicalValueModelTest {
     private fun localMethodIdentity(
         symbol: IrSimpleFunctionSymbolImpl,
     ) = DotNetGenericOwnerPhysicalMethodDefIdentity.Local(symbol, role = null)
+
+    private fun nativeArrayType(
+        element: IrType?,
+        variance: Variance = Variance.INVARIANT,
+        nullable: Boolean = false,
+    ): IrType {
+        val array = IrFactoryImpl.buildClass {
+            name = Name.identifier("Array")
+        }.also { declaration ->
+            declaration.parent = IrExternalPackageFragmentImpl(
+                IrExternalPackageFragmentSymbolImpl(), FqName("kotlin"), IrErrorModuleFragment,
+            )
+            declaration.addTypeParameter { name = Name.identifier("T") }
+        }
+        return IrSimpleTypeImpl(
+            array.symbol,
+            if (nullable) SimpleTypeNullability.MARKED_NULLABLE else SimpleTypeNullability.NOT_SPECIFIED,
+            listOf(element?.let { makeTypeProjection(it, variance) } ?: IrStarProjectionImpl),
+            annotations = emptyList(),
+        )
+    }
 
     private data class ExactLocalCarrierFixture(
         val owner: IrClass,

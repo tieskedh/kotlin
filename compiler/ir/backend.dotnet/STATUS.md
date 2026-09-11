@@ -75,13 +75,24 @@ Earlier bounded feature evidence remains indexed in the
 [archive](docs/archive/README.md); this full gate does not establish complete
 candidate Runtime/Stdlib closure or authorize a production generic-owner switch.
 
+The subsequent native-array constructor/state feature inherits that full
+checkpoint (`cafb56a4e8`). Its rehearsal-physical gate passed 32 candidate tests,
+404 backend tests, and the same 32-test production inverse, with no failures,
+errors, or skips. Both parsers and runtimes execute the Kotlin/C# fixture;
+actual PE and BOUND/final seals prove the original `!T[]` state and constructor
+inputs. Production selected routes remain unchanged. See the
+[array-constructor archive](docs/archive/generic-owner-array-constructor-2026-09-11.md).
+
 ## Active work
 
 Canonical array factories now accept an instruction-free widening of their
 actual Iterator/Iterable result to an already-selected object destination.
-Rerun the source-built candidate census from this green checkpoint. Exact array
-operands passed to generic constructors remain an independent proof candidate;
-do not infer their physical construction from the logical result type.
+Exact invariant array operands now preserve the selected generic constructor
+through their independently proven element/field/parameter carriers. Native
+arrays no longer require a fictitious nominal TypeDef in that proof. Rerun the
+source-built candidate census from this green checkpoint; the previous census
+contained 228 error lines. Broader projected/nullable array state and unproven
+element constructions are not admitted by this slice.
 
 The incoming DLL investigation isolates a missing Kotlin/foreign reference
 graph in both candidate and production: a C# MethodDef can reference a

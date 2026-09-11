@@ -715,6 +715,14 @@ private class BackendCliDotNetFacade(
             completedOutput.declarations, testServices.moduleStructure.originalTestDataFiles.single(),
             testServices.getOrCreateTempDirectory("generic-owner-closed-constructor"),
         )
+        validateGenericOwnerArrayConstructor(
+            genericOwnerRehearsal, loweredInput.configuration.dotNetProducesLibrary,
+            loweredInput.configuration.dotNetTarget, completedOutput.output,
+            completedOutput.declarations, completedOutput.genericOwnerPrototypes,
+            completedOutput.genericOwnerPhysicalStateEmissionSnapshots,
+            testServices.moduleStructure.originalTestDataFiles.single(),
+            testServices.getOrCreateTempDirectory("generic-owner-array-constructor"),
+        )
         validateGenericOwnerCanonicalState(
             genericOwnerRehearsal, loweredInput.configuration.dotNetProducesLibrary,
             loweredInput.configuration.dotNetTarget, completedOutput.output,
@@ -21427,6 +21435,142 @@ private fun validateGenericOwnerSemanticOverloads(
             source, consumer, references = references, executable = true, warningsAsErrors = true,
         )
         DotNetTarget.NETSTANDARD_2_0 -> error("The semantic-overload consumer needs an executable profile")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    listOf(runtime, stdlib).forEach { it.copyTo(directory.resolve(it.name), overwrite = true) }
+    executeSnapshotConsumer(target, consumer, directory)
+}
+
+private fun validateGenericOwnerArrayConstructor(
+    genericOwnerRehearsal: Boolean,
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    declarations: Map<String, DotNetPhysicalDeclaration>,
+    prototypes: List<DotNetGenericOwnerPrototypeSnapshot>,
+    stateEmissions: List<DotNetGenericOwnerPhysicalStateEmissionSnapshot>,
+    testDataFile: File,
+    directory: File,
+) {
+    if ("DOTNET_GENERIC_OWNER_ARRAY_CONSTRUCTOR_PROBE" !in testDataFile.readText()) return
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+    val metadata = DotNetClrMetadataReader.read(producer)
+    val namespaceName = "generic.owner.array.constructor"
+    if (!genericOwnerRehearsal) {
+        check(declarations.genericOwnerRehearsalEpochRecordIndexKeys().isEmpty())
+        check(stateEmissions.isEmpty())
+        check(metadata.typeDefinitions.none { it.namespaceName == namespaceName && '`' in it.metadataName })
+    }
+    if (producer.name.equals("lib.dll", true) && genericOwnerRehearsal) {
+        val parameter = DotNetClrTypeSignature.GenericParameter(DotNetClrGenericParameterKind.TYPE, 0)
+        val vector = DotNetClrTypeSignature.SzArray(parameter)
+        for (name in listOf("Source", "Cursor")) {
+            val owner = checkNotNull(metadata.typeDefinitions.singleOrNull {
+                it.namespaceName == namespaceName && it.metadataName == "$name`1"
+            }) { "Missing array owner $name: ${metadata.typeDefinitions.map { it.metadataName }}" }
+            val fields = metadata.fieldDefinitions.filter { it.declaringType == owner.handle }
+            check(fields.size == 1 && fields.single().name == "values" &&
+                    fields.single().visibility == DotNetClrFieldVisibility.PRIVATE &&
+                    !fields.single().isStatic && fields.single().signature.fieldType == vector) {
+                "Array storage must remain one actual !T[] FieldDef: $fields"
+            }
+            val constructor = checkNotNull(metadata.methodDefinitions.singleOrNull {
+                it.declaringType == owner.handle && it.name == ".ctor"
+            }) { "Missing unique array constructor on $name" }
+            check(constructor.signature.parameterTypes == listOf(vector)) { "Array constructor lost !T[]: $constructor" }
+            val seal = checkNotNull(stateEmissions.singleOrNull { it.ownerName == "$namespaceName.$name" }) {
+                val prototype = prototypes.singleOrNull { it.ownerName == "$namespaceName.$name" }
+                "Missing native-array state seal on $name: $stateEmissions; " +
+                        "parameters=${prototype?.physicalGenericParameters}; constructors=${prototype?.constructors}; " +
+                        "states=${prototype?.states}"
+            }
+            check(seal.logicalFieldName == "values" &&
+                    seal.requirement == DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN &&
+                    seal.carrierKind == DotNetGenericOwnerPhysicalStateEmissionCarrierKind.SZ_ARRAY) {
+                "Native array state requires BOUND-to-final authority: $seal"
+            }
+        }
+    }
+    if (producesLibrary || !genericOwnerRehearsal) return
+    val lib = directory.resolve("lib.dll")
+    check(lib.isFile)
+    val platform = System.getProperty("kotlin.dotnet.test.platform.${target.description}.path")?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform for the array-constructor probe")
+    val runtime = platform.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platform.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    val source = directory.resolve("ArrayConstructorConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+            using System.Reflection;
+            using generic.owner.array.constructor;
+
+            public static class ArrayConstructorConsumer
+            {
+                private const BindingFlags Fields = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
+
+                private static void Check<T>(T[] values)
+                {
+                    var source = new Source<T>(values);
+                    Read<T> result = source.make();
+                    var cursor = result as Cursor<T>;
+                    if (cursor == null || !Object.ReferenceEquals(source, (Build<T>)source) ||
+                        !Object.ReferenceEquals(typeof(Source<T>).GetField("values", Fields).GetValue(source), values) ||
+                        !Object.ReferenceEquals(typeof(Cursor<T>).GetField("values", Fields).GetValue(cursor), values) ||
+                        typeof(Source<T>).GetFields(Fields).Length != 1 || typeof(Cursor<T>).GetFields(Fields).Length != 1 ||
+                        typeof(Source<T>).GetField("values", Fields).FieldType != typeof(T[]) ||
+                        typeof(Cursor<T>).GetField("values", Fields).FieldType != typeof(T[]) ||
+                        typeof(Source<T>).GetConstructor(new Type[] { typeof(T[]) }) == null ||
+                        typeof(Cursor<T>).GetMethod("read").ReturnType != typeof(T) ||
+                        typeof(Source<T>).GetMethod("make").ReturnType != typeof(Read<T>))
+                        throw new InvalidOperationException("Array construction, field, result carrier, or identity changed");
+                    if (!Object.Equals(result.read(), values[0]) ||
+                        !Object.Equals(source.makeWith(new string[] { "unrelated" }).read(), values[0]))
+                        throw new InvalidOperationException("An unrelated input contaminated exact array state");
+                }
+
+                public static int Main()
+                {
+                    Check(new int[] { 41 });
+                    Check(new long[] { long.MaxValue });
+                    Check(new string[] { "text" });
+                    Check(new int?[] { null });
+                    Check(new int?[] { 43 });
+                    Check(new int[][] { new int[] { 47 } });
+                    Check(new Array[] { new int[] { 53 } });
+                    var values = new int[] { 59 };
+                    var source = new Source<int>(values);
+                    var cursor = source.make();
+                    values[0] = 61;
+                    if (cursor.read() != 61 || !Object.Equals(sourceKt.readIntSource(source), 61))
+                        throw new InvalidOperationException("Separate Kotlin semantic routing lost the original vector");
+                    var nominal = sourceKt.nominalSource();
+                    if (sourceKt.readNominal(nominal) != 19 ||
+                        typeof(Source<Id>).GetField("values", Fields).FieldType != typeof(Id[]) ||
+                        nominal.make().GetType() != typeof(Cursor<Id>))
+                        throw new InvalidOperationException("Value-class substitution was remapped to a payload array");
+                    Build<object> referenceView = new Source<string>(new string[] { "widened" });
+                    if (!Object.Equals(referenceView.make().read(), "widened"))
+                        throw new InvalidOperationException("Natural reference variance changed");
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val consumer = directory.resolve(if (target == DotNetTarget.NET48) "ArrayConstructorConsumer.exe" else "ArrayConstructorConsumer.dll")
+    val references = listOf(lib, runtime, stdlib)
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()),
+            source, consumer, references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()),
+            source, consumer, references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 -> error("The array-constructor consumer needs an executable profile")
     }
     check(compilation.exitCode == 0) { compilation.output }
     listOf(runtime, stdlib).forEach { it.copyTo(directory.resolve(it.name), overwrite = true) }

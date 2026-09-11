@@ -14,6 +14,9 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-array-constructor-2026-09-11.md`](generic-owner-array-constructor-2026-09-11.md)
+  records native-vector constructor provenance, complete BOUND/final state
+  seals, actual typed fields, separate Kotlin/C# consumption, and the inverse.
 - [`array-factory-object-results-2026-09-11.md`](array-factory-object-results-2026-09-11.md)
   records actual factory-result reference widening, separate-library array
   iteration, the four-lane candidate, and the fresh full production checkpoint.

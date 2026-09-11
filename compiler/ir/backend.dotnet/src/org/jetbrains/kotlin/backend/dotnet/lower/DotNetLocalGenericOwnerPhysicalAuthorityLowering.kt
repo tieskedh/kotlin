@@ -742,8 +742,8 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
      * First exact state grammar: every owner-dependent field is one private instance slot whose
      * carrier can be bound recursively from admitted local TypeDefs, fixed leaves, and this
      * owner's own GenericParams. Canonical local classes have no physical arguments; generic
-     * constructions require invariant arguments. Each field binds independently; unsupported
-     * nullability, foreign, and unresolved-writer shapes stay unavailable rather than guessed.
+     * constructions and native SZ arrays require invariant arguments. Each field binds independently;
+     * unsupported nullability, foreign, and unresolved-writer shapes stay unavailable rather than guessed.
      * Semantic state continues to select object explicitly.
      */
     private data class BoundStateFamilySelection(
@@ -801,7 +801,8 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
                         inputsByIdentity,
                     ) ?: return null
                     if (binding !is DotNetGenericOwnerSymbolicCarrierReference.Parameter &&
-                        binding !is DotNetGenericOwnerSymbolicCarrierReference.Constructed
+                        binding !is DotNetGenericOwnerSymbolicCarrierReference.Constructed &&
+                        binding !is DotNetGenericOwnerSymbolicCarrierReference.SzArray
                     ) return null
                     binding
                 }

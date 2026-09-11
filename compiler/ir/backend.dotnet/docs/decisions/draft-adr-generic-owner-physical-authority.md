@@ -318,8 +318,19 @@ backing fields, including fields for `val`, are emitted non-init-only today.
 For typed state, the exact logical field type must bind either to one direct
 owner parameter or to one exact invariant construction of already admitted
 local class/natural-interface TypeDefs whose recursive leaves are declaration-
-independent carriers or parameters of the same physical owner. A same-compilation
-class fixed on its canonical non-generic TypeDef is also an exact nominal
+independent carriers or parameters of the same physical owner. Native invariant
+SZ-array carriers bind recursively through the same element grammar; they do
+not require or create a nominal `Array` TypeDef. Reference nullability on the
+vector does not change its carrier, but open-nullable element parameters,
+stars/projections, and unbound element representations cannot select an exact
+vector. The selected physical owner parameter remains the element authority
+under later value/reference/nullable/value-class substitutions; a later logical
+approximation must not replace `!T[]` with `object[]` or an unboxed payload array.
+The rehearsal's boundary analysis must not classify an already exact invariant
+vector as a capability merely because `Array` lacks a nominal CLR TypeDef.
+This preserves the parameter's actual vector carrier; it does not select the
+carrier of an unproven element or an arbitrary projected source value.
+A same-compilation class fixed on its canonical non-generic TypeDef is also an exact nominal
 reference: its logical arguments (including stars/projections) do not create
 physical GenericParams. A field may therefore mention the enclosing owner's
 logical `T` without physically containing `!T`. This does not erase the
@@ -1030,6 +1041,15 @@ prefix grammar, conversion, boxing permission, proxy, wrapper, state, or ABI.
 #### Constructors, captures, and generated classes
 
 - Constructor results use their selected physical construction and state plan.
+- Native-array determining inputs follow the ordinary exact-input rule. The
+  early plan may preserve an already exact invariant vector only through its
+  admitted element-carrier grammar. BOUND recursively binds the existing
+  symbolic SZ-array carrier and compares the actual produced argument with the
+  required constructor input. A selected field/accessor carrier is evidence;
+  an `Array<T>` source spelling alone is not. Neither epoch invents an `Array`
+  TypeDef, proves vector covariance, or narrows a `System.Array` input. Failure
+  to prove an input cannot be repaired by replacing `new C<!T>` with
+  `new C<object>` while retaining a physically incompatible `!T[]` argument.
 - A capture preserves an exact fact only when the captured definition and the
   generated field's producer-wide storage plan both prove that carrier.
 - Mixed captures are analyzed independently; one broad capture does not erase
