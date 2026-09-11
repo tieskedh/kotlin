@@ -2740,6 +2740,9 @@ internal class DotNetIlEmitter(
             is DotNetIlValueType.GenericArray -> DotNetGenericOwnerObservedMethodCarrier.SzArray(
                 normalizeObservedMethodCarrier(carrier.elementType, raw, physicalOwner),
             )
+            is DotNetIlValueType.ErasedGenericArray -> DotNetGenericOwnerObservedMethodCarrier.CoreType(
+                genericOwnerSystemArrayIdentity(),
+            )
             is DotNetIlValueType.ByReference -> DotNetGenericOwnerObservedMethodCarrier.ByReference(
                 normalizeObservedMethodCarrier(carrier.elementType, raw, physicalOwner),
             )
@@ -2959,6 +2962,9 @@ internal class DotNetIlEmitter(
             }
             is DotNetIlValueType.GenericArray -> DotNetGenericOwnerObservedMethodCarrier.SzArray(
                 normalizeObservedTypeCarrier(carrier.elementType, physicalBinder),
+            )
+            is DotNetIlValueType.ErasedGenericArray -> DotNetGenericOwnerObservedMethodCarrier.CoreType(
+                genericOwnerSystemArrayIdentity(),
             )
             is DotNetIlValueType.ByReference -> DotNetGenericOwnerObservedMethodCarrier.ByReference(
                 normalizeObservedTypeCarrier(carrier.elementType, physicalBinder),

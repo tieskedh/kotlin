@@ -534,6 +534,11 @@ internal sealed interface DotNetGenericOwnerObservedMethodDefOwner {
  * fabricates a named type when its own final TypeDef map cannot resolve one.
  */
 internal sealed interface DotNetGenericOwnerObservedMethodCarrier {
+    /** A fixed non-generic core TypeDef observed from the selected physical carrier. */
+    data class CoreType(
+        val definition: DotNetGenericOwnerPhysicalTypeDefIdentity.CoreLibrary,
+    ) : DotNetGenericOwnerObservedMethodCarrier
+
     data class Leaf(
         val kind: DotNetGenericOwnerPhysicalTypeKind,
     ) : DotNetGenericOwnerObservedMethodCarrier {

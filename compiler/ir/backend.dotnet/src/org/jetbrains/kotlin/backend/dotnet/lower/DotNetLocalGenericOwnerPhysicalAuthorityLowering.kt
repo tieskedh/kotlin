@@ -66,6 +66,8 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.dotNetPhysicalValueStableName
 import org.jetbrains.kotlin.backend.dotnet.declarationIndependentLeafCarrierOrNull
 import org.jetbrains.kotlin.backend.dotnet.genericOwnerDeclarationIndependentLeafPrototypeOrNull
+import org.jetbrains.kotlin.backend.dotnet.genericOwnerOutputProjectedArrayElementOrNull
+import org.jetbrains.kotlin.backend.dotnet.genericOwnerSystemArrayIdentity
 import org.jetbrains.kotlin.backend.dotnet.genericOwnerPrototypePhysicalGenericParameters
 import org.jetbrains.kotlin.backend.dotnet.allowsGenericOwnerRehearsalAfterStateResolution
 import org.jetbrains.kotlin.backend.dotnet.isReifiedByGenericOwnerRehearsal
@@ -331,7 +333,21 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
             .associateBy(DotNetLocalGenericOwnerPhysicalTypeInput::identity)
         val recordedPlans = context.localGenericOwnerPhysicalClassEdgePlans.orEmpty()
 
-        val bound = earlyAuthority.advanceBound(additionalInputs) boundBuilder@{ declarations ->
+        val coreStateTypes = if (context.genericOwnerArchitecturePlans.values.any { plan ->
+                plan.isReifiedByGenericOwnerRehearsal && plan.stateCarriers.values.any { state ->
+                    state.requirement == DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN &&
+                            state.field.type.genericOwnerOutputProjectedArrayElementOrNull() != null
+                }
+            }) {
+            listOf(org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeDefReference(
+                genericOwnerSystemArrayIdentity(),
+                genericParameters = emptyList(),
+                category = org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+            ))
+        } else {
+            emptyList()
+        }
+        val bound = earlyAuthority.advanceBound(additionalInputs, coreStateTypes) boundBuilder@{ declarations ->
             val edgeSets = mutableListOf<DotNetGenericOwnerPhysicalDirectSupertypeEdgeSet>()
             for (source in classInputs) {
                 val recordedPlan = recordedPlans[source.identity.owner.owner] ?: continue
@@ -1058,6 +1074,13 @@ internal class DotNetLocalGenericOwnerPhysicalAuthorityLowering(
             inputsByIdentity,
         ) ?: return null
         if (parameter in context.genericOwnerCapabilityDeclarations) {
+            // The projected-array declaration fixes System.Array independently of the logical
+            // element bound. A requested owner capability cannot replace this core carrier;
+            // the actual mapper still emits System.Array. Final writer/field observations must
+            // prove that fact again, just as for the canonical local reference below.
+            if ((carrier as? DotNetGenericOwnerSymbolicCarrierReference.Constructed)?.definition ==
+                genericOwnerSystemArrayIdentity() && carrier.arguments.isEmpty()
+            ) return carrier
             // A request for a semantic view does not create a capability TypeDef. For a local
             // declaration fixed on its canonical class, the mapper retains that nominal class
             // when no capability exists. Bind that same physical truth; a real capability or an

@@ -38,6 +38,7 @@ import org.jetbrains.kotlin.ir.symbols.impl.IrClassSymbolImpl
 import org.jetbrains.kotlin.ir.symbols.impl.IrSimpleFunctionSymbolImpl
 import org.jetbrains.kotlin.ir.symbols.impl.IrVariableSymbolImpl
 import org.jetbrains.kotlin.ir.types.IrType
+import org.jetbrains.kotlin.ir.types.makeNullable
 import org.jetbrains.kotlin.ir.types.SimpleTypeNullability
 import org.jetbrains.kotlin.ir.types.defaultType
 import org.jetbrains.kotlin.ir.types.impl.IrSimpleTypeImpl
@@ -7102,7 +7103,71 @@ class DotNetGenericOwnerPhysicalValueModelTest {
         )
     }
 
-    private fun stateEmissionFixture(): StateEmissionFixture {
+    @Test
+    fun `projected array carrier requires a recorded fixed core type but never an element construction`() {
+        val fixture = exactLocalCarrierFixture()
+        val projected = nativeArrayType(fixture.owner.typeParameters.first().defaultType, Variance.OUT_VARIANCE)
+        assertEquals(DotNetGenericOwnerPhysicalBindingResult.Unavailable, fixture.bindResult(projected))
+        val declarations = boundDeclarationIndex(listOf(
+            typeDescription(fixture.ownerIdentity, 2, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+            typeDescription(genericOwnerSystemArrayIdentity(), 0, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+        ), emptyList())
+        val complete = fixture.copy(declarations = declarations)
+        val binding = complete.bind(projected)
+        assertNull(binding.view)
+        assertEquals(boundConstruction(declarations, genericOwnerSystemArrayIdentity(), emptyList()), binding.carrier.type)
+        assertEquals(binding.carrier, complete.bind(nativeArrayType(
+            fixture.owner.typeParameters.first().defaultType.makeNullable(), Variance.OUT_VARIANCE,
+        )).carrier)
+        for (type in listOf(
+            nativeArrayType(null),
+            nativeArrayType(fixture.owner.typeParameters.first().defaultType, Variance.IN_VARIANCE),
+            nativeArrayType(fixture.owner.typeParameters.first().defaultType.makeNullable()),
+        )) {
+            assertEquals(DotNetGenericOwnerPhysicalBindingResult.Unavailable, complete.bindResult(type))
+        }
+        for (shape in listOf(
+            typeDescription(genericOwnerSystemArrayIdentity(), 1, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS),
+            typeDescription(genericOwnerSystemArrayIdentity(), 0, DotNetGenericOwnerPhysicalNamedTypeCategory.VALUE_TYPE),
+        )) {
+            val wrong = boundDeclarationIndex(listOf(
+                typeDescription(fixture.ownerIdentity, 2, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS), shape,
+            ), emptyList())
+            assertIs<DotNetGenericOwnerPhysicalBindingResult.Conflict>(fixture.copy(declarations = wrong).bindResult(projected))
+        }
+    }
+
+    @Test
+    fun `core array state seal requires matching physical field and writer identities`() {
+        val fixture = stateEmissionFixture(coreArray = true)
+        assertEquals(DotNetGenericOwnerPhysicalStateEmissionCarrierKind.CONSTRUCTED,
+            fixture.authority.sealFinalStateFields(listOf(fixture.scopeObservation())).single().carrierKind)
+        for (wrong in listOf(
+            DotNetGenericOwnerObservedMethodCarrier.Other("class [mscorlib]System.Array"),
+            DotNetGenericOwnerObservedMethodCarrier.CoreType(
+                DotNetGenericOwnerPhysicalTypeDefIdentity.CoreLibrary(listOf("System", "String")),
+            ),
+            DotNetGenericOwnerObservedMethodCarrier.Leaf(DotNetGenericOwnerPhysicalTypeKind.OBJECT),
+            DotNetGenericOwnerObservedMethodCarrier.SzArray(
+                DotNetGenericOwnerObservedMethodCarrier.OwnerParameter(fixture.observedOwner, 0),
+            ),
+        )) {
+            assertFailsWith<IllegalStateException> {
+                fixture.authority.sealFinalStateFields(listOf(fixture.scopeObservation(typeDefs = listOf(
+                    fixture.ownerObservation.withSelectedField(fixture.selectedFieldObservation.copy(carrier = wrong)),
+                ))))
+            }
+            assertFailsWith<IllegalStateException> {
+                fixture.authority.sealFinalStateFields(listOf(fixture.scopeObservation(typeDefs = listOf(
+                    fixture.ownerObservation.copy(methodDefParameters = listOf(
+                        fixture.writerParameterObservation.copy(carrier = wrong),
+                    )),
+                ))))
+            }
+        }
+    }
+
+    private fun stateEmissionFixture(coreArray: Boolean = false): StateEmissionFixture {
         val owner = testOwner("StateOwner")
         val packageFragment = IrExternalPackageFragmentImpl(
             IrExternalPackageFragmentSymbolImpl(),
@@ -7117,7 +7182,11 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             declaration.parent = packageFragment
             packageFragment.declarations += declaration
         }
-        val selectedField = testField(owner, "state")
+        val selectedField = testField(owner, "state", if (coreArray) {
+            nativeArrayType(owner.typeParameters.single().defaultType, Variance.OUT_VARIANCE)
+        } else {
+            owner.typeParameters.single().defaultType
+        })
         val writer = IrFactoryImpl.buildFun {
             name = Name.identifier("replace")
             returnType = selectedField.type
@@ -7148,8 +7217,16 @@ class DotNetGenericOwnerPhysicalValueModelTest {
                 >(DotNetLocalGenericOwnerPhysicalAuthority.bindEarly(listOf(ownerInput))).value
         val authority = assertIs<
                 DotNetGenericOwnerPhysicalBindingResult.Bound<DotNetLocalGenericOwnerPhysicalAuthority>,
-                >(earlyAuthority.advanceBound(emptyList()) { provisional ->
-            val ownerParameter = boundTypeParameter(provisional, ownerIdentity, 0)
+                >(earlyAuthority.advanceBound(emptyList(), if (coreArray) {
+            listOf(typeDescription(genericOwnerSystemArrayIdentity(), 0, DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS))
+        } else {
+            emptyList()
+        }) { provisional ->
+            val ownerParameter = if (coreArray) {
+                boundConstruction(provisional, genericOwnerSystemArrayIdentity(), emptyList())
+            } else {
+                boundTypeParameter(provisional, ownerIdentity, 0)
+            }
             val fieldDefinition = fieldDescription(
                 selectedField.symbol,
                 ownerIdentity,
@@ -7199,7 +7276,8 @@ class DotNetGenericOwnerPhysicalValueModelTest {
             visibility = DotNetIlRawMethodDefVisibility.PRIVATE,
             isStatic = false,
             isInitOnly = false,
-            carrier = DotNetGenericOwnerObservedMethodCarrier.OwnerParameter(observedOwner, 0),
+            carrier = if (coreArray) DotNetGenericOwnerObservedMethodCarrier.CoreType(genericOwnerSystemArrayIdentity())
+                else DotNetGenericOwnerObservedMethodCarrier.OwnerParameter(observedOwner, 0),
         )
         val ordinaryFieldObservation = DotNetGenericOwnerPhysicalFieldDefObservation(
             physicalField = ordinaryField.symbol,
@@ -7215,7 +7293,7 @@ class DotNetGenericOwnerPhysicalValueModelTest {
         val writerParameterObservation = DotNetGenericOwnerPhysicalMethodDefParameterObservation(
             writer.symbol,
             writerParameter.symbol,
-            DotNetGenericOwnerObservedMethodCarrier.OwnerParameter(observedOwner, 0),
+            selectedFieldObservation.carrier,
         )
         val ownerObservation = DotNetGenericOwnerPhysicalTypeDefEmissionObservation(
             physicalType = DotNetGenericOwnerObservedMethodDefOwner.Local(observedOwner),

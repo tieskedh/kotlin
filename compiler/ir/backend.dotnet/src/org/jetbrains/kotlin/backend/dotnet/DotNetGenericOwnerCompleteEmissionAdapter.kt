@@ -1019,6 +1019,8 @@ private fun bindSemanticEquivalenceTargetSignature(
                         "semantic-equivalence target binding is total",
                     )
                 }
+            is DotNetGenericOwnerObservedMethodCarrier.CoreType ->
+                DotNetGenericOwnerPhysicalBindingResult.Bound(carrier)
             is DotNetGenericOwnerObservedMethodCarrier.Other ->
                 DotNetGenericOwnerPhysicalBindingResult.Conflict(
                     "the target signature contains a carrier outside the bounded identity vocabulary",

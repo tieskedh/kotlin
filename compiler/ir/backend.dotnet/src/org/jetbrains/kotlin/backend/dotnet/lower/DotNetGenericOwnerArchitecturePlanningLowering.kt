@@ -36,6 +36,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalGenericPara
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeDefIdentity
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeParameterVariance
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeMember
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeTypeKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeTypeSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerSemanticHookReason
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalCallableResultLayoutRecord
@@ -72,6 +73,7 @@ import org.jetbrains.kotlin.backend.dotnet.genericOwnerInvariantArrayElementOrNu
 import org.jetbrains.kotlin.backend.dotnet.dotNetIlMethodName
 import org.jetbrains.kotlin.backend.dotnet.dotNetPhysicalValueStableName
 import org.jetbrains.kotlin.backend.dotnet.genericOwnerDeclarationIndependentLeafPrototypeOrNull
+import org.jetbrains.kotlin.backend.dotnet.genericOwnerOutputProjectedArrayElementOrNull
 import org.jetbrains.kotlin.backend.dotnet.hasIdenticalPrototypeInputCarriers
 import org.jetbrains.kotlin.backend.dotnet.genericOwnerConditionalSupertypeParameterIndices
 import org.jetbrains.kotlin.backend.dotnet.genericOwnerPrototypePhysicalGenericParameters
@@ -137,6 +139,7 @@ import org.jetbrains.kotlin.ir.expressions.IrTypeOperatorCall
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperator
 import org.jetbrains.kotlin.ir.expressions.IrWhen
 import org.jetbrains.kotlin.ir.expressions.impl.IrReturnImpl
+import org.jetbrains.kotlin.ir.overrides.isEffectivelyPrivate
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
@@ -5116,6 +5119,18 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 if (DescriptorVisibilities.isPrivate(function.visibility) && !isOwnerConstructor) return@forEach
                 function.parameters.forEach { parameter ->
                     if (parameter.kind == IrParameterKind.DispatchReceiver) return@forEach
+                    // The fixed System.Array carrier does not enforce Kotlin's element bound
+                    // for raw foreign callers. Until the checked-entry proof is available,
+                    // do not use such an entry to close an owner-dependent state graph. This
+                    // is an entry-admission restriction, not a different storage carrier.
+                    if (context.configuration.dotNetGenericOwnerRehearsal &&
+                        !function.isEffectivelyPrivate() &&
+                        parameter.type.referencesGenericOwnerParameter(owner) &&
+                        parameter.type.genericOwnerOutputProjectedArrayElementOrNull() != null
+                    ) {
+                        addProvenance(parameter, TypedWriteValueFact.Unresolved)
+                        return@forEach
+                    }
                     // A direct open nullable parameter has a fixed boxed-or-null entry, not
                     // !T. Seed that physical boundary so a captured nullable value does not
                     // leave the whole owner's otherwise exact state graph unresolved. The
@@ -5340,6 +5355,11 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
         private fun carrierCoordinate(type: IrType): TypedWriteCarrierCoordinate? {
             type.genericOwnerDeclarationIndependentLeafPrototypeOrNull()?.let { leaf ->
                 return TypedWriteCarrierCoordinate.Leaf(leaf.kind)
+            }
+            if (context.configuration.dotNetGenericOwnerRehearsal &&
+                type.genericOwnerOutputProjectedArrayElementOrNull() != null
+            ) {
+                return TypedWriteCarrierCoordinate.Leaf(DotNetGenericOwnerPrototypeTypeKind.SYSTEM_ARRAY)
             }
             val simple = type as? IrSimpleType ?: return null
             val parameter = (simple.classifier as? IrTypeParameterSymbol)?.owner

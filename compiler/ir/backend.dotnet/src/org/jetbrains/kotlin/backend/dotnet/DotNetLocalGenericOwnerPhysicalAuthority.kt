@@ -1390,6 +1390,7 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
 
     fun advanceBound(
         additionalInputs: Iterable<DotNetLocalGenericOwnerPhysicalTypeInput>,
+        additionalTypeDefinitions: Iterable<DotNetGenericOwnerPhysicalTypeDefReference> = emptyList(),
         buildBoundInput: (
             DotNetGenericOwnerPhysicalDeclarationIndex,
         ) -> DotNetGenericOwnerPhysicalBindingResult<DotNetLocalGenericOwnerPhysicalBoundInput>,
@@ -1414,7 +1415,8 @@ internal class DotNetLocalGenericOwnerPhysicalAuthority private constructor(
                 }
             }
         }
-        val additionalReferences = stableAdditionalInputs.map(DotNetLocalGenericOwnerPhysicalTypeInput::asReference)
+        val additionalReferences = stableAdditionalInputs.map(DotNetLocalGenericOwnerPhysicalTypeInput::asReference) +
+                additionalTypeDefinitions
         val provisional = when (val binding = earlyDeclarations.advance(
             nextEpoch = DotNetGenericOwnerPhysicalAuthorityEpoch.BOUND_DECLARATION_INDEX,
             typeDefinitions = additionalReferences,

@@ -6059,7 +6059,9 @@ private fun IrType.genericOwnerPrototypeType(
     if (classifier.fqNameWhenAvailable?.asString() == "kotlin.Array") {
         val elementProjection = simpleType.arguments.singleOrNull() as? IrTypeProjection ?: return null
         if (elementProjection.variance != Variance.INVARIANT) {
-            return if (use == DotNetGenericOwnerPrototypeTypeUse.CALLABLE) {
+            return if (use == DotNetGenericOwnerPrototypeTypeUse.CALLABLE ||
+                elementProjection.variance == Variance.OUT_VARIANCE
+            ) {
                 DotNetGenericOwnerPrototypeTypeSnapshot.systemArrayType()
             } else {
                 null

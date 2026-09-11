@@ -14,6 +14,9 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-projected-array-state-2026-09-11.md`](generic-owner-projected-array-state-2026-09-11.md)
+  records fixed System.Array state without owner erasure, private-entry proof,
+  BOUND/final seals, same-array Kotlin/C# execution, and the focused inverse.
 - [`generic-owner-array-constructor-2026-09-11.md`](generic-owner-array-constructor-2026-09-11.md)
   records native-vector constructor provenance, complete BOUND/final state
   seals, actual typed fields, separate Kotlin/C# consumption, and the inverse.

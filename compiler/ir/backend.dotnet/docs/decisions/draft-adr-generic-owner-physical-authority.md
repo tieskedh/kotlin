@@ -330,6 +330,33 @@ The rehearsal's boundary analysis must not classify an already exact invariant
 vector as a capability merely because `Array` lacks a nominal CLR TypeDef.
 This preserves the parameter's actual vector carrier; it does not select the
 carrier of an unproven element or an arbitrary projected source value.
+
+An output-projected array has a different, declaration-stable physical fact:
+`Array<out T>` uses the non-generic core `System.Array` TypeDef. The owner
+parameter remains a logical read bound, not an element in that FieldDef's
+physical construction. Its complete writer graph can therefore preserve one
+`System.Array` field without erasing the containing `C<T>` or fabricating a
+`T[]` view. Different compatible SZ vectors can successively inhabit that
+same slot; their array identity and mutation through exact aliases survive.
+The existing projected-array read operation performs the logical result
+recovery. This is not a promise of unboxed projected element reads.
+
+The core TypeDef must be present with its fixed class/zero-arity shape in the
+BOUND declaration index. Binding yields the carrier, not an exact element
+view. Final FieldDef and writer-parameter observations independently identify
+the same core type; a rendered type-name string is not equivalent evidence.
+An owner-capability request on that writer is not a physical capability
+TypeDef and cannot overrule the already-selected fixed core carrier. The
+emitter must still independently prove the actual parameter stayed System.Array.
+Privacy does not change this physical carrier. The current admission proof
+nevertheless does not seed an owner-dependent projected-array parameter at an
+ordinary foreign-accessible entry: it lacks the checked bound required by the
+[projected-array decision](bounded-output-projected-arrays.md). Compiler-private
+entries may receive Kotlin-checked values; a public exact `T[]` factory may
+perform a legal projection internally. Extending raw `System.Array` entries
+requires the separate classifier/element-bound guard proof, not a relaxation
+of the state seal. Imported CLR array MethodDefs are unaffected.
+
 A same-compilation class fixed on its canonical non-generic TypeDef is also an exact nominal
 reference: its logical arguments (including stars/projections) do not create
 physical GenericParams. A field may therefore mention the enclosing owner's
@@ -383,7 +410,7 @@ owner-level priority/disposition summary cannot conceal
 are admitted, and CLR-reference nullability may retain the same verifier
 carrier. Stars/projections in physical generic constructions, nullable bare
 owner parameters, substitution-dependent value/value-class nullability,
-arrays, volatile fields, open writer
+other array forms, volatile fields, open writer
 graphs, external state authority, and declaration-independent slots remain
 outside this grammar.
 

@@ -220,6 +220,10 @@ private fun DotNetGenericOwnerSymbolicCarrierReference.matchesFinalStateCarrier(
                 actual.index == index
     }
     is DotNetGenericOwnerSymbolicCarrierReference.Constructed -> {
+        if (definition is DotNetGenericOwnerPhysicalTypeDefIdentity.CoreLibrary) {
+            return arguments.isEmpty() &&
+                    (observed as? DotNetGenericOwnerObservedMethodCarrier.CoreType)?.definition == definition
+        }
         val expectedDefinition = definition as? DotNetGenericOwnerPhysicalTypeDefIdentity.Local
             ?: return false
         val actual = observed as? DotNetGenericOwnerObservedMethodCarrier.LocalConstruction

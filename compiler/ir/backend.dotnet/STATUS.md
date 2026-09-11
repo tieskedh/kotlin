@@ -83,16 +83,26 @@ actual PE and BOUND/final seals prove the original `!T[]` state and constructor
 inputs. Production selected routes remain unchanged. See the
 [array-constructor archive](docs/archive/generic-owner-array-constructor-2026-09-11.md).
 
+The latest projected-array state feature inherits that same full checkpoint.
+Its 32 candidate tests, 406 backend tests, and 32-test production inverse all
+passed without failures, errors, or skips. The private implementation retains
+its generic owner with one System.Array field; BOUND/final seals and ordinary
+C# consumption verify the physical contract and original-array identity. See
+the [projected-array archive](docs/archive/generic-owner-projected-array-state-2026-09-11.md).
+
 ## Active work
 
 Canonical array factories now accept an instruction-free widening of their
 actual Iterator/Iterable result to an already-selected object destination.
 Exact invariant array operands now preserve the selected generic constructor
 through their independently proven element/field/parameter carriers. Native
-arrays no longer require a fictitious nominal TypeDef in that proof. Rerun the
-source-built candidate census from this green checkpoint; the previous census
-contained 228 error lines. Broader projected/nullable array state and unproven
-element constructions are not admitted by this slice.
+arrays no longer require a fictitious nominal TypeDef in that proof. Fixed
+output-projected array state now also preserves a generic owner through its
+complete private writer graph, using System.Array rather than a fabricated
+T[] or object[]. Rerun the source-built candidate census from this green
+checkpoint; the census after `af73c6519e` contained 227 error lines. Raw public
+projected-array entries, broader nullable array state, and unproven element
+constructions remain outside this proof.
 
 The incoming DLL investigation isolates a missing Kotlin/foreign reference
 graph in both candidate and production: a C# MethodDef can reference a

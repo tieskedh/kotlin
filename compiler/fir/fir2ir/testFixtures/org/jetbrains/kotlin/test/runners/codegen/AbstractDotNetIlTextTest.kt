@@ -723,6 +723,13 @@ private class BackendCliDotNetFacade(
             testServices.moduleStructure.originalTestDataFiles.single(),
             testServices.getOrCreateTempDirectory("generic-owner-array-constructor"),
         )
+        validateGenericOwnerProjectedArrayState(
+            genericOwnerRehearsal, loweredInput.configuration.dotNetProducesLibrary,
+            loweredInput.configuration.dotNetTarget, completedOutput.output, completedOutput.declarations,
+            completedOutput.genericOwnerPhysicalStateEmissionSnapshots, completedOutput.genericOwnerPrototypes,
+            testServices.moduleStructure.originalTestDataFiles.single(),
+            testServices.getOrCreateTempDirectory("generic-owner-projected-array-state"),
+        )
         validateGenericOwnerCanonicalState(
             genericOwnerRehearsal, loweredInput.configuration.dotNetProducesLibrary,
             loweredInput.configuration.dotNetTarget, completedOutput.output,
@@ -21435,6 +21442,125 @@ private fun validateGenericOwnerSemanticOverloads(
             source, consumer, references = references, executable = true, warningsAsErrors = true,
         )
         DotNetTarget.NETSTANDARD_2_0 -> error("The semantic-overload consumer needs an executable profile")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    listOf(runtime, stdlib).forEach { it.copyTo(directory.resolve(it.name), overwrite = true) }
+    executeSnapshotConsumer(target, consumer, directory)
+}
+
+private fun validateGenericOwnerProjectedArrayState(
+    rehearsal: Boolean,
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    declarations: Map<String, DotNetPhysicalDeclaration>,
+    stateEmissions: List<DotNetGenericOwnerPhysicalStateEmissionSnapshot>,
+    prototypes: List<DotNetGenericOwnerPrototypeSnapshot>,
+    testDataFile: File,
+    directory: File,
+) {
+    if ("DOTNET_GENERIC_OWNER_PROJECTED_ARRAY_STATE_PROBE" !in testDataFile.readText()) return
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+    val metadata = DotNetClrMetadataReader.read(producer)
+    if (!rehearsal) {
+        check(declarations.genericOwnerRehearsalEpochRecordIndexKeys().isEmpty())
+        check(stateEmissions.isEmpty())
+        check(metadata.typeDefinitions.none {
+            it.namespaceName == "generic.owner.projected.array" && '`' in it.metadataName
+        })
+        return
+    }
+    if (producer.name.equals("lib.dll", true)) {
+        val window = metadata.typeDefinitions.single {
+            it.namespaceName == "generic.owner.projected.array" && it.metadataName == "Window`1"
+        }
+        val field = metadata.fieldDefinitions.filter { it.declaringType == window.handle }.single()
+        check(field.name == "values" && field.visibility == DotNetClrFieldVisibility.PRIVATE && !field.isStatic)
+        val fieldType = field.signature.fieldType as? DotNetClrTypeSignature.Named
+            ?: error("Projected array state must be a named System.Array, not a vector or object")
+        check(!fieldType.isValueType && metadata.typeReferences.any {
+            it.handle == fieldType.type && it.namespaceName == "System" && it.metadataName == "Array"
+        })
+        val constructor = metadata.methodDefinitions.single { it.declaringType == window.handle && it.name == ".ctor" }
+        check(constructor.signature.parameterTypes == listOf(field.signature.fieldType))
+        val seal = checkNotNull(stateEmissions.singleOrNull {
+            it.ownerName == "generic.owner.projected.array.Window" && it.logicalFieldName == "values"
+        }) {
+            val prototype = prototypes.singleOrNull { it.ownerName == "generic.owner.projected.array.Window" }
+            "The private projected-array field lacks its BOUND-to-final seal: $stateEmissions; " +
+                    "states=${prototype?.states}; constructors=${prototype?.constructors}"
+        }
+        check(seal.requirement == DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN &&
+                seal.carrierKind == DotNetGenericOwnerPhysicalStateEmissionCarrierKind.CONSTRUCTED)
+        check(metadata.typeDefinitions.any {
+            it.namespaceName == "generic.owner.projected.array" && it.metadataName == "PublicWindow"
+        })
+        check(metadata.typeDefinitions.none {
+            it.namespaceName == "generic.owner.projected.array" && it.metadataName == "PublicWindow`1"
+        })
+    }
+    if (producesLibrary) return
+    val lib = directory.resolve("lib.dll")
+    check(lib.isFile)
+    val platform = System.getProperty("kotlin.dotnet.test.platform.${target.description}.path")?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET platform for projected-array state")
+    val runtime = platform.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platform.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    val source = directory.resolve("ProjectedArrayStateConsumer.cs").apply {
+        writeText("""
+            using System;
+            using System.Reflection;
+            using generic.owner.projected.array;
+            public static class ProjectedArrayStateConsumer
+            {
+                private const BindingFlags Fields = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
+                private static void Check<T>(T[] values)
+                {
+                    Read<T> reader = viewKt.exact<T>(values);
+                    var type = reader.GetType();
+                    if (type.IsPublic || type.GetGenericArguments()[0] != typeof(T) ||
+                        type.BaseType.GetGenericArguments()[0] != typeof(T) ||
+                        type.GetFields(Fields).Length != 1 ||
+                        type.GetField("values", Fields).FieldType != typeof(Array) ||
+                        type.GetConstructor(new Type[] { typeof(Array) }) == null ||
+                        !Object.ReferenceEquals(type.GetField("values", Fields).GetValue(reader), values) ||
+                        !Object.Equals(reader.read(), values[0]))
+                        throw new InvalidOperationException("Private owner, generic base, field, or identity changed");
+                }
+                public static int Main()
+                {
+                    Check(new int[] { 41 });
+                    Check(new long[] { long.MaxValue });
+                    Check(new string[] { "text" });
+                    Check(new int?[] { null });
+                    Check(new int?[] { 43 });
+                    Check(new int[][] { new int[] { 47 } });
+                    var values = new int[] { 53 };
+                    Read<object> wide = viewKt.widenedInts(values);
+                    if (wide.GetType().GetGenericArguments()[0] != typeof(object) ||
+                        !Object.ReferenceEquals(wide.GetType().GetField("values", Fields).GetValue(wide), values))
+                        throw new InvalidOperationException("Widening fabricated a vector or lost owner construction");
+                    values[0] = 59;
+                    if (!Object.Equals(wide.read(), 59) || !viewKt.changing() || viewKt.nominalValue(viewKt.nominal()) != 19)
+                        throw new InvalidOperationException("Mutation, replacement, or nominal substitution changed");
+                    return 0;
+                }
+            }
+        """.trimIndent())
+    }
+    val consumer = directory.resolve(if (target == DotNetTarget.NET48) "ProjectedArrayStateConsumer.exe" else "ProjectedArrayStateConsumer.dll")
+    val references = listOf(lib, runtime, stdlib)
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()), source, consumer,
+            references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()), source, consumer,
+            references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 -> error("The projected-array consumer needs an executable profile")
     }
     check(compilation.exitCode == 0) { compilation.output }
     listOf(runtime, stdlib).forEach { it.copyTo(directory.resolve(it.name), overwrite = true) }

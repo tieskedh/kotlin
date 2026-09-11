@@ -97,6 +97,12 @@ internal fun DotNetGenericOwnerSymbolicCarrierReference.projectBoundLocalCarrier
         }
     }
     is DotNetGenericOwnerSymbolicCarrierReference.Constructed -> {
+        if (definition == genericOwnerSystemArrayIdentity()) {
+            check(arguments.isEmpty()) {
+                "Internal .NET backend error: BOUND $authorityDescription changed System.Array arity"
+            }
+            return DotNetIlValueType.ErasedGenericArray(typeMapper.coreLibrary.reference)
+        }
         val constructionOwner = (definition as? DotNetGenericOwnerPhysicalTypeDefIdentity.Local)
             ?.methodAuthorityClassInfoOrNull(typeMapper)
             ?: dotNetUnsupported(

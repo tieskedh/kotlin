@@ -1047,6 +1047,7 @@ internal fun DotNetGenericOwnerObservedMethodCarrier.toActualCarrierShapeForDecl
                 is DotNetGenericOwnerPhysicalBindingResult.Conflict -> converted
                 DotNetGenericOwnerPhysicalBindingResult.Unavailable -> converted
             }
+        is DotNetGenericOwnerObservedMethodCarrier.CoreType -> DotNetGenericOwnerPhysicalBindingResult.Unavailable
         is DotNetGenericOwnerObservedMethodCarrier.Other -> DotNetGenericOwnerPhysicalBindingResult.Bound(
             DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.Other,
         )
@@ -1168,6 +1169,9 @@ internal fun DotNetGenericOwnerObservedMethodCarrier.toActualCarrier(
             DotNetGenericOwnerPhysicalMethodDefEmissionCarrierKind.BY_REFERENCE,
             DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape::ByReference,
         )
+    is DotNetGenericOwnerObservedMethodCarrier.CoreType -> ActualCarrierConversion(
+        unavailableReason = "fixed core types are not yet in the local callable seal grammar",
+    )
     is DotNetGenericOwnerObservedMethodCarrier.Other -> ActualCarrierConversion(
         known = ActualCarrier(
             DotNetGenericOwnerPhysicalMethodDefEmissionCarrierShape.Other,

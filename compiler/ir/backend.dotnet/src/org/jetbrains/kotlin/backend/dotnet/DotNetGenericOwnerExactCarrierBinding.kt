@@ -24,6 +24,16 @@ internal fun IrType.genericOwnerInvariantArrayElementOrNull(): IrType? {
     return projection.type.takeIf { projection.variance == Variance.INVARIANT }
 }
 
+/** Output projection selects System.Array; it never proves an exact element vector. */
+internal fun IrType.genericOwnerOutputProjectedArrayElementOrNull(): IrType? {
+    if (!isArray() && !isNullableArray()) return null
+    val projection = (this as? IrSimpleType)?.arguments?.singleOrNull() as? IrTypeProjection ?: return null
+    return projection.type.takeIf { projection.variance == Variance.OUT_VARIANCE }
+}
+
+internal fun genericOwnerSystemArrayIdentity() =
+    DotNetGenericOwnerPhysicalTypeDefIdentity.CoreLibrary(listOf("System", "Array"))
+
 /**
  * One exact carrier selected recursively from a frozen local declaration index.
  *
@@ -37,13 +47,14 @@ internal data class DotNetGenericOwnerExactCarrierBinding(
 )
 
 /**
- * Binds an invariant owner-dependent type without consulting the general IL type mapper.
+ * Binds an owner-dependent carrier without consulting the general IL type mapper.
  *
- * The current owner's parameters come only from [physicalOwnerIdentity]. Every constructed type
+ * The current owner's parameters come only from [physicalOwnerIdentity]. Every local construction
  * must be selected by [localDefinitionOrNull] and already exist in [declarations]. A native
- * invariant SZ array recursively binds its element carrier, not a nominal Array TypeDef. Projections
- * and stars remain unavailable for physical generic constructions; a selected canonical class
- * has no physical arguments to bind. Nullable owner parameters/value carriers, foreign
+ * invariant SZ array recursively binds its element carrier, not a nominal Array TypeDef. An
+ * output-projected array instead binds its recorded fixed System.Array, with no element view.
+ * Projections and stars remain unavailable for physical generic constructions; a selected
+ * canonical class has no physical arguments to bind. Nullable owner parameters/value carriers, foreign
  * constructions, and unresolved classifiers remain unavailable. CLR-reference nullability does
  * not change a fixed leaf or constructed carrier; a declaration-index contradiction is a conflict.
  */
@@ -61,6 +72,32 @@ internal fun bindExactLocalGenericOwnerDependentCarrierOrError(
     }
     val simple = type as? IrSimpleType
         ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+
+    if (type.genericOwnerOutputProjectedArrayElementOrNull() != null) {
+        val definition = declarations.typeDescriptionOrNull(genericOwnerSystemArrayIdentity())
+            ?: return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        if (definition.genericParameters.isNotEmpty() ||
+            definition.category != DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS
+        ) {
+            return DotNetGenericOwnerPhysicalBindingResult.Conflict(
+                "the fixed System.Array carrier contradicts its physical TypeDef shape",
+            )
+        }
+        val construction = when (val binding = declarations.constructTypeOrError(
+            genericOwnerSystemArrayIdentity(), emptyList(),
+        )) {
+            is DotNetGenericOwnerPhysicalBindingResult.Bound -> binding.value
+            is DotNetGenericOwnerPhysicalBindingResult.Conflict -> return binding
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        }
+        return when (val binding = declarations.carrierOrError(construction)) {
+            is DotNetGenericOwnerPhysicalBindingResult.Bound -> DotNetGenericOwnerPhysicalBindingResult.Bound(
+                DotNetGenericOwnerExactCarrierBinding(binding.value, view = null),
+            )
+            is DotNetGenericOwnerPhysicalBindingResult.Conflict -> binding
+            DotNetGenericOwnerPhysicalBindingResult.Unavailable -> DotNetGenericOwnerPhysicalBindingResult.Unavailable
+        }
+    }
 
     type.genericOwnerDeclarationIndependentLeafPrototypeOrNull()
         ?.declarationIndependentLeafCarrierOrNull()
