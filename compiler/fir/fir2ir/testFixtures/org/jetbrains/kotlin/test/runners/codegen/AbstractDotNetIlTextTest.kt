@@ -703,6 +703,12 @@ private class BackendCliDotNetFacade(
             testServices.moduleStructure.originalTestDataFiles.single(),
             testServices.getOrCreateTempDirectory("generic-owner-canonical-state"),
         )
+        validateGenericOwnerAbstractForeignOutput(
+            genericOwnerRehearsal, loweredInput.configuration.dotNetProducesLibrary,
+            loweredInput.configuration.dotNetTarget, completedOutput.output,
+            completedOutput.declarations, testServices.moduleStructure.originalTestDataFiles.single(),
+            testServices.getOrCreateTempDirectory("generic-owner-abstract-foreign-output"),
+        )
         validateGenericOwnerRuntimeIteratorCSharp(
             genericOwnerRehearsal = genericOwnerRehearsal,
             producesLibrary = loweredInput.configuration.dotNetProducesLibrary,
@@ -20155,6 +20161,163 @@ private fun validateGenericOwnerSplitNullableResultCSharp(
  * seals and actual PE fields, then exercise separately compiled Kotlin/C# inheritance on the
  * same receiver without hidden ABI or duplicate state.
  */
+private fun validateGenericOwnerAbstractForeignOutput(
+    genericOwnerRehearsal: Boolean,
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    declarations: Map<String, DotNetPhysicalDeclaration>,
+    testDataFile: File,
+    directory: File,
+) {
+    if ("DOTNET_GENERIC_OWNER_ABSTRACT_FOREIGN_OUTPUT_PROBE" !in testDataFile.readText()) return
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+    val metadata = DotNetClrMetadataReader.read(producer)
+    val namespaceName = "generic.owner.abstract.output"
+    if (!genericOwnerRehearsal) {
+        check(declarations.genericOwnerRehearsalEpochRecordIndexKeys().isEmpty())
+        check(metadata.typeDefinitions.none { it.namespaceName == namespaceName && '`' in it.metadataName })
+    }
+    if (producer.name.equals("lib.dll", true)) {
+        fun requireType(name: String) = metadata.typeDefinitions.single {
+            it.namespaceName == namespaceName && it.metadataName == name
+        }
+        val owner = requireType(if (genericOwnerRehearsal) "Owner`1" else "Owner")
+        check(metadata.fieldDefinitions.none { it.declaringType == owner.handle })
+        val abstractMethods = metadata.methodDefinitions.filter { it.declaringType == owner.handle && it.isAbstract }
+        check(abstractMethods.map { it.name }.toSet() == setOf("source", "choose", "get_current")) {
+            "An ordinary C# subclass must have only the three natural abstract obligations: $abstractMethods"
+        }
+        listOf("BroadProperty", "BroadInput", "NestedSplit").forEach { name ->
+            val blocked = requireType(name)
+            check(metadata.genericParameterDefinitions.none { it.owner == blocked.handle })
+        }
+    }
+    if (producesLibrary || !genericOwnerRehearsal) return
+    val lib = directory.resolve("lib.dll")
+    val middle = directory.resolve("middle.dll")
+    check(lib.isFile && middle.isFile)
+    val platform = System.getProperty("kotlin.dotnet.test.platform.${target.description}.path")?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform for abstract foreign output")
+    val runtime = platform.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platform.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    val source = directory.resolve("AbstractOutputConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+            using System.Reflection;
+            using generic.owner.@abstract.output;
+
+            public sealed class CsSource<T> : Source<T>
+            {
+                private readonly T value;
+                public CsSource(T value) { this.value = value; }
+                public T read() { return value; }
+            }
+            public sealed class CsDirect : Owner<int>
+            {
+                public readonly Source<int> Result = new CsSource<int>(61);
+                public override Source<int> source() { return Result; }
+                public override Source<int> choose(bool first) { if (!first) throw new Exception("argument"); return Result; }
+                public override Source<int> current { get { return Result; } }
+            }
+            public sealed class CsInherited : InheritedOwner<string>
+            {
+                public readonly Source<string> Result = new CsSource<string>("inherited");
+                public override Source<string> source() { return Result; }
+                public override Source<string> choose(bool first) { return Result; }
+                public override Source<string> current { get { return Result; } }
+            }
+            public class CsMiddle : MiddleOwner<int>
+            {
+                public readonly Source<int> Result = new CsSource<int>(67);
+                public CsMiddle() : base(0) { }
+                public override Source<int> source() { return Result; }
+                public override Source<int> choose(bool first) { return source(); }
+                public override Source<int> current { get { return source(); } }
+            }
+            public sealed class CsGrandchild : CsMiddle
+            {
+                public readonly Source<int> Last = new CsSource<int>(71);
+                public override Source<int> source() { return Last; }
+            }
+            public sealed class CsReabstract : ReabstractOwner<int>
+            {
+                public readonly Source<int> Result = new CsSource<int>(73);
+                public CsReabstract() : base(0) { }
+                public override Source<int> source() { return Result; }
+                public override Source<int> choose(bool first) { return Result; }
+                public override Source<int> current { get { return Result; } }
+            }
+            public static class AbstractOutputConsumer
+            {
+                public static int Main()
+                {
+                    var direct = new CsDirect();
+                    var inherited = new CsInherited();
+                    var middle = new CsMiddle();
+                    var grandchild = new CsGrandchild();
+                    var reabstract = new CsReabstract();
+                    if (!Object.Equals(ownersKt.readWide(direct), 61) ||
+                        !Object.Equals(ownersKt.chooseWide(direct), 61) ||
+                        !Object.Equals(ownersKt.currentWide(direct), 61) ||
+                        !Object.ReferenceEquals(ownersKt.sourceIdentity(direct), direct.Result) ||
+                        !ownersKt.sameOwner(direct, direct) ||
+                        !Object.Equals(ownersKt.readWide(inherited), "inherited") ||
+                        !Object.Equals(ownersKt.chooseWide(inherited), "inherited") ||
+                        !Object.Equals(ownersKt.currentWide(inherited), "inherited") ||
+                        !Object.Equals(ownersKt.readWide(middle), 67) ||
+                        !Object.Equals(ownersKt.chooseWide(middle), 67) ||
+                        !Object.Equals(ownersKt.currentWide(middle), 67) ||
+                        !Object.Equals(ownersKt.readWide(grandchild), 71) ||
+                        !Object.Equals(ownersKt.currentWide(grandchild), 71) ||
+                        !Object.Equals(ownersKt.readWide(reabstract), 73) ||
+                        !Object.Equals(ownersKt.chooseWide(reabstract), 73) ||
+                        !Object.Equals(ownersKt.currentWide(reabstract), 73))
+                        throw new InvalidOperationException("Abstract/Kotlin/C# dispatch or identity diverged");
+                    if (typeof(Owner<int>).GetMethod("source").ReturnType != typeof(Source<int>) ||
+                        typeof(Owner<string>).GetMethod("source").ReturnType != typeof(Source<string>) ||
+                        !typeof(Owner<>).GetMethod("source").IsAbstract ||
+                        typeof(InheritedOwner<int>).BaseType != typeof(Owner<int>) ||
+                        typeof(ReabstractOwner<int>).BaseType != typeof(KotlinOwner<int>))
+                        throw new InvalidOperationException("Natural abstract MethodDef or inheritance changed");
+                    foreach (var method in typeof(Owner<int>).GetMethods(
+                        BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
+                        if (method.IsFamily && method.ReturnType == typeof(object))
+                        {
+                            var arguments = method.GetParameters().Length == 0 ? new object[0] : new object[] { true };
+                            if (!Object.ReferenceEquals(method.Invoke(direct, arguments), direct.Result))
+                                throw new InvalidOperationException("Abstract semantic forwarder narrowed or replaced the result");
+                        }
+                    foreach (var method in typeof(ReabstractOwner<>).GetMethods(
+                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
+                        if (method.IsAbstract && method.Name != "source" && method.Name != "choose" && method.Name != "get_current")
+                            throw new InvalidOperationException("Hidden abstract C# obligation: " + method.Name);
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val consumer = directory.resolve(if (target == DotNetTarget.NET48) "AbstractOutputConsumer.exe" else "AbstractOutputConsumer.dll")
+    val references = listOf(lib, middle, runtime, stdlib)
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()),
+            source, consumer, references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()),
+            source, consumer, references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 -> error("The abstract-output consumer needs an executable profile")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    listOf(runtime, stdlib).forEach { it.copyTo(directory.resolve(it.name), overwrite = true) }
+    executeSnapshotConsumer(target, consumer, directory)
+}
+
 private fun validateGenericOwnerCanonicalState(
     genericOwnerRehearsal: Boolean,
     producesLibrary: Boolean,

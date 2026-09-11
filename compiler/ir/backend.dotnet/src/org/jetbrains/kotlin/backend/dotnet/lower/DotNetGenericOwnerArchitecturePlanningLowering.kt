@@ -637,7 +637,11 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                     } else {
                         DescriptorVisibilities.PROTECTED
                     }
-                    modality = source.modality
+                    modality = if (family.supportsAbstractForeignSemanticForwarding()) {
+                        Modality.OPEN
+                    } else {
+                        source.modality
+                    }
                     returnType = context.irBuiltIns.anyNType
                 }.apply hook@{
                     parameters += createDispatchReceiverParameterWithClassParent()
@@ -694,7 +698,8 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
         val openForeignOverrideProbeSources = semanticHooksBySource.keys.filterTo(linkedSetOf()) { source ->
             val owner = source.parent as IrClass
             val family = admittedPlansByOwner.getValue(owner).memberFamilies.getValue(source)
-            owner.kind != ClassKind.INTERFACE && source.modality == Modality.OPEN &&
+            owner.kind != ClassKind.INTERFACE &&
+                    (source.modality == Modality.OPEN || family.supportsAbstractForeignSemanticForwarding()) &&
                     !DescriptorVisibilities.isPrivate(source.visibility) &&
                     family.supportsDirectForeignOverrideProbe() &&
                     (family.returnSlotDomain ==
@@ -737,7 +742,11 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                     roots,
                 ))
                 visibility = DescriptorVisibilities.PROTECTED
-                modality = source.modality
+                modality = if (family.supportsAbstractForeignSemanticForwarding()) {
+                    Modality.OPEN
+                } else {
+                    source.modality
+                }
                 returnType = context.irBuiltIns.booleanType
             }.apply {
                 parameters += createDispatchReceiverParameterWithClassParent()
@@ -882,7 +891,9 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             }
             check(context.genericOwnerMemberBodyPlacements.put(
                 source,
-                if (preservesNaturalBody) {
+                if (family.supportsAbstractForeignSemanticForwarding()) {
+                    DotNetGenericOwnerMemberBodyPlacement.ABSTRACT_NATURAL_WITH_SEMANTIC_FORWARDER
+                } else if (preservesNaturalBody) {
                     DotNetGenericOwnerMemberBodyPlacement.PAIRED_NATURAL_AND_SEMANTIC
                 } else {
                     DotNetGenericOwnerMemberBodyPlacement.SEMANTIC_BODY_WITH_NATURAL_WRAPPER
@@ -1300,6 +1311,22 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                     }
                 })
                 exactValueAnalysis.restoreExactHelperCallCarriers()
+            }
+            if (family.supportsAbstractForeignSemanticForwarding()) {
+                check(source.body == null && hook.body == null && hook.typeParameters.isEmpty())
+                // There is no Kotlin base body to preserve or reinterpret. The natural abstract
+                // slot is the complete foreign obligation; an ordinary C# implementation needs
+                // only that slot. Kotlin overrides still replace the paired hook/probe family.
+                // Install this bridge after semantic body remapping: its exact `this` call must
+                // reach the natural virtual MethodDef, not recursively call the semantic hook.
+                hook.body = context.createIrBuilder(hook.symbol).irBlockBody {
+                    val call = irCall(source.symbol, source.returnType).apply {
+                        hook.parameters.forEachIndexed { index, parameter ->
+                            arguments[index] = irGet(parameter)
+                        }
+                    }
+                    +irReturn(irImplicitCast(call, hook.returnType))
+                }
             }
             if (preservesNaturalBody || source.body == null) return@forEach
             source.body = context.createIrBuilder(source.symbol).irBlockBody {
@@ -2456,7 +2483,21 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in roles &&
                 source.modality != Modality.FINAL &&
                 !DescriptorVisibilities.isPrivate(source.visibility) &&
-                (source.modality != Modality.OPEN || !supportsDirectForeignOverrideProbe())
+                !(source.modality == Modality.OPEN && supportsDirectForeignOverrideProbe() ||
+                        supportsAbstractForeignSemanticForwarding())
+
+    /**
+     * A result-only abstract family has no base body/state behavior which a typed foreign
+     * override could bypass. Its semantic bridge only widens the already-produced reference.
+     * Abstract broad properties, owner-dependent inputs, MethodSpecs, and split results require
+     * independent conversion/obligation proofs and are deliberately not implied by this rule.
+     */
+    private fun DotNetGenericOwnerMemberFamilyPlan.supportsAbstractForeignSemanticForwarding(): Boolean =
+        (source.parent as? IrClass)?.kind != ClassKind.INTERFACE &&
+                source.modality == Modality.ABSTRACT && source.typeParameters.isEmpty() &&
+                requiresSemanticResultCapability &&
+                DotNetGenericOwnerSemanticHookReason.ABSTRACT_BROAD_PROPERTY_OBLIGATION !in semanticHookReasons &&
+                supportsDirectForeignOverrideProbe()
 
     private fun plan(
         owner: IrClass,

@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-abstract-foreign-output-2026-09-11.md`](generic-owner-abstract-foreign-output-2026-09-11.md)
+  records concrete compiler forwarders for abstract natural output slots,
+  separate Kotlin/C# inheritance and reabstraction, unchanged broad/split
+  exclusions, and the focused candidate/inverse gate.
 - [`generic-owner-canonical-state-reference-2026-09-11.md`](generic-owner-canonical-state-reference-2026-09-11.md)
   records nominal canonical dependency fields, preserved enclosing generics,
   BOUND/final state and writer seals, separate Kotlin/C# inheritance, and the

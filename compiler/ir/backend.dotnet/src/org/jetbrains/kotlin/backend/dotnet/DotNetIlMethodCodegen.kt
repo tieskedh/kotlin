@@ -2067,6 +2067,14 @@ internal class DotNetIlMethodCodegen(
                 typedInfo.signature.parameterTypes.isNotEmpty()) {
             "A generic-owner foreign override probe must target one supported local member"
         }
+        if (typedEntry.modality == Modality.ABSTRACT) {
+            // No concrete Kotlin body exists at this declaration (including reabstraction).
+            // Until a Kotlin subclass overrides this probe, its ordinary natural override is
+            // the implementation. In particular, never emit ldftn against an abstract method.
+            methodContext.emit("ldc.i4.1", pushes = 1)
+            methodContext.emitReturn(pops = 1)
+            return
+        }
         val ownerToken = if (functionInfo.owner.typeParameterCount == 0) {
             functionInfo.owner.ilTypeRef
         } else {

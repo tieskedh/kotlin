@@ -196,6 +196,9 @@ internal enum class DotNetGenericOwnerMemberBodyPlacement {
 
     /** Final, non-virtual input semantics are emitted independently in both physical domains. */
     PAIRED_NATURAL_AND_SEMANTIC,
+
+    /** The natural slot is abstract; its concrete semantic bridge calls the natural override. */
+    ABSTRACT_NATURAL_WITH_SEMANTIC_FORWARDER,
 }
 
 /**

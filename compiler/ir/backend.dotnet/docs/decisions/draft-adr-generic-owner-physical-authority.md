@@ -595,11 +595,25 @@ For an open class family, semantic-result routing must still observe an ordinary
 C# subclass which overrides only the natural typed MethodDef. The virtual
 MethodDef probe may forward any count of binder-independent fixed-leaf
 arguments whose natural and semantic carriers are already proven identical;
-the broader `DECLARATION_INDEPENDENT` domain is not sufficient evidence. If the
-source is abstract, or an argument requires an unproved broad/owner-relative
-conversion, the class owner remains erased until a complete foreign-override
-dispatch exists. A protected compiler hook is never an extra C# authoring
+the broader `DECLARATION_INDEPENDENT` domain is not sufficient evidence. An
+argument requiring an unproved broad/owner-relative conversion keeps the class
+owner erased. A protected compiler hook is never an extra C# authoring
 obligation.
+
+An abstract natural slot whose semantic obligation is an interface result may
+use the same dispatch family when every input already has the identical fixed
+physical carrier, there are no method binders or split-result channels, and no
+abstract broad-property obligation is present. Its natural MethodDef remains
+abstract. Its semantic hook is a concrete virtual forwarder to that natural
+slot; it only widens the produced reference and creates no state or alternate
+receiver. Its virtual probe selects the natural override unconditionally:
+there is no concrete base implementation whose address could be compared with
+`ldftn`. A Kotlin implementation replaces both hook and probe as usual; an
+ordinary C# implementation supplies only the natural override. Reabstraction
+reinstates this rule without inheriting the earlier concrete body's authority.
+Inherited semantic routing metadata does not itself create a new abstract
+source obligation. Abstract broad setters/getters and unproved input/result
+conversions remain outside this proof.
 
 The same fourth form may contain more than one mutually exclusive direct call
 without weakening those requirements. Its first result-path grammar is exactly:
