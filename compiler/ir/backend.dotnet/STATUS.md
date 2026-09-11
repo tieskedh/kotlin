@@ -75,20 +75,15 @@ Earlier bounded feature evidence remains indexed in the
 [archive](docs/archive/README.md); this full gate does not establish complete
 candidate Runtime/Stdlib closure or authorize a production generic-owner switch.
 
-The subsequent native-array constructor/state feature inherits that full
-checkpoint (`cafb56a4e8`). Its rehearsal-physical gate passed 32 candidate tests,
-404 backend tests, and the same 32-test production inverse, with no failures,
-errors, or skips. Both parsers and runtimes execute the Kotlin/C# fixture;
-actual PE and BOUND/final seals prove the original `!T[]` state and constructor
-inputs. Production selected routes remain unchanged. See the
-[array-constructor archive](docs/archive/generic-owner-array-constructor-2026-09-11.md).
-
-The latest projected-array state feature inherits that same full checkpoint.
-Its 32 candidate tests, 406 backend tests, and 32-test production inverse all
-passed without failures, errors, or skips. The private implementation retains
-its generic owner with one System.Array field; BOUND/final seals and ordinary
-C# consumption verify the physical contract and original-array identity. See
-the [projected-array archive](docs/archive/generic-owner-projected-array-state-2026-09-11.md).
+The latest fresh-allocation feature inherits that full checkpoint (`cafb56a4e8`).
+Its rehearsal-physical gate passed 36 candidate tests, 409 backend tests, and
+the same 36-test production inverse, with no failures, errors, or skips. Both
+parsers and runtimes execute the separate Kotlin/C# fixture, including original
+array identity, broad inputs and nullable/value-class substitutions. Production
+selected paths remain structurally unchanged. The matrix also covers the two
+preceding array constructor/state features. See the
+[allocation archive](docs/archive/generic-owner-projected-allocation-2026-09-11.md)
+for the exact boundary, physical evidence and inherited checkpoint.
 
 ## Active work
 
@@ -99,10 +94,14 @@ through their independently proven element/field/parameter carriers. Native
 arrays no longer require a fictitious nominal TypeDef in that proof. Fixed
 output-projected array state now also preserves a generic owner through its
 complete private writer graph, using System.Array rather than a fabricated
-T[] or object[]. Rerun the source-built candidate census from this green
-checkpoint; the census after `af73c6519e` contained 227 error lines. Raw public
-projected-array entries, broader nullable array state, and unproven element
-constructions remain outside this proof.
+T[] or object[]. A fresh allocation behind an all-star logical result now uses
+its independently selected constructor vector, with ordinary MethodDef input
+and destination checks. This does not make existing star values exact or
+promote an unadmitted interface to a natural C# contract. Rerun the source-built
+candidate census from this checkpoint; the census after `a43d1db5cf` contained
+228 error lines and exposed this allocation failure. Raw public projected-array
+entries, broader nullable array state, and unproven element constructions remain
+outside these proofs.
 
 The incoming DLL investigation isolates a missing Kotlin/foreign reference
 graph in both candidate and production: a C# MethodDef can reference a

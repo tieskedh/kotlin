@@ -730,6 +730,12 @@ private class BackendCliDotNetFacade(
             testServices.moduleStructure.originalTestDataFiles.single(),
             testServices.getOrCreateTempDirectory("generic-owner-projected-array-state"),
         )
+        validateGenericOwnerProjectedAllocation(
+            genericOwnerRehearsal, loweredInput.configuration.dotNetProducesLibrary,
+            loweredInput.configuration.dotNetTarget, completedOutput.output, completedOutput.declarations,
+            testServices.moduleStructure.originalTestDataFiles.single(),
+            testServices.getOrCreateTempDirectory("generic-owner-projected-allocation"),
+        )
         validateGenericOwnerCanonicalState(
             genericOwnerRehearsal, loweredInput.configuration.dotNetProducesLibrary,
             loweredInput.configuration.dotNetTarget, completedOutput.output,
@@ -21442,6 +21448,88 @@ private fun validateGenericOwnerSemanticOverloads(
             source, consumer, references = references, executable = true, warningsAsErrors = true,
         )
         DotNetTarget.NETSTANDARD_2_0 -> error("The semantic-overload consumer needs an executable profile")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    listOf(runtime, stdlib).forEach { it.copyTo(directory.resolve(it.name), overwrite = true) }
+    executeSnapshotConsumer(target, consumer, directory)
+}
+
+private fun validateGenericOwnerProjectedAllocation(
+    rehearsal: Boolean,
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    declarations: Map<String, DotNetPhysicalDeclaration>,
+    testDataFile: File,
+    directory: File,
+) {
+    if ("DOTNET_GENERIC_OWNER_PROJECTED_ALLOCATION_PROBE" !in testDataFile.readText()) return
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+    if (!rehearsal) {
+        check(declarations.genericOwnerRehearsalEpochRecordIndexKeys().isEmpty())
+        check(DotNetClrMetadataReader.read(producer).typeDefinitions.none { '`' in it.metadataName })
+        return
+    }
+    if (producesLibrary) return
+    val lib = directory.resolve("lib.dll")
+    check(lib.isFile)
+    val platform = System.getProperty("kotlin.dotnet.test.platform.${target.description}.path")?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET platform for projected allocations")
+    val runtime = platform.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platform.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    val metadata = DotNetClrMetadataReader.read(lib)
+    val sourceType = metadata.typeDefinitions.single {
+        it.namespaceName == "generic.owner.projected.callable" && it.metadataName == "Source"
+    }
+    val sourceMethod = metadata.methodDefinitions.single { it.declaringType == sourceType.handle }
+    val source = directory.resolve("ProjectedAllocationConsumer.cs").apply {
+        writeText("""
+            using System;
+            using System.Reflection;
+            using generic.owner.projected.callable;
+            public static class ProjectedAllocationConsumer
+            {
+                private static void Check<T>(T[] values)
+                {
+                    Source source = captureKt.capture<T>(values);
+                    var iterator = (Kotlin.Collections.Iterator<object>)source.${sourceMethod.name}();
+                    if (!Object.Equals(iterator.Next(), values[0]))
+                        throw new InvalidOperationException("Natural result changed");
+                    var predicate = captureKt.lastPredicate();
+                    if (predicate == null || !predicate.GetType().IsGenericType ||
+                        predicate.GetType().GetGenericArguments().Length != 1 ||
+                        predicate.GetType().GetGenericArguments()[0] != typeof(object))
+                        throw new InvalidOperationException("Predicate lost generic owner");
+                    var fields = predicate.GetType().GetFields(BindingFlags.NonPublic | BindingFlags.Instance);
+                    if (fields.Length != 1 || fields[0].FieldType != typeof(Array) ||
+                        !Object.ReferenceEquals(fields[0].GetValue(predicate), values))
+                        throw new InvalidOperationException("Predicate copied or changed array state");
+                }
+                public static int Main()
+                {
+                    Check(new int[] { 41 });
+                    Check(new string[] { "text" });
+                    Check(new int?[] { null });
+                    Check(new int?[] { 43 });
+                    Check(new int[][] { new int[] { 47 } });
+                    return 0;
+                }
+            }
+        """.trimIndent())
+    }
+    val consumer = directory.resolve(if (target == DotNetTarget.NET48) "ProjectedAllocationConsumer.exe" else "ProjectedAllocationConsumer.dll")
+    val references = listOf(lib, runtime, stdlib)
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()), source, consumer,
+            references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()), source, consumer,
+            references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 -> error("The projected-allocation consumer needs an executable profile")
     }
     check(compilation.exitCode == 0) { compilation.output }
     listOf(runtime, stdlib).forEach { it.copyTo(directory.resolve(it.name), overwrite = true) }

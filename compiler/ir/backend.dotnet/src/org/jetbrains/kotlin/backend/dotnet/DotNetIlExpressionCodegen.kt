@@ -2,6 +2,7 @@ package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_EXACT_CALL
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_VALUE_CLASS_UNBOX_HELPER
+import org.jetbrains.kotlin.backend.dotnet.lower.dotNetProjectedGenericOwnerAllocationOrNull
 import org.jetbrains.kotlin.backend.dotnet.serialization.DotNetIrMangler
 import org.jetbrains.kotlin.builtins.functions.BuiltInFunctionArity
 import org.jetbrains.kotlin.descriptors.Modality
@@ -222,6 +223,7 @@ internal class DotNetIlExpressionCodegen(
      * performed by codegen.
      */
     fun mappedNaturalType(expression: IrExpression): DotNetIlValueType? {
+        projectedAllocationTypeOrNull(expression)?.let { return it }
         if (expression is IrTypeOperatorCall && expression.operator == IrTypeOperator.REINTERPRET_CAST) {
             val sourceValueClassCarrier =
                 typeMapper.genericOwnerValueClassCarrierTypeOrNull(expression.argument.type)
@@ -3765,7 +3767,9 @@ internal class DotNetIlExpressionCodegen(
     private fun emitConstructorCall(call: IrConstructorCall, expectedType: DotNetIlValueType) {
         val constructor = call.symbol.owner
         val irClass = constructor.constructedClass
-        val constructedType = typeMapper.toDotNetIlValueType(call.type)
+        val projectedAllocation = projectedAllocationTypeOrNull(call)
+        val constructedType = projectedAllocation
+            ?: typeMapper.toDotNetIlValueType(call.type)
         // Constructor kind belongs to the declaration being instantiated, not to the contextual
         // value representation of the call. A value class whose exact carrier is Array<E> maps
         // `call.type` to that vector, but `new V(array)` still constructs V's one nominal box
@@ -3812,7 +3816,7 @@ internal class DotNetIlExpressionCodegen(
             val argumentsFromCall = call.typeArguments.map { argument ->
                 argument?.let(constructorTypeMapper::toDotNetIlGenericArgumentType)
             }
-            val instanceType = (constructorTypeMapper.toDotNetIlValueType(call.type) as?
+            val instanceType = ((projectedAllocation ?: constructorTypeMapper.toDotNetIlValueType(call.type)) as?
                     DotNetIlValueType.GenericInstance)
                 ?.takeIf { instance ->
                     // A constructor expression may deliberately select a different logical result
@@ -3853,6 +3857,22 @@ internal class DotNetIlExpressionCodegen(
             pops = parameterTypes.size,
             pushes = 1,
         )
+    }
+
+    /** A new allocation has a constructor vector even when its logical result is a star view. */
+    private fun projectedAllocationTypeOrNull(expression: IrExpression): DotNetIlValueType.GenericInstance? {
+        if (!typeMapper.isGenericOwnerRehearsalEnabled()) return null
+        val allocation = expression.dotNetProjectedGenericOwnerAllocationOrNull() ?: return null
+        val owner = allocation.constructedClass
+        if (owner.dotNetImportedClrTypeAuthorityOrNull() != null ||
+            typeMapper.genericClassInfoOrNull(owner) != null
+        ) return null
+        val info = typeMapper.classInfoOrNull(owner) ?: return null
+        if (info.typeParameterCount != owner.typeParameters.size) return null
+        val arguments = owner.typeParameters.map { parameter ->
+            typeMapper.toDotNetIlGenericArgumentType(allocation.substitutions.getValue(parameter.symbol)) ?: return null
+        }
+        return DotNetIlValueType.GenericInstance(info, arguments)
     }
 
     /**

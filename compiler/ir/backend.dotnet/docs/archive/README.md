@@ -14,6 +14,9 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-projected-allocation-2026-09-11.md`](generic-owner-projected-allocation-2026-09-11.md)
+  records constructor-selected fresh allocations behind star result views,
+  preserved array identity and broad inputs, Kotlin/C# execution, and the inverse.
 - [`generic-owner-projected-array-state-2026-09-11.md`](generic-owner-projected-array-state-2026-09-11.md)
   records fixed System.Array state without owner erasure, private-entry proof,
   BOUND/final seals, same-array Kotlin/C# execution, and the focused inverse.

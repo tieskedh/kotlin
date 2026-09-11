@@ -1068,6 +1068,20 @@ prefix grammar, conversion, boxing permission, proxy, wrapper, state, or ABI.
 #### Constructors, captures, and generated classes
 
 - Constructor results use their selected physical construction and state plan.
+- A fresh allocation and its logical result view are distinct. An all-star
+  result view names no constructed arguments; a complete independent constructor
+  class-argument vector can still select the actual allocation. The emitter
+  binds the already-admitted Kotlin TypeDef, checks its physical arity, uses the
+  selected constructor MethodDef and every substituted input carrier, and then
+  checks the actual produced construction against the destination. A container
+  ending in that allocation produces the same carrier after its prefix effects;
+  this observation does not select local/field storage or eliminate effects.
+  Existing star values, casts, joins, missing vectors, partial projections and
+  unsupported physical arguments do not enter this bounded rule. Two invariant
+  encodings must still agree. Retained foreign constructors keep their existing
+  metadata-authoritative path. In particular, `new C<object>` is valid only
+  when that is the constructor's actual selected vector and its inputs fit;
+  neither a star nor a failed `C<!T>` input authorizes that construction.
 - Native-array determining inputs follow the ordinary exact-input rule. The
   early plan may preserve an already exact invariant vector only through its
   admitted element-carrier grammar. BOUND recursively binds the existing

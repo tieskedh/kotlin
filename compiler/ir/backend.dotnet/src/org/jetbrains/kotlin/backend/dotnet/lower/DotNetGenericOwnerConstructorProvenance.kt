@@ -9,6 +9,8 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetImportedClrTypeAuthorityOrNull
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericClassDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.expressions.IrConstructorCall
+import org.jetbrains.kotlin.ir.expressions.IrContainerExpression
+import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.classTypeArgumentsCount
 import org.jetbrains.kotlin.ir.expressions.getClassTypeArgument
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
@@ -114,6 +116,46 @@ internal data class DotNetGenericOwnerInvariantConstructorUse(
     val constructedType: IrSimpleType,
     val substitutions: Map<IrTypeParameterSymbol, IrType>,
 )
+
+/**
+ * A fresh allocation's complete class vector when its result describes only an all-star view.
+ *
+ * Unlike two invariant construction encodings, this result type makes no claim about the
+ * allocated arguments. The constructor's independent vector determines them. Containers retain
+ * their final producer; this query neither skips their preceding effects nor selects storage.
+ * Existing values, casts, joins, partial projections and missing vectors supply no evidence.
+ *
+ * This is structural input, not TypeDef or MethodDef authority. An emitter must independently
+ * bind the selected owner and constructor, check every argument against that physical signature,
+ * and prove the resulting allocation can enter its destination. In particular, this query never
+ * casts an existing C<X> to C<object>, and does not alter strict constructor-encoding agreement.
+ */
+internal fun IrExpression.dotNetProjectedGenericOwnerAllocationOrNull(): DotNetGenericOwnerInvariantConstructorUse? {
+    val call = when (this) {
+        is IrConstructorCall -> this
+        is IrContainerExpression -> return (statements.lastOrNull() as? IrExpression)
+            ?.dotNetProjectedGenericOwnerAllocationOrNull()
+        else -> return null
+    }
+    val owner = call.symbol.owner.parent as? IrClass ?: return null
+    val arity = owner.typeParameters.size
+    val view = call.type as? IrSimpleType ?: return null
+    if (arity == 0 || view.classifier != owner.symbol ||
+        view.nullability == SimpleTypeNullability.MARKED_NULLABLE ||
+        view.arguments.size != arity || view.arguments.any { it is IrTypeProjection } ||
+        call.classTypeArgumentsCount != arity
+    ) return null
+    val arguments = (0 until arity).map { index ->
+        val argument = call.getClassTypeArgument(index) ?: return null
+        if (argument.hasUnsupportedDotNetInvariantConstructorArgument()) return null
+        argument
+    }
+    return DotNetGenericOwnerInvariantConstructorUse(
+        owner,
+        owner.symbol.typeWith(arguments),
+        owner.typeParameters.indices.associate { index -> owner.typeParameters[index].symbol to arguments[index] },
+    )
+}
 
 /** Parameters of [owner] whose physical binders can occur in its semantic body. */
 internal fun IrType.dotNetGenericOwnerParameterDependencies(
