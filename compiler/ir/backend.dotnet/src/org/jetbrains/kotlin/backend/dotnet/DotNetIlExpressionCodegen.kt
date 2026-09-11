@@ -4267,6 +4267,15 @@ internal class DotNetIlExpressionCodegen(
         }
     }
 
+    /** Reconstructs a foreign natural result at the compiler's object-domain dispatch boundary. */
+    fun emitSplitNullableObjectResult(
+        returnType: DotNetIlReturnType,
+        nullFlagSlot: DotNetIlSlot.Local,
+        calleeName: String,
+    ) {
+        emitSplitNullableLogicalResult(returnType, nullFlagSlot, DotNetIlValueType.Object, calleeName)
+    }
+
     /** Reconstructs the logical Kotlin nullable carrier after a typed-payload CLR call. */
     private fun emitSplitNullableLogicalResult(
         returnType: DotNetIlReturnType,

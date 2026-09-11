@@ -746,6 +746,12 @@ private class BackendCliDotNetFacade(
             completedOutput.declarations, testServices.moduleStructure.originalTestDataFiles.single(),
             testServices.getOrCreateTempDirectory("generic-owner-foreign-scalar-result"),
         )
+        validateGenericOwnerForeignSplitResult(
+            genericOwnerRehearsal, loweredInput.configuration.dotNetProducesLibrary,
+            loweredInput.configuration.dotNetTarget, completedOutput.output,
+            completedOutput.declarations, testServices.moduleStructure.originalTestDataFiles.single(),
+            testServices.getOrCreateTempDirectory("generic-owner-foreign-split-result"),
+        )
         validateGenericOwnerRuntimeIteratorCSharp(
             genericOwnerRehearsal = genericOwnerRehearsal,
             producesLibrary = loweredInput.configuration.dotNetProducesLibrary,
@@ -20198,6 +20204,157 @@ private fun validateGenericOwnerSplitNullableResultCSharp(
  * seals and actual PE fields, then exercise separately compiled Kotlin/C# inheritance on the
  * same receiver without hidden ABI or duplicate state.
  */
+private fun validateGenericOwnerForeignSplitResult(
+    genericOwnerRehearsal: Boolean,
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    declarations: Map<String, DotNetPhysicalDeclaration>,
+    testDataFile: File,
+    directory: File,
+) {
+    if ("DOTNET_GENERIC_OWNER_FOREIGN_SPLIT_RESULT_PROBE" !in testDataFile.readText()) return
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+    val metadata = DotNetClrMetadataReader.read(producer)
+    val namespaceName = "generic.owner.foreign.split"
+    if (!genericOwnerRehearsal) {
+        check(declarations.genericOwnerRehearsalEpochRecordIndexKeys().isEmpty())
+        check(metadata.typeDefinitions.none { it.namespaceName == namespaceName && '`' in it.metadataName })
+        return
+    }
+    if (producer.name.equals("lib.dll", true)) {
+        val owner = metadata.typeDefinitions.single {
+            it.namespaceName == namespaceName && it.metadataName == "Store`2"
+        }
+        val methods = metadata.methodDefinitions.filter { it.declaringType == owner.handle }
+        val natural = methods.single { it.name == "find" }
+        val boolType = DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.BOOLEAN)
+        val objectType = DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.OBJECT)
+        check(natural.isVirtual && natural.visibility == DotNetClrMethodVisibility.PUBLIC &&
+                natural.signature.returnType == DotNetClrTypeSignature.GenericParameter(DotNetClrGenericParameterKind.TYPE, 1) &&
+                natural.signature.parameterTypes == listOf(boolType, DotNetClrTypeSignature.ByReference(boolType)))
+        check(metadata.parameterDefinitions.single {
+            it.declaringMethod == natural.handle && it.parameterIndex == 1
+        }.isOut)
+        val fields = metadata.fieldDefinitions.filter { it.declaringType == owner.handle }
+        check(fields.size == 2 && fields.single { it.name == "anchor" }.signature.fieldType ==
+                DotNetClrTypeSignature.GenericParameter(DotNetClrGenericParameterKind.TYPE, 0) &&
+                fields.single { it.name == "value" }.signature.fieldType == objectType) {
+            "Unrelated typed state or the one authoritative semantic field changed: $fields"
+        }
+    }
+    if (producesLibrary) return
+    val lib = directory.resolve("lib.dll")
+    val middle = directory.resolve("middle.dll")
+    check(lib.isFile && middle.isFile)
+    val platform = System.getProperty("kotlin.dotnet.test.platform.${target.description}.path")?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform for foreign split results")
+    val runtime = platform.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platform.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    val source = directory.resolve("SplitConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+            using System.Reflection;
+            using generic.owner.foreign.split;
+            public class CsDirect : Store<int, int>
+            {
+                public CsDirect() : base(1, 41) { }
+                public override int find(bool missing, out bool isNull) { isNull = missing; return 61; }
+            }
+            public sealed class CsGrandchild : CsDirect
+            {
+                public override int find(bool missing, out bool isNull) { isNull = missing; return 67; }
+            }
+            public sealed class CsInherited : Middle<int, int>
+            {
+                public CsInherited() : base(1, 43) { }
+                public override int find(bool missing, out bool isNull) { isNull = missing; return 71; }
+            }
+            public sealed class CsKotlinChild : KotlinOverride
+            {
+                public CsKotlinChild() : base(1, 47) { }
+                public override int find(bool missing, out bool isNull) { isNull = missing; return 73; }
+            }
+            public sealed class CsReference : Store<string, string>
+            {
+                public CsReference() : base("key", "base") { }
+                public override string find(bool missing, out bool isNull) { isNull = missing; return "reference"; }
+            }
+            public sealed class CsNullable : Store<int, int?>
+            {
+                public CsNullable() : base(1, 0) { }
+                public override int? find(bool missing, out bool isNull) { isNull = missing; return null; }
+            }
+            public sealed class CsNominal : Store<int, Id>
+            {
+                public readonly Id Result;
+                public CsNominal(Id value) : base(1, value) { Result = value; }
+                public override Id find(bool missing, out bool isNull) { isNull = missing; return Result; }
+            }
+            public static class SplitConsumer
+            {
+                private static void Check(Store<int, int> value, int expected)
+                {
+                    bool isNull;
+                    if (value.find(false, out isNull) != expected || isNull ||
+                        lookupKt.exact(value, false) != expected || lookupKt.exact(value, true) != null ||
+                        !Object.Equals(lookupKt.wide(value, false), expected) || lookupKt.wide(value, true) != null ||
+                        !Object.Equals(lookupKt.throughInterface(value, false), expected) ||
+                        lookupKt.throughInterface(value, true) != null || !lookupKt.same(value, value))
+                        throw new Exception("Natural and semantic C# dispatch diverged");
+                    var map = value.GetType().GetInterfaceMap(typeof(NullableSource<int>));
+                    if (map.TargetMethods.Length != 1 || map.TargetMethods[0].ReturnType != typeof(int) ||
+                        map.TargetMethods[0].GetParameters()[1].ParameterType != typeof(bool).MakeByRefType() ||
+                        map.TargetMethods[0].GetBaseDefinition() != typeof(Store<int, int>).GetMethod("find"))
+                        throw new Exception("Natural split MethodImpl lost payload or override identity");
+                }
+                public static int Main()
+                {
+                    Check(new CsDirect(), 61);
+                    Check(new CsGrandchild(), 67);
+                    Check(new CsInherited(), 71);
+                    var child = new CsKotlinChild();
+                    Check(child, 73);
+                    if (child.parent(false) != 47 || child.parent(true) != null)
+                        throw new Exception("Nonvirtual Kotlin super entered the C# override");
+                    var reference = new CsReference();
+                    if (!Object.Equals(lookupKt.readAny(reference, false), "reference") || lookupKt.readAny(reference, true) != null)
+                        throw new Exception("Reference payload/flag");
+                    var nullable = new CsNullable();
+                    if (lookupKt.readAny(nullable, false) != null || lookupKt.readAny(nullable, true) != null ||
+                        typeof(Store<int, int?>).GetMethod("find").ReturnType != typeof(int?))
+                        throw new Exception("Nullable payload/flag");
+                    var nominal = new CsNominal((Id)lookupKt.id());
+                    if (!Object.ReferenceEquals(lookupKt.readAny(nominal, false), nominal.Result) ||
+                        lookupKt.readAny(nominal, true) != null || lookupKt.readId(nominal.Result) != 53 ||
+                        typeof(Store<int, Id>).GetMethod("find").ReturnType != typeof(Id))
+                        throw new Exception("Nominal payload was remapped to its underlying value");
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val consumer = directory.resolve(if (target == DotNetTarget.NET48) "SplitConsumer.exe" else "SplitConsumer.dll")
+    val references = listOf(lib, middle, runtime, stdlib)
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()),
+            source, consumer, references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()),
+            source, consumer, references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 -> error("The split-result consumer needs an executable profile")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    listOf(runtime, stdlib).forEach { it.copyTo(directory.resolve(it.name), overwrite = true) }
+    executeSnapshotConsumer(target, consumer, directory)
+}
+
 private fun validateGenericOwnerForeignScalarResult(
     genericOwnerRehearsal: Boolean,
     producesLibrary: Boolean,

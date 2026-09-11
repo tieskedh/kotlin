@@ -2033,7 +2033,7 @@ internal class DotNetIlMethodCodegen(
                 semanticInfo.signature.parameterTypes.size == signature.parameterTypes.size &&
                 semanticInfo.signature.parameterTypes.drop(1) == signature.parameterTypes.drop(1) &&
                 probe.typeParameters.size == function.typeParameters.size &&
-                !typedInfo.signature.hasSplitNullableResult &&
+                !signature.hasSplitNullableResult &&
                 !semanticInfo.signature.hasSplitNullableResult &&
                 !probeInfo.signature.hasSplitNullableResult &&
                 typedReturn != null &&
@@ -2049,12 +2049,22 @@ internal class DotNetIlMethodCodegen(
         val semanticLabel = methodContext.nextLabel("semanticOutput")
         methodContext.emitBranch("brfalse", semanticLabel, pops = 1)
 
+        // The signature's regular parameter vector excludes its physical trailing bool&.
+        // Bind the payload from that same MethodDef, never from a substituted logical T?.
+        val nullFlagSlot = if (typedInfo.signature.hasSplitNullableResult) {
+            methodContext.declareSyntheticLocal(DotNetIlValueType.Boolean, "<foreignSplitIsNull>")
+        } else {
+            null
+        }
         methodContext.emit("ldarg.0", pushes = 1)
         signature.parameterTypes.indices.drop(1).forEach { index ->
             methodContext.emit(
                 if (index <= 3) "ldarg.$index" else "ldarg $index",
                 pushes = 1,
             )
+        }
+        if (nullFlagSlot != null) {
+            methodContext.emit(loadLocalAddressInstruction(nullFlagSlot.index), pushes = 1)
         }
         methodContext.emit(
             typedInfo.renderCallInstruction(
@@ -2063,10 +2073,16 @@ internal class DotNetIlMethodCodegen(
                 ownerToken = typedInfo.openOwnerToken(),
                 methodInstantiation = methodInstantiation,
             ),
-            pops = signature.parameterTypes.size,
+            pops = typedInfo.signature.physicalParameterCount,
             pushes = 1,
         )
-        if (!typedReturn.isDotNetReferenceShaped()) {
+        if (nullFlagSlot != null) {
+            expressionCodegen.emitSplitNullableObjectResult(
+                typedInfo.signature.returnType,
+                nullFlagSlot,
+                typedInfo.physicalMethodName ?: dispatch.typedEntry.dotNetIlMethodName(),
+            )
+        } else if (!typedReturn.isDotNetReferenceShaped()) {
             methodContext.emit("box ${typedReturn.nameInSignature}", pops = 1, pushes = 1)
         }
         methodContext.emitReturn(pops = 1)

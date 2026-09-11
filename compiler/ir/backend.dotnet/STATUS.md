@@ -49,36 +49,38 @@ Current representation rules are linked from the navigation section below.
 
 ## Latest verification
 
-The callable physical-carrier InterfaceImpl fix passed the rehearsal-physical
+Foreign virtual split-nullable results passed the rehearsal-physical
 lane on 2026-09-11. Direct JUnit XML audit found no failures, errors, or skips:
 
 | Lane | Suites | Tests |
 | --- | ---: | ---: |
-| Focused candidate, both parsers and runtimes | 4 | 28 |
-| Same production-erased inverse | 4 | 28 |
+| Focused candidate, both parsers and runtimes | 4 | 36 |
+| Same production-erased inverse | 4 | 36 |
 | Complete backend suite | 22 | 402 |
 
 The inherited production-erased full checkpoint is `17676a90e1`: 212 suites,
 2,863 tests (backend 402, physical CLI model 6, full FIR2IR 2,327, integration
 128), all green. Its actual FIR2IR Test task was explicitly rerun without
 filters. This feature is not another full aggregate: only rehearsal-selected
-compiler-owned callable InterfaceImpl mapping and fixture-local checks changed.
+owner admission, foreign-result dispatch, and fixture-local checks changed.
 Production mapping, Runtime/Stdlib, shared compiler, and schemas are unchanged.
 
-The shared physical-carrier rule, exact state/result controls, ordinary C#
-implementation, InterfaceMap checks, and inverse are recorded in the
-[callable capture archive](docs/archive/generic-owner-callable-semantic-capture-2026-09-11.md).
+The actual split MethodDef payload, preserved typed/semantic state, ordinary
+C# override chains, InterfaceMap checks, and inverse are recorded in the
+[foreign split-result archive](docs/archive/generic-owner-foreign-split-result-2026-09-11.md).
 The independently fixed production nominal-box defect and full gate are in the
 [callable value-class archive](docs/archive/value-class-callable-nominal-result-2026-09-11.md).
 
 ## Active work
 
-Investigate the next generated-owner inheritance boundary using the recorded
-owner plans. The census now passes the private overload and exact callable
-construction in `AbstractMap`, then rejects its anonymous keys object's generic
-base argument as unavailable. Establish whether an earlier enclosing-owner
-admission failure causes that missing binder before changing capture/base-edge
-rules. An open-nullable callable capturing a generic owner's getter remains an
+Continue foreign-input authority from the retained custom probe. The census
+established that `AbstractMap` and `AbstractCollection` are blocked at foreign
+semantic override admission; their anonymous children's unavailable generic
+base binders are downstream, not permission for another capture exception.
+Split-result forwarding with proven fixed inputs is now closed. Owner-relative
+inputs and Common broad-candidate inputs still need their own complete physical
+conversion/semantic policy; a logical strict `K` alone is not that proof.
+An open-nullable callable capturing a generic owner's getter remains an
 independent earlier-routing gap; its saved probe must not become a getter-name
 exception. Public/top-level semantic overload families also remain separate.
 
@@ -90,8 +92,8 @@ generic owners/state. The complete natural/semantic constructor contract is
 still open: the existing `L` seal alone does not admit broad constructors, and
 closed reference covariance still includes CLR-unnameable bottom views.
 Rerun the census from this green checkpoint; custom-shape correctness is not
-complete stdlib closure. Broad inputs, split-result forwarding, fixed semantic
-fields, and their inheritance compositions remain separate gaps.
+complete stdlib closure. Broad inputs, refined/nested split-result forwarding,
+fixed semantic fields, and their inheritance compositions remain separate gaps.
 Do not add declaration, package, collection, `Map`, member-name, IR-origin,
 or stdlib exceptions.
 

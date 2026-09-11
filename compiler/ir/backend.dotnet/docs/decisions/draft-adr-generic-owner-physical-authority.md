@@ -634,6 +634,20 @@ argument requiring an unproved broad/owner-relative conversion keeps the class
 owner erased. A protected compiler hook is never an extra C# authoring
 obligation.
 
+The input proof and result layout remain independent. With those already-equal
+fixed input carriers, a direct owner-nullable natural result may forward its
+actual split payload and trailing `out bool` into a private local pair, then
+reconstruct the object-domain result through the shared nullable conversion.
+The payload is the selected MethodDef's physical result, bound in its own
+generic context; a later logical nullable/value-class substitution never
+remaps it. The emitted call consumes the complete physical parameter vector,
+including the flag address. Only a detected foreign override uses this path:
+the Kotlin semantic body keeps its wider authoritative state and must not be
+forced through a natural wrapper which narrows a legal widened value. This
+does not admit owner-dependent/broad inputs, refined or nested split results,
+or split results with owner-relative MethodSpec constraints. Those need their
+own complete input/slot proofs, not an additional combined member role.
+
 When a compiler-owned natural wrapper and its semantic body have identical
 physical boundaries, the natural virtual operation can itself implement the
 class capability. No override probe or object-result convention is necessary:

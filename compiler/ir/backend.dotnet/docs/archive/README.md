@@ -14,6 +14,9 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-foreign-split-result-2026-09-11.md`](generic-owner-foreign-split-result-2026-09-11.md)
+  records fixed-input foreign split-result dispatch, actual payload/flag
+  authority, ordinary C# override chains, typed state, and the inverse gate.
 - [`generic-owner-callable-semantic-capture-2026-09-11.md`](generic-owner-callable-semantic-capture-2026-09-11.md)
   records callable physical-carrier InterfaceImpl binding, retained independent
   typed state/results, actual C# InterfaceMaps, and the production inverse.

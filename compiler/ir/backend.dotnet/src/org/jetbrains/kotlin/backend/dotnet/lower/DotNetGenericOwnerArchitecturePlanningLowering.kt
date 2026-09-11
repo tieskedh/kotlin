@@ -2420,8 +2420,12 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                         producerRecordedImplementationLayout is
                         DotNetGenericOwnerPhysicalCallableResultLayoutRecord.SplitNullable
             }
+        val hasDirectNullableOwnerResult = (source.returnType as? IrSimpleType)?.let { result ->
+            result.nullability == SimpleTypeNullability.MARKED_NULLABLE &&
+                    (result.classifier as? IrTypeParameterSymbol)?.owner?.parent === source.parent
+        } == true
         val supportsDeclarationIndependentArguments =
-            !mayUseSplitNullableResult && source.typeParameters.isEmpty() &&
+            (!mayUseSplitNullableResult || hasDirectNullableOwnerResult) && source.typeParameters.isEmpty() &&
                     source.parameters.drop(1).size == parameterSlotDomains.size &&
                     source.parameters.drop(1).zip(parameterSlotDomains).all { pair ->
                         pair.second == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
@@ -2452,10 +2456,9 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                     overridesErasedOwnerRelativeInterfaceSlot &&
                     DotNetGenericOwnerSemanticHookReason.OWNER_RELATIVE_METHOD_BOUND in
                     semanticHookReasons
-        // The split-nullable natural slot has an additional `out bool` which this direct
-        // dispatcher does not yet allocate or translate back to Kotlin's object-domain null.
-        // Refuse the probe before admission rather than emitting a malformed call which silently
-        // treats the payload as a complete result. The owner-relative case is admitted only when
+        // A direct owner-nullable result may reconstruct the actual natural MethodDef's split
+        // payload/flag in the dispatcher. Refined/nested results and owner-relative method binders
+        // still need independent composition proofs. The owner-relative case is admitted only when
         // it closes an interface slot whose relational constraint interface lowering will erase;
         // an owner-declared `<R : T>` MethodDef remains authoritative and cannot implement an
         // unconstrained capability MethodSpec. This is still an early candidate, not physical
