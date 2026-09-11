@@ -213,7 +213,7 @@ internal class DotNetIlEmitter(
     private val genericInterfaceNaturalMethodParameterDomains:
             Map<IrSimpleFunction, List<DotNetGenericOwnerPhysicalSlotDomain>> = emptyMap(),
     private val genericSamWrapperSemanticPlans:
-            Map<IrClass, DotNetContravariantOpenNullableSamWrapperPlan> = emptyMap(),
+            Map<IrClass, DotNetOpenNullableSamWrapperPlan> = emptyMap(),
     private val genericOwnerCapabilityInterfaces: Map<IrClass, IrClass> = emptyMap(),
     private val externalReifiedGenericInterfaceCapabilityProviders: Map<IrClass, IrClass> = emptyMap(),
     private val externalGenericOwnerCapabilitySupertypeProviders: Map<IrClass, List<IrClass>> = emptyMap(),
@@ -4566,17 +4566,23 @@ internal class DotNetIlEmitter(
                 ?: dotNetUnsupported(
                     "semantic SAM wrapper '${irClass.name}' has no admitted natural TypeDef anchor"
                 )
+            val expectedVariance = when (plan.interfaceVariance) {
+                DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT -> Variance.INVARIANT
+                DotNetGenericOwnerPhysicalTypeParameterVariance.CONTRAVARIANT -> Variance.IN_VARIANCE
+                DotNetGenericOwnerPhysicalTypeParameterVariance.COVARIANT ->
+                    error("Internal .NET backend error: covariant open-nullable SAM was not admitted")
+            }
             check(naturalClass.typeParameterCount == 1 &&
-                    naturalClass.typeParameterVariances == listOf(Variance.IN_VARIANCE)
+                    naturalClass.typeParameterVariances == listOf(expectedVariance)
             ) {
                 "Internal .NET backend error: semantic SAM wrapper '${irClass.name}' no longer " +
-                        "targets one contravariant natural interface"
+                        "targets its variance-authoritative natural interface"
             }
             val witness = DotNetIlValueType.TypeParameter(
                 index = witnessIndex,
                 isMethodParameter = false,
             )
-            DotNetRuntimeTypes.genericInterfaceContravariantOpenNullableViewType(
+            DotNetRuntimeTypes.genericInterfaceOpenNullableViewType(
                 DotNetIlValueType.GenericInstance(naturalClass, listOf(witness)),
             )
         }

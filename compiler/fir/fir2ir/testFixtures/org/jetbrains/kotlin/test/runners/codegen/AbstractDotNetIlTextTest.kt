@@ -679,6 +679,12 @@ private class BackendCliDotNetFacade(
             testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
             directory = testServices.getOrCreateTempDirectory("generic-owner-generic-sam-wrapper"),
         )
+        validateGenericOwnerInvariantNullableSam(
+            genericOwnerRehearsal, loweredInput.configuration.dotNetProducesLibrary,
+            loweredInput.configuration.dotNetTarget, completedOutput.output,
+            completedOutput.declarations, testServices.moduleStructure.originalTestDataFiles.single(),
+            testServices.getOrCreateTempDirectory("generic-owner-invariant-nullable-sam"),
+        )
         validateGenericOwnerStateAuthorityCSharp(
             genericOwnerRehearsal = genericOwnerRehearsal,
             producesLibrary = loweredInput.configuration.dotNetProducesLibrary,
@@ -8868,6 +8874,8 @@ private const val GENERIC_OWNER_CALLABLE_COMPOSITION_CSHARP_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_CALLABLE_COMPOSITION_CSHARP_PROBE"
 private const val GENERIC_OWNER_GENERIC_SAM_WRAPPER_CSHARP_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_GENERIC_SAM_WRAPPER_CSHARP_PROBE"
+private const val GENERIC_OWNER_INVARIANT_OPEN_NULLABLE_SAM_CSHARP_PROBE_MARKER =
+    "// DOTNET_GENERIC_OWNER_INVARIANT_OPEN_NULLABLE_SAM_CSHARP_PROBE"
 private const val GENERIC_OWNER_STATE_AUTHORITY_CSHARP_PROBE_MARKER =
     "// DOTNET_GENERIC_OWNER_STATE_AUTHORITY_CSHARP_PROBE"
 private const val GENERIC_OWNER_RUNTIME_ITERATOR_CSHARP_PROBE_MARKER =
@@ -17306,7 +17314,7 @@ private fun validateGenericOwnerGenericSamWrapper(
     val wrapperFamilyPrefix = "sam\$generic_owner_sam_wrapper_Sink\$"
     val naturalWrapperBaseName = "${wrapperFamilyPrefix}0"
     val witnessNamespace = "Kotlin.Runtime.Internal"
-    val witnessName = "GenericInterfaceContravariantOpenNullableView`1"
+    val witnessName = "GenericInterfaceOpenNullableView`1"
     val objectType = DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.OBJECT)
     val stringType = DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.STRING)
     val ownerParameter = DotNetClrTypeSignature.GenericParameter(
@@ -18046,6 +18054,221 @@ private fun validateGenericOwnerGenericSamWrapperCasts(
     listOf(runtime, stdlib).forEach { dependency ->
         dependency.copyTo(directory.resolve(dependency.name), overwrite = true)
     }
+    executeSnapshotConsumer(target, consumer, directory)
+}
+
+/** Invariance must not inherit the contravariant witness predicate; projections remain Kotlin views. */
+private fun validateGenericOwnerInvariantNullableSam(
+    genericOwnerRehearsal: Boolean,
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    declarations: Map<String, DotNetPhysicalDeclaration>,
+    testDataFile: File,
+    directory: File,
+) {
+    if (GENERIC_OWNER_INVARIANT_OPEN_NULLABLE_SAM_CSHARP_PROBE_MARKER !in testDataFile.readText()) return
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+    val namespaceName = "generic.owner.invariant.nullable.sam"
+    val markerName = "Kotlin.Runtime.Internal.GenericInterfaceOpenNullableView`1"
+    val metadata = DotNetClrMetadataReader.read(producer)
+    fun typeName(handle: org.jetbrains.kotlin.load.dotnet.DotNetClrMetadataHandle): String? =
+        metadata.typeDefinitions.singleOrNull { it.handle == handle }?.let {
+            "${it.namespaceName}.${it.metadataName}"
+        } ?: metadata.typeReferences.singleOrNull { it.handle == handle }?.let {
+            "${it.namespaceName}.${it.metadataName}"
+        }
+    fun signature(handle: org.jetbrains.kotlin.load.dotnet.DotNetClrMetadataHandle): DotNetClrTypeSignature =
+        metadata.typeSpecifications.singleOrNull { it.handle == handle }?.signature
+            ?: DotNetClrTypeSignature.Named(handle, isValueType = false)
+    fun named(signature: DotNetClrTypeSignature, name: String): Boolean =
+        (signature as? DotNetClrTypeSignature.Named)?.let { !it.isValueType && typeName(it.type) == name } == true
+    fun construction(signature: DotNetClrTypeSignature, name: String): DotNetClrTypeSignature.GenericInstance? =
+        (signature as? DotNetClrTypeSignature.GenericInstance)?.takeIf { named(it.genericType, name) }
+
+    val epochRecords = declarations.genericOwnerRehearsalEpochRecordIndexKeys()
+    if (!genericOwnerRehearsal) {
+        check(epochRecords.isEmpty()) { "Invariant SAM inverse retained rehearsal records: $epochRecords" }
+        check(metadata.typeReferences.none { "${it.namespaceName}.${it.metadataName}" == markerName } &&
+                metadata.typeDefinitions.none { it.namespaceName == namespaceName && it.metadataName.endsWith("`1") }
+        ) { "Invariant SAM inverse retained a generic owner or nullable witness" }
+    } else if (producesLibrary) {
+        val naturalName = "$namespaceName.PairInput`1"
+        val ownerParameter = DotNetClrTypeSignature.GenericParameter(DotNetClrGenericParameterKind.TYPE, 0)
+        val objectType = DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.OBJECT)
+        val stringType = DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.STRING)
+        val wrappers = metadata.typeDefinitions.filter { type ->
+            !type.isInterface && metadata.interfaceImplementations.any { edge ->
+                edge.implementingType == type.handle &&
+                        named(signature(edge.interfaceType), "Kotlin.Runtime.Internal.FunctionAdapter")
+            }
+        }
+        check(wrappers.size == if (producer.name.equals("lib.dll", true)) 1 else 2) {
+            "Expected one semantic wrapper and, in middle, one natural wrapper: $wrappers"
+        }
+        var semanticCount = 0
+        wrappers.forEach { wrapper ->
+            check(wrapper.visibility == DotNetClrTypeVisibility.NOT_PUBLIC && wrapper.isSealed)
+            val binders = metadata.genericParameterDefinitions.filter { it.owner == wrapper.handle }
+            check(binders.singleOrNull()?.let { parameter ->
+                parameter.number == 0 && parameter.variance == DotNetClrGenericParameterVariance.INVARIANT &&
+                        !parameter.hasReferenceTypeConstraint && !parameter.hasNotNullableValueTypeConstraint &&
+                        !parameter.hasDefaultConstructorConstraint &&
+                        metadata.genericParameterConstraints.none { it.owner == parameter.handle }
+            } == true) { "SAM wrapper must have one unconstrained invariant witness: $binders" }
+            val fields = metadata.fieldDefinitions.filter { it.declaringType == wrapper.handle }
+            check(fields.singleOrNull()?.let {
+                it.visibility == DotNetClrFieldVisibility.PRIVATE && !it.isStatic &&
+                        named(it.signature.fieldType, "Kotlin.Function2")
+            } == true) { "SAM wrapper must retain one raw Function2 field, without shadow state: $fields" }
+            val methods = metadata.methodDefinitions.filter { it.declaringType == wrapper.handle }
+            check(methods.singleOrNull { it.name == ".ctor" }?.let {
+                it.visibility == DotNetClrMethodVisibility.ASSEMBLY && !it.isStatic &&
+                        it.signature.parameterTypes.singleOrNull()?.let { p -> named(p, "Kotlin.Function2") } == true
+            } == true) { "SAM wrapper must retain its raw Function2 constructor" }
+            val edges = metadata.interfaceImplementations.filter { it.implementingType == wrapper.handle }
+                .map { signature(it.interfaceType) }
+            val marker = edges.mapNotNull { construction(it, markerName) }.singleOrNull()
+            val natural = edges.mapNotNull { construction(it, naturalName) }
+            val semantic = marker != null
+            if (marker != null) {
+                semanticCount++
+                check(natural.isEmpty() && marker.arguments.singleOrNull()?.let {
+                    construction(it, naturalName)?.arguments == listOf(ownerParameter)
+                } == true) { "Nullable witness must anchor PairInput<!0>, never assert that natural view: $edges" }
+            } else {
+                check(natural.singleOrNull()?.arguments == listOf(ownerParameter)) {
+                    "Natural wrapper lost its exact PairInput<!0> edge: $edges"
+                }
+            }
+            val input = if (semantic) objectType else ownerParameter
+            check(methods.singleOrNull { it.name == "combine" }?.let {
+                it.visibility == DotNetClrMethodVisibility.PUBLIC && !it.isStatic && !it.isAbstract &&
+                        it.signature.returnType == stringType && it.signature.parameterTypes == listOf(input, input)
+            } == true) { "PairInput wrapper lost its selected two-input callable signature: $methods" }
+        }
+        check(semanticCount == 1) { "Nullable wrapper discovery must not depend on Common cache encounter order" }
+        if (producer.name.equals("lib.dll", true)) {
+            val family = declarations.values.filterIsInstance<DotNetPhysicalDeclaration.PublishedGenericInterfaceFamily>()
+                .single { it.ownerPath.lastOrNull() == naturalName }
+            check(family.naturalTypeParameterVariances == listOf(DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT))
+            validateReifiedGenericInterfaceCSharpManifest(
+                producer, expectedDeclaredOwner = "PairInput`1", expectedMemberName = "combine",
+                expectedTypeParameterVariances = listOf(DotNetCSharpTypeParameterVariance.INVARIANT),
+                expectedSemanticReturnType = "string", expectedSemanticParameterTypes = listOf("object", "object"),
+                expectedNaturalReturnType = "string", expectedNaturalParameterTypes = listOf("!0", "!0"),
+            )
+            val owner = metadata.typeDefinitions.single { "${it.namespaceName}.${it.metadataName}" == naturalName }
+            check(metadata.genericParameterDefinitions.single { it.owner == owner.handle }.variance ==
+                    DotNetClrGenericParameterVariance.INVARIANT)
+        }
+    }
+    if (producesLibrary) return
+
+    val lib = directory.resolve("lib.dll")
+    val middle = directory.resolve("middle.dll")
+    check(lib.isFile && middle.isFile)
+    val platformProperty = "kotlin.dotnet.test.platform.${target.description}.path"
+    val platform = System.getProperty(platformProperty)?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform property '$platformProperty'")
+    val runtime = platform.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platform.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    check(runtime.isFile && stdlib.isFile)
+    val source = directory.resolve("InvariantNullableSamConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+            using System.Reflection;
+            using generic.owner.invariant.nullable.sam;
+
+            public static class InvariantNullableSamConsumer
+            {
+                private static readonly bool Candidate = ${genericOwnerRehearsal.toString()};
+
+                private static void CheckInt(object value, bool semantic)
+                {
+                    if (!Object.ReferenceEquals(contractsKt.safeNullableIntInput(value), value) ||
+                        !Object.ReferenceEquals(contractsKt.checkedNullableIntInput(value), value) ||
+                        !contractsKt.isNullableIntInput(value) || !contractsKt.isPairInput(value))
+                        throw new InvalidOperationException("Compatible invariant casts lost identity");
+                    if ((contractsKt.safeIntInput(value) == null) != Candidate ||
+                        (contractsKt.safeNullableStringInput(value) == null) != Candidate ||
+                        (contractsKt.safeNullableAnyInput(value) == null) != Candidate ||
+                        contractsKt.checkedIntInputFails(value) != Candidate ||
+                        contractsKt.isIntInput(value) == Candidate)
+                        throw new InvalidOperationException("Invariant as/as?/is incorrectly used contravariance");
+                    if (Candidate) CheckInterfaces(value, semantic);
+                }
+
+                private static void CheckInterfaces(object value, bool semantic)
+                {
+                    Type wrapper = value.GetType();
+                    bool marker = false;
+                    bool natural = false;
+                    bool dispatched = false;
+                    foreach (Type contract in wrapper.GetInterfaces())
+                    {
+                        if (contract.IsGenericType)
+                        {
+                            string name = contract.GetGenericTypeDefinition().FullName;
+                            marker |= name == "$markerName";
+                            natural |= name == "$namespaceName.PairInput`1";
+                        }
+                        if (contract.IsGenericType || !contract.IsPublic) continue;
+                        InterfaceMapping map = wrapper.GetInterfaceMap(contract);
+                        for (int i = 0; i < map.InterfaceMethods.Length; i++)
+                        {
+                            ParameterInfo[] parameters = map.InterfaceMethods[i].GetParameters();
+                            if (map.InterfaceMethods[i].ReturnType != typeof(string) || parameters.Length != 2 ||
+                                parameters[0].ParameterType != typeof(object) || parameters[1].ParameterType != typeof(object))
+                                continue;
+                            MethodInfo target = map.TargetMethods[i];
+                            if (!target.IsPrivate || !target.IsVirtual || !target.IsFinal ||
+                                target.DeclaringType != wrapper || map.InterfaceMethods[i].Invoke(value, new object[] { null, 67 }) == null)
+                                throw new InvalidOperationException("Missing same-object capability MethodImpl");
+                            dispatched = true;
+                        }
+                    }
+                    if (marker != semantic || natural == semantic || !dispatched)
+                        throw new InvalidOperationException("Wrapper fabricated a natural view or lost semantic dispatch");
+                }
+
+                public static int Main()
+                {
+                    CheckInt(contractsKt.localNullableInput<int, int>(3), true);
+                    CheckInt(factoriesKt.externalNullableInput<string, int>("foreign"), true);
+                    CheckInt(factoriesKt.sharedNullableInput<int>(), true);
+                    CheckInt(factoriesKt.sharedClosedNullableIntInput(), false);
+                    object token = factoriesKt.tokenInput();
+                    if (!Object.ReferenceEquals(contractsKt.safeNullableTokenInput(token), token) ||
+                        (contractsKt.safeNullableDerivedInput(token) == null) != Candidate ||
+                        contractsKt.checkedDerivedInputFails(token) != Candidate ||
+                        contractsKt.isNullableDerivedInput(token) == Candidate)
+                        throw new InvalidOperationException("Invariant reference witness admitted a derived construction");
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val consumer = directory.resolve(
+        if (target == DotNetTarget.NET48) "InvariantNullableSamConsumer.exe" else "InvariantNullableSamConsumer.dll"
+    )
+    val references = listOf(lib, middle, runtime, stdlib)
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()),
+            source, consumer, references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()),
+            source, consumer, references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 -> error("The invariant SAM consumer needs an executable profile")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    listOf(runtime, stdlib).forEach { it.copyTo(directory.resolve(it.name), overwrite = true) }
     executeSnapshotConsumer(target, consumer, directory)
 }
 

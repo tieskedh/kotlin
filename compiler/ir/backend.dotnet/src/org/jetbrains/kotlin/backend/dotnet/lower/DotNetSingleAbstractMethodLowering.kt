@@ -9,7 +9,7 @@ import org.jetbrains.kotlin.backend.common.ScopeWithIr
 import org.jetbrains.kotlin.backend.common.lower.SingleAbstractMethodLowering
 import org.jetbrains.kotlin.backend.common.suspendFunction
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
-import org.jetbrains.kotlin.backend.dotnet.DotNetContravariantOpenNullableSamWrapperPlan
+import org.jetbrains.kotlin.backend.dotnet.DotNetOpenNullableSamWrapperPlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeParameterVariance
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMemberResultLayout
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMemberRole
@@ -99,9 +99,10 @@ internal class DotNetSingleAbstractMethodLowering(
             check(semanticInterfacesByWrapper.put(klass, interfaceClass) == null &&
                     dotNetContext.genericSamWrapperSemanticPlans.put(
                         klass,
-                        DotNetContravariantOpenNullableSamWrapperPlan(
+                        DotNetOpenNullableSamWrapperPlan(
                             logicalInterface = interfaceClass.symbol,
                             witnessParameter = witnessParameter,
+                            interfaceVariance = checkNotNull(semanticInterfaceVarianceOrNull(interfaceClass)),
                         ),
                     ) == null
             ) {
@@ -255,21 +256,29 @@ internal class DotNetSingleAbstractMethodLowering(
         if (exactConstructionArgumentsOrNull(type, interfaceClass) != null) {
             return GenericSamWrapperPhysicalPlan.NATURAL
         }
+        check(semanticOpenNullableWitnessArgumentsOrNull(type, interfaceClass) != null &&
+                semanticInterfaceVarianceOrNull(interfaceClass) != null
+        ) {
+            "Generic SAM construction '${type.render()}' has no verifier-nameable natural " +
+                    "TypeSpec and no truthful semantic-only open-nullable wrapper plan"
+        }
+        return GenericSamWrapperPhysicalPlan.SEMANTIC_ONLY
+    }
+
+    private fun semanticInterfaceVarianceOrNull(
+        interfaceClass: IrClass,
+    ): DotNetGenericOwnerPhysicalTypeParameterVariance? {
+        val logicalVariance = when (interfaceClass.typeParameters.singleOrNull()?.variance) {
+            Variance.INVARIANT -> DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT
+            Variance.IN_VARIANCE -> DotNetGenericOwnerPhysicalTypeParameterVariance.CONTRAVARIANT
+            else -> return null
+        }
         val physicalVariances = dotNetContext
             .earlyAdmittedGenericSamNaturalAuthorityPlans[interfaceClass.symbol]
             ?.selectedPhysicalVariances
             ?: externalDeclarations
                 .publishedGenericInterfaceNaturalTypeParameterVariancesOrNull(interfaceClass)
-        check(semanticOpenNullableWitnessArgumentsOrNull(type, interfaceClass) != null &&
-                interfaceClass.typeParameters.singleOrNull()?.variance == Variance.IN_VARIANCE &&
-                physicalVariances == listOf(
-                    DotNetGenericOwnerPhysicalTypeParameterVariance.CONTRAVARIANT,
-                )
-        ) {
-            "Generic SAM construction '${type.render()}' has no verifier-nameable natural " +
-                    "TypeSpec and no truthful semantic-only contravariant wrapper plan"
-        }
-        return GenericSamWrapperPhysicalPlan.SEMANTIC_ONLY
+        return logicalVariance.takeIf { physicalVariances == listOf(it) }
     }
 
     private fun semanticOpenNullableWitnessArgumentsOrNull(

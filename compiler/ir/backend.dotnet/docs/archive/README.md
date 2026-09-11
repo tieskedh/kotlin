@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-invariant-nullable-sam-2026-09-11.md`](generic-owner-invariant-nullable-sam-2026-09-11.md)
+  records invariant nullable SAM witnesses, strict invariant cast matching,
+  valid projections, physical result forwarding, reverse wrapper-cache order,
+  the candidate/inverse matrix, and the fresh 2,821-test target gate.
 - [`generic-owner-open-nullable-sam-2026-09-10.md`](generic-owner-open-nullable-sam-2026-09-10.md)
   records the bounded contravariant nullable SAM witness, separate-producer
   binding, semantic result joins, shared cast/equality behavior, focused

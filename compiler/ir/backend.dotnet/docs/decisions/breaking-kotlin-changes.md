@@ -40,9 +40,10 @@ the declaration's recorded variance. Unsupported owner/argument shapes remain
 outside the reified-owner proof; this entry does not authorize guessing their
 subtyping.
 
-The bounded contravariant direct-callable SAM form also checks ordinary natural
-constructions and the compiler-produced open-nullable witness described in the
-[SAM decision](fun-interfaces.md#open-nullable-contravariant-conversion).
+The bounded invariant and contravariant direct-callable SAM forms also check
+ordinary natural constructions and the compiler-produced open-nullable witness
+described in the
+[SAM decision](fun-interfaces.md#open-nullable-invariant-and-contravariant-conversion).
 This does not broaden the source boundary. An object may truthfully carry the
 logical `Sink<T?>` view without implementing a natural `Sink<Nullable<T>>`:
 the runtime must then validate its recorded witness and semantic capability,

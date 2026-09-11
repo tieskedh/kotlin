@@ -75,9 +75,11 @@ internal data class DotNetLoweredInterfaceDefaultImplementation(
  * implements only [logicalInterface]'s semantic capability; a separate runtime-only marker uses
  * the witness for BK-1 checks and is never a natural interface view or a value-carrier fact.
  */
-internal data class DotNetContravariantOpenNullableSamWrapperPlan(
+internal data class DotNetOpenNullableSamWrapperPlan(
     val logicalInterface: IrClassSymbol,
     val witnessParameter: IrTypeParameterSymbol,
+    /** Admission requires the same invariant/contravariant policy in Kotlin and CLR authority. */
+    val interfaceVariance: DotNetGenericOwnerPhysicalTypeParameterVariance,
 )
 
 /** Pre-lowering authority for one source function which may acquire an object-input twin. */
@@ -279,9 +281,9 @@ internal class DotNetBackendContext(
     /** Generated SAM implementation owners which consumed one exact natural interface binder. */
     val genericSamWrapperNaturalInterfaces: MutableMap<IrClass, IrClassSymbol> =
         java.util.IdentityHashMap()
-    /** Generated SAM owners admitted to the bounded contravariant `I<T?>` capability-only plan. */
+    /** Generated SAM owners admitted to the bounded open-nullable `I<T?>` capability-only plan. */
     val genericSamWrapperSemanticPlans:
-        MutableMap<IrClass, DotNetContravariantOpenNullableSamWrapperPlan> =
+        MutableMap<IrClass, DotNetOpenNullableSamWrapperPlan> =
         java.util.IdentityHashMap()
     val consumedEarlyGenericInterfaceNaturalAuthorityPlans: MutableSet<IrClassSymbol> = linkedSetOf()
     /** Explicitly admitted subset populated later by bounded reified-interface admission only. */

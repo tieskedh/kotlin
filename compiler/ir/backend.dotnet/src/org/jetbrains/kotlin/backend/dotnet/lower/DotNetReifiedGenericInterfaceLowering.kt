@@ -864,7 +864,11 @@ internal class DotNetReifiedGenericInterfaceLowering(
                     Variance.IN_VARIANCE ->
                         argumentClassifier is IrTypeParameterSymbol ||
                                 projection.type.hasClrValueGenericArgumentCarrier()
-                    Variance.INVARIANT -> false
+                    // Invariance does not make open T? a nameable CLR argument. Record the
+                    // producer's semantic result now so a later closed MethodSpec (including
+                    // reference T) cannot fabricate an exact I<T> result in a forwarding body.
+                    Variance.INVARIANT -> argumentClassifier is IrTypeParameterSymbol &&
+                            projection.type.isMarkedNullable()
                 }
                 if (requiresSemanticCarrier) return owner
             }

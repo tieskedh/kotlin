@@ -92,7 +92,7 @@ internal object DotNetGenericInterfaceRuntime {
     }
   }
 
-  .class interface public abstract auto ansi 'GenericInterfaceContravariantOpenNullableView`1'<TNaturalAnchor>
+  .class interface public abstract auto ansi 'GenericInterfaceOpenNullableView`1'<TNaturalAnchor>
   {
     $compilerAbiTypeAttributesIl
   }
@@ -330,7 +330,7 @@ internal object DotNetGenericInterfaceRuntime {
       ret
     }
 
-    .method private hidebysig static bool 'IsCompatibleContravariantOpenNullableView'(
+    .method private hidebysig static bool 'IsCompatibleOpenNullableView'(
         $typeType 'runtimeClass',
         $typeType[] 'interfaces',
         $typeType 'requestedConstruction',
@@ -348,7 +348,8 @@ internal object DotNetGenericInterfaceRuntime {
         [6] $typeType 'naturalAnchor',
         [7] $typeType[] 'anchorArguments',
         [8] $typeType 'witness',
-        [9] $typeType 'requestedArgument'
+        [9] $typeType 'requestedArgument',
+        [10] int32 'variance'
       )
       ldarg.s 'expectedCapability'
       brfalse GIF_OpenNullableFalse
@@ -374,8 +375,13 @@ internal object DotNetGenericInterfaceRuntime {
       conv.i4
       ldc.i4.3
       and
+      stloc.s 10
+      ldloc.s 10
+      brfalse GIF_OpenNullableConstruction
+      ldloc.s 10
       ldc.i4.2
       bne.un GIF_OpenNullableFalse
+    GIF_OpenNullableConstruction:
       ldarg.2
       callvirt instance $typeType[] ${coreLibraryReference}System.Type::GetGenericArguments()
       stloc.1
@@ -388,7 +394,7 @@ internal object DotNetGenericInterfaceRuntime {
       ldc.i4.0
       ldelem.ref
       stloc.s 9
-      ldtoken 'Kotlin.Runtime.Internal.GenericInterfaceContravariantOpenNullableView`1'
+      ldtoken 'Kotlin.Runtime.Internal.GenericInterfaceOpenNullableView`1'
       call $typeType ${coreLibraryReference}System.Type::GetTypeFromHandle(
           valuetype ${coreLibraryReference}System.RuntimeTypeHandle)
       stloc.2
@@ -450,16 +456,27 @@ internal object DotNetGenericInterfaceRuntime {
       ldloc.s 8
       callvirt instance bool ${coreLibraryReference}System.Type::get_IsValueType()
       brtrue.s GIF_OpenNullableValueWitness
+      ldloc.s 10
+      brfalse.s GIF_OpenNullableInvariantReference
       ldloc.s 8
       ldloc.s 9
       callvirt instance bool ${coreLibraryReference}System.Type::IsAssignableFrom($typeType)
       brtrue.s GIF_OpenNullableTrue
       br.s GIF_OpenNullableContinue
-    GIF_OpenNullableValueWitness:
+    GIF_OpenNullableInvariantReference:
       ldloc.s 8
       ldloc.s 9
       call bool ${coreLibraryReference}System.Type::op_Equality($typeType, $typeType)
       brtrue.s GIF_OpenNullableTrue
+      br.s GIF_OpenNullableContinue
+    GIF_OpenNullableValueWitness:
+      ldloc.s 10
+      brfalse.s GIF_OpenNullableNullableValue
+      ldloc.s 8
+      ldloc.s 9
+      call bool ${coreLibraryReference}System.Type::op_Equality($typeType, $typeType)
+      brtrue.s GIF_OpenNullableTrue
+    GIF_OpenNullableNullableValue:
       ldloc.s 9
       call $typeType ${coreLibraryReference}System.Nullable::GetUnderlyingType($typeType)
       ldloc.s 8
@@ -573,7 +590,7 @@ internal object DotNetGenericInterfaceRuntime {
       ldarg.1
       ldloc.3
       ldarg.2
-      call bool Kotlin.Runtime.Internal.GenericInterfaceDispatch::'IsCompatibleContravariantOpenNullableView'(
+      call bool Kotlin.Runtime.Internal.GenericInterfaceDispatch::'IsCompatibleOpenNullableView'(
           $typeType, $typeType[], $typeType, $typeType, $typeType)
       ret
     GIF_CompatibleMiss:

@@ -11,8 +11,8 @@ ADRs, and dated evidence in [`docs/archive`](docs/archive/README.md).
   local `dotnet` and `fork/dotnet` together.
 - Reviewed upstream base:
   `88a184ab89279617dbfe4e89ba9831ed1b43c863`.
-- Physical library ABI 70, generic-owner artifact schema 22, and compiler/
-  runtime surface 61 are current. Git owns the exact promoted commit identity.
+- Physical library ABI 71, generic-owner artifact schema 22, and compiler/
+  runtime surface 62 are current. Git owns the exact promoted commit identity.
 - The production-inert generic-owner authority consolidation is closed. It
   separates Kotlin logical authority, CLR declaration authority, per-value
   physical provenance, late operation routing, and producer-wide state.
@@ -49,15 +49,15 @@ Current representation rules are linked from the navigation section below.
 
 ## Latest verification
 
-The 2026-09-10 ABI-70/schema-22 target-wide aggregate includes the bounded
-open-nullable contravariant SAM slice. Direct JUnit XML audit found 212 suites
-and 2,817 tests, with zero failures, errors, or skips:
+The 2026-09-11 ABI-71/schema-22 target-wide aggregate includes the bounded
+open-nullable invariant SAM extension. Direct JUnit XML audit found 212 suites
+and 2,821 tests, with zero failures, errors, or skips:
 
 | Root | Suites | Tests |
 | --- | ---: | ---: |
 | backend | 22 | 400 |
 | `dotnet.ir` | 1 | 6 |
-| FIR2IR | 187 | 2,283 |
+| FIR2IR | 187 | 2,287 |
 | integration | 2 | 128 |
 
 The actual FIR2IR Test task was explicitly rerun without filters after the
@@ -67,19 +67,21 @@ focused matrix, and the public target aggregate completed with:
 .\gradlew.bat --max-workers=1 --no-configuration-cache -q :compiler:fir:fir2ir:dotNetTest --rerun :compiler:backend.dotnet:dotNetTest
 ```
 
-The focused candidate and production-erased inverse each passed 12 tests
-through PSI and LightTree on .NET 10 and Framework 4.8. The shared SAM-cache
-boundary also passed 20 JVM tests. Scope, metadata/identity/cast evidence, and
-reproduction commands are in the
-[open-nullable SAM archive](docs/archive/generic-owner-open-nullable-sam-2026-09-10.md).
+The focused candidate and production-erased inverse each passed 16 tests
+through PSI and LightTree on .NET 10 and Framework 4.8, including the existing
+contravariant SAM and natural-interface interop regressions. Scope,
+metadata/identity/cast evidence, and reproduction commands are in the
+[invariant nullable SAM archive](docs/archive/generic-owner-invariant-nullable-sam-2026-09-11.md).
 
 ## Active work
 
-Resume the source-built Runtime/Stdlib generic-owner rehearsal census beyond
-the closed exact and open-nullable contravariant SAM cases within phase 1 of
-the way forward. The next real failure selects the next structural provenance,
-placement, operation, or state rule. Do not add declaration, package,
-collection, `Map`, member-name, IR-origin, or stdlib exceptions.
+Continue the source-built Runtime/Stdlib generic-owner rehearsal census within
+phase 1 of the way forward. SAM admission now passes and the census reaches
+emission. Isolate the first physical inheritance/MethodDef-view mismatch in a
+declaration-independent reproducer; the dated archive records the newly visible
+failure groups without treating cascading diagnostics as independent bugs.
+Do not add declaration, package, collection, `Map`, member-name, IR-origin,
+or stdlib exceptions.
 
 The next slice must preserve ordinary C# overrides and implementations: hidden
 semantic compiler ABI cannot become a second source-level obligation. It must

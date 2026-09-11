@@ -351,8 +351,8 @@ This rule does not introduce a representation-repair proxy or shadow state.
 The SAM wrapper is the conversion object already required by Common lowering
 and keeps its single raw `FunctionN` field. The current executable proof is
 deliberately bounded to one unconstrained interface parameter and the admitted
-direct-callable SAM shape. The bounded open-nullable contravariant alternative
-is owned by the [SAM decision](fun-interfaces.md#open-nullable-contravariant-conversion):
+direct-callable SAM shape. The bounded open-nullable invariant/contravariant alternative
+is owned by the [SAM decision](fun-interfaces.md#open-nullable-invariant-and-contravariant-conversion):
 the same Common conversion object carries a semantic interface and an invariant
 underlying-type witness, without claiming a natural nullable construction.
 Natural and semantic wrapper plans have separate cache entries. The witness

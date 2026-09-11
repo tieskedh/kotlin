@@ -93,7 +93,9 @@ shape. The accepted erased production wrapper is unchanged. Wider interface
 bounds, multiple parameters, inherited SAM families, and projected operands
 remain unproved and fail closed.
 
-### Open-nullable contravariant conversion
+<a id="open-nullable-contravariant-conversion"></a>
+
+### Open-nullable invariant and contravariant conversion
 
 An open `Sink<T?>` conversion with a logically non-null `T` cannot generally
 name a natural CLR construction. `T = String` needs `Sink<string>`, whereas
@@ -103,12 +105,13 @@ the missing operation is a type-level nullable construction, not a method's
 payload/null-flag pair.
 
 For an admitted direct-callable interface whose sole parameter is logically
-and physically contravariant, the Common conversion object may instead use:
+and physically invariant or contravariant, the Common conversion object may
+instead use:
 
 ```text
 private sealed sam$SinkNullable<W>
     : FunctionAdapter, SinkSemantic,
-      GenericInterfaceContravariantOpenNullableView<Sink<W>>
+      GenericInterfaceOpenNullableView<Sink<W>>
 ```
 
 It retains one raw `FunctionN` field and forwards the semantic input without
@@ -123,11 +126,28 @@ The empty metadata-public marker belongs to versioned compiler ABI. Its
 `Sink<W>` argument anchors the exact admitted natural TypeDef and underlying
 witness; it does **not** assert that the object implements that construction.
 Runtime matching requires both the expected semantic capability and the
-matching natural definition. A non-nullable value witness accepts that value
-type or its closed `Nullable` form. A reference witness accepts verifier-valid
-subtypes through contravariance. A nullable-value witness is rejected. No
+matching natural definition. The recorded declaration variance selects the
+matching policy; the witness does not invent variance:
+
+- invariant: a non-nullable value witness accepts only its closed `Nullable`
+  form, and a reference witness requires the identical CLR argument;
+- contravariant: a non-nullable value witness accepts that value type or its
+  closed `Nullable` form, and a reference witness accepts CLR-assignable argument
+  types. A compatible value argument still needs the semantic route; it does not
+  prove a native CLR generic variance conversion.
+
+A nullable-value witness is rejected. Covariant declarations and disagreement
+between logical and physical variance are outside this bounded admission. No
 runtime `MakeGenericType`, representation-repair object, or shadow field is
 needed. Ordinary foreign implementations do not author the marker.
+
+An invariant two-input SAM uses the same rule as a one-input SAM. Its ordinary
+closed conversion still implements the exact natural `I<W>`; an open `I<T?>`
+conversion retains a witness-only semantic view. Legal Kotlin use-site
+projections remain valid on the same object, including `I<Int?>` to `I<in Int>`
+and `I<Base?>` to `I<in Derived?>`. They do not make a warning-bearing exact
+cast to `I<Int>` or `I<Derived?>` compatible. Neither Common declarations nor
+their declaration-site variance are changed to obtain a representable view.
 
 The same BK-1 predicate handles `as`, `as?`, and admitted parameterized `is`;
 stars and wrapper equality remain classifier checks. Successful operations
@@ -143,6 +163,10 @@ compilation may therefore contain both definitions, and equality over the same
 stored function remains symmetric between them. No wrapper plan, private field,
 or value-flow fact is inferred by a separate consumer: its DLL supplies the
 published interface identity and each callable's physical result carrier.
+Invariance does not make the open `T?` argument verifier-nameable: such a
+factory's semantic result must be recorded before binding any closed
+MethodSpec. A forwarding function preserves that physical result even when
+its substituted logical return type looks like an exact reference construction.
 
 This is a bounded representation proof, not a general nullable generic-owner
 ABI. Unconstrained nullable witnesses, other variance/member shapes, and wider
@@ -280,8 +304,9 @@ including:
   inheritance, default members, and suspend abstract methods;
 - the rehearsal-only invariant wrapper binder, exact closed and caller-
   MethodDef constructions, and the unchanged erased-production inverse;
-- local and separate-producer open-nullable contravariant conversions, their
-  witness-only InterfaceImpl, semantic dispatch, cast agreement, and result joins;
+- local and separate-producer open-nullable invariant and contravariant
+  conversions, their witness-only InterfaceImpl, semantic dispatch, cast
+  agreement, valid use-site projections, and result joins;
 - wrapper equality/hash behavior and negative cross-interface equality;
 - `is`/`as` through the ordinary interface identity;
 - physical absence of a CLR delegate base or extra public wrapper TypeDef;
