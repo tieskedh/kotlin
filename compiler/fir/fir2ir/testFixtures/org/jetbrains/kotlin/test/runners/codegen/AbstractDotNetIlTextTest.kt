@@ -752,6 +752,13 @@ private class BackendCliDotNetFacade(
             completedOutput.declarations, testServices.moduleStructure.originalTestDataFiles.single(),
             testServices.getOrCreateTempDirectory("generic-owner-foreign-split-result"),
         )
+        validateGenericOwnerForeignOwnerInput(
+            genericOwnerRehearsal, loweredInput.configuration.dotNetProducesLibrary,
+            loweredInput.configuration.dotNetTarget, completedOutput.output,
+            completedOutput.declarations,
+            testServices.moduleStructure.originalTestDataFiles.single(),
+            testServices.getOrCreateTempDirectory("generic-owner-foreign-owner-input"),
+        )
         validateGenericOwnerRuntimeIteratorCSharp(
             genericOwnerRehearsal = genericOwnerRehearsal,
             producesLibrary = loweredInput.configuration.dotNetProducesLibrary,
@@ -20199,11 +20206,116 @@ private fun validateGenericOwnerSplitNullableResultCSharp(
     executeSnapshotConsumer(target, authoringConsumer, directory)
 }
 
-/**
- * A fixed canonical dependency must not erase its containing generic owner. Check both state
- * seals and actual PE fields, then exercise separately compiled Kotlin/C# inheritance on the
- * same receiver without hidden ABI or duplicate state.
- */
+/** Exact inputs and nested semantic inputs bind different honest natural constructions. */
+private fun validateGenericOwnerForeignOwnerInput(
+    genericOwnerRehearsal: Boolean,
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    declarations: Map<String, DotNetPhysicalDeclaration>,
+    testDataFile: File,
+    directory: File,
+) {
+    if ("DOTNET_GENERIC_OWNER_FOREIGN_OWNER_INPUT_PROBE" !in testDataFile.readText()) return
+    if (!genericOwnerRehearsal) {
+        check(declarations.genericOwnerRehearsalEpochRecordIndexKeys().isEmpty())
+        check(DotNetClrMetadataReader.read(producer).typeDefinitions.none {
+            it.namespaceName == "generic.owner.foreign.input" && '`' in it.metadataName
+        })
+        return
+    }
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+    if (producesLibrary) return
+    val platform = System.getProperty("kotlin.dotnet.test.platform.${target.description}.path")?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform for foreign owner inputs")
+    val runtime = platform.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platform.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    val source = directory.resolve("OwnerInputConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+            using generic.owner.foreign.input;
+            public sealed class CsProducer : Producer<int>
+            {
+                public int produce() { return 53; }
+            }
+            public sealed class CsLookup : Lookup<object, int>
+            {
+                public int find(object key, out bool isNull)
+                {
+                    isNull = false;
+                    return ((Producer<int>)key).produce();
+                }
+            }
+            public sealed class CsExactLookup : Lookup<int, int>
+            {
+                public int find(int key, out bool isNull) { isNull = key != 7; return 97; }
+            }
+            public static class OwnerInputConsumer
+            {
+                public static int Main()
+                {
+                    var key = new CsProducer();
+                    if (typeof(inputsKt).GetMethod("nested").GetParameters()[0].ParameterType != typeof(Lookup<object, int>))
+                        throw new Exception("The nested semantic input fabricated a natural construction");
+                    if (!inputsKt.same(key, key) || inputsKt.nested(new CsLookup(), key) != 53)
+                        throw new Exception("Legal nested Kotlin variance lost input or identity");
+                    var exact = new CsExactLookup();
+                    if (inputsKt.exact(exact, 7) != 97 || inputsKt.exact(exact, 8) != null)
+                        throw new Exception("Exact input/result conversion");
+                    var method = exact.GetType().GetInterfaceMap(typeof(Lookup<int, int>)).TargetMethods[0];
+                    if (method.ReturnType != typeof(int) || method.GetParameters()[0].ParameterType != typeof(int) ||
+                        method.GetParameters()[1].ParameterType != typeof(bool).MakeByRefType() ||
+                        !method.GetParameters()[1].IsOut)
+                        throw new Exception("Exact value calls lost their typed input/payload");
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val consumer = directory.resolve(if (target == DotNetTarget.NET48) "OwnerInputConsumer.exe" else "OwnerInputConsumer.dll")
+    val references = listOf(directory.resolve("lib.dll"), runtime, stdlib)
+    fun compileProbe(source: File, output: File, executable: Boolean) = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()),
+            source, output, references = references, executable = executable, warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()),
+            source, output, references = references, executable = executable, warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 -> error("The owner-input consumer needs an executable profile")
+    }
+    val compilation = compileProbe(source, consumer, executable = true)
+    check(compilation.exitCode == 0) { compilation.output }
+    listOf(runtime, stdlib).forEach { it.copyTo(directory.resolve(it.name), overwrite = true) }
+    executeSnapshotConsumer(target, consumer, directory)
+    val incompatibleSource = directory.resolve("IncompatibleOwnerInput.cs").apply {
+        writeText(
+            """
+            using generic.owner.foreign.input;
+            public sealed class NativeNestedLookup : Lookup<Producer<object>, int>
+            {
+                public int find(Producer<object> key, out bool isNull) { isNull = false; return 53; }
+            }
+            public static class IncompatibleOwnerInput
+            {
+                public static int? invoke(Producer<int> key)
+                {
+                    return inputsKt.nested(new NativeNestedLookup(), key);
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val incompatible = compileProbe(incompatibleSource, directory.resolve("IncompatibleOwnerInput.dll"), executable = false)
+    check(incompatible.exitCode != 0 && "CS1503" in incompatible.output && "Lookup" in incompatible.output) {
+        "Different invariant native constructions must not be presented as the same physical contract: ${incompatible.output}"
+    }
+}
+
 private fun validateGenericOwnerForeignSplitResult(
     genericOwnerRehearsal: Boolean,
     producesLibrary: Boolean,
@@ -21174,6 +21286,11 @@ private fun validateGenericOwnerClosedConstructorInput(
     executeSnapshotConsumer(target, consumer, directory)
 }
 
+/**
+ * A fixed canonical dependency must not erase its containing generic owner. Check both state
+ * seals and actual PE fields, then exercise separately compiled Kotlin/C# inheritance on the
+ * same receiver without hidden ABI or duplicate state.
+ */
 private fun validateGenericOwnerCanonicalState(
     genericOwnerRehearsal: Boolean,
     producesLibrary: Boolean,

@@ -14,6 +14,9 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-foreign-input-contracts-2026-09-11.md`](generic-owner-foreign-input-contracts-2026-09-11.md)
+  records exact/nested outward C# input contracts, the rejected different
+  construction, the inverse, and the separately preserved incoming proof gap.
 - [`generic-owner-foreign-split-result-2026-09-11.md`](generic-owner-foreign-split-result-2026-09-11.md)
   records fixed-input foreign split-result dispatch, actual payload/flag
   authority, ordinary C# override chains, typed state, and the inverse gate.

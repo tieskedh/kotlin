@@ -49,22 +49,25 @@ Current representation rules are linked from the navigation section below.
 
 ## Latest verification
 
-Foreign virtual split-nullable results passed the rehearsal-physical
-lane on 2026-09-11. Direct JUnit XML audit found no failures, errors, or skips:
+The exact/nested foreign input contract proof passed the focused lane on
+2026-09-11. Direct JUnit XML audit found no failures, errors, or skips:
 
 | Lane | Suites | Tests |
 | --- | ---: | ---: |
-| Focused candidate, both parsers and runtimes | 4 | 36 |
-| Same production-erased inverse | 4 | 36 |
-| Complete backend suite | 22 | 402 |
+| Focused candidate, both parsers and runtimes | 4 | 12 |
+| Same production-erased inverse | 4 | 12 |
 
 The inherited production-erased full checkpoint is `17676a90e1`: 212 suites,
 2,863 tests (backend 402, physical CLI model 6, full FIR2IR 2,327, integration
 128), all green. Its actual FIR2IR Test task was explicitly rerun without
-filters. This feature is not another full aggregate: only rehearsal-selected
-owner admission, foreign-result dispatch, and fixture-local checks changed.
-Production mapping, Runtime/Stdlib, shared compiler, and schemas are unchanged.
+filters. The backend's 22 suites and 402 tests are inherited from `f23e3d20cf`,
+which also passed its 36-case candidate and inverse. The latest delta changes
+only test data, a fixture-local validator, and documentation: no compiler
+implementation, physical mapping, Runtime/Stdlib, or schema changed.
 
+The exact/nested input signatures, rejected native construction, and open
+incoming evidence gap are recorded in the
+[foreign input archive](docs/archive/generic-owner-foreign-input-contracts-2026-09-11.md).
 The actual split MethodDef payload, preserved typed/semantic state, ordinary
 C# override chains, InterfaceMap checks, and inverse are recorded in the
 [foreign split-result archive](docs/archive/generic-owner-foreign-split-result-2026-09-11.md).
@@ -73,16 +76,21 @@ The independently fixed production nominal-box defect and full gate are in the
 
 ## Active work
 
-Continue foreign-input authority from the retained custom probe. The census
+Investigate the saved open-nullable callable capture against actual physical
+supertype/calling-convention authority. Its generated owner's earlier admission
+failure must not be repaired with a getter-name exception. Foreign-input
+authority remains a separate open gate: the incoming CLR-DLL probes stop in
+FIR before proving the disputed input conversion, and the outward contract
+proof does not justify general `object -> !K` entry casts.
+
+The census
 established that `AbstractMap` and `AbstractCollection` are blocked at foreign
 semantic override admission; their anonymous children's unavailable generic
 base binders are downstream, not permission for another capture exception.
 Split-result forwarding with proven fixed inputs is now closed. Owner-relative
 inputs and Common broad-candidate inputs still need their own complete physical
 conversion/semantic policy; a logical strict `K` alone is not that proof.
-An open-nullable callable capturing a generic owner's getter remains an
-independent earlier-routing gap; its saved probe must not become a getter-name
-exception. Public/top-level semantic overload families also remain separate.
+Public/top-level semantic overload families also remain separate.
 
 Continue the source-built Runtime/Stdlib generic-owner rehearsal census within
 phase 1 of the way forward. SAM admission passes and the census reaches
