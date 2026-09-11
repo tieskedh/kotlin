@@ -82,9 +82,16 @@ The independently fixed production nominal-box defect and full gate are in the
 
 ## Active work
 
-Resume foreign-input authority at the incoming DLL reference/member graph.
-The preserved probes stop in FIR before proving the disputed input conversion;
-the outward contract proof does not justify general `object -> !K` entry casts.
+The incoming DLL investigation isolates a missing Kotlin/foreign reference
+graph in both candidate and production: a C# MethodDef can reference a
+Kotlin-produced interface, but the native importer graph cannot yet bind that
+reference to the existing KLIB classifier. See the
+[reference-graph evidence](docs/archive/foreign-kotlin-interface-reference-graph-2026-09-11.md).
+This is not an input-conversion failure. Complete incoming binding remains
+open; neither that failure nor the outward contract proof justifies general
+`object -> !K` entry casts. Continue foreign-input forwarding first where the
+natural and semantic physical parameter contracts agree, retaining final
+MethodDef equality checks. Different-carrier conversion requires its own proof.
 Nullable callable capture is now closed for the selected fixed invocation
 contracts without a getter exception. Broader callable-reference metadata and
 nested nullable generic constructions remain separate requirements.

@@ -14,6 +14,9 @@ Use:
 
 Archived snapshots:
 
+- [`foreign-kotlin-interface-reference-graph-2026-09-11.md`](foreign-kotlin-interface-reference-graph-2026-09-11.md)
+  isolates the incoming Kotlin/foreign declaration-graph gap in both epochs,
+  records exact resolver evidence, and preserves the unpromoted red probe.
 - [`generic-owner-nullable-callable-capture-2026-09-11.md`](generic-owner-nullable-callable-capture-2026-09-11.md)
   records physical callable-supertype and boxed-or-null entry facts, preserved
   exact/mixed captures, actual C# InterfaceMaps, and the focused verification.
