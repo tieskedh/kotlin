@@ -67,9 +67,11 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerPhysicalMemberName
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerPhysicalForeignOverrideProbeName
 import org.jetbrains.kotlin.backend.dotnet.dotNetDirectOwnerRelativeMethodBoundsOrNull
+import org.jetbrains.kotlin.backend.dotnet.dotNetPrimitiveTypeParameterUpperBoundOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetIlMethodName
 import org.jetbrains.kotlin.backend.dotnet.dotNetPhysicalValueStableName
 import org.jetbrains.kotlin.backend.dotnet.genericOwnerDeclarationIndependentLeafPrototypeOrNull
+import org.jetbrains.kotlin.backend.dotnet.genericOwnerConditionalSupertypeParameterIndices
 import org.jetbrains.kotlin.backend.dotnet.genericOwnerPrototypePhysicalGenericParameters
 import org.jetbrains.kotlin.backend.dotnet.genericOwnerPrototypeStateType
 import org.jetbrains.kotlin.backend.dotnet.hasSameFrozenAuthorityAs
@@ -2622,7 +2624,11 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             }
         }
         val conditionalSupertypes = owner.superTypes.filter { superType ->
-            superType.hasExplicitNullableParameterOf(owner)
+            if (context.configuration.dotNetGenericOwnerRehearsal) {
+                superType.genericOwnerConditionalSupertypeParameterIndices(owner).isNotEmpty()
+            } else {
+                superType.hasExplicitNullableParameterOf(owner)
+            }
         }
         val directAccesses = producerAccesses.mapValuesTo(linkedMapOf()) { entry ->
             entry.value.restrictTo(fields)
@@ -5089,7 +5095,16 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 if (DescriptorVisibilities.isPrivate(function.visibility) && !isOwnerConstructor) return@forEach
                 function.parameters.forEach { parameter ->
                     if (parameter.kind == IrParameterKind.DispatchReceiver) return@forEach
-                    val isTypedOwnerInput = parameter !in additionalSemanticBoundaryParameters &&
+                    // A direct open nullable parameter has a fixed boxed-or-null entry, not
+                    // !T. Seed that physical boundary so a captured nullable value does not
+                    // leave the whole owner's otherwise exact state graph unresolved. The
+                    // primitive-bound shortcut has its own carrier and is not this boundary.
+                    val simpleType = parameter.type as? IrSimpleType
+                    val hasBoxedOrNullEntry = context.configuration.dotNetGenericOwnerRehearsal &&
+                            simpleType?.isMarkedNullable() == true &&
+                            (simpleType.classifier as? IrTypeParameterSymbol)?.owner in owner.typeParameters &&
+                            parameter.type.dotNetPrimitiveTypeParameterUpperBoundOrNull() == null
+                    val isTypedOwnerInput = !hasBoxedOrNullEntry && parameter !in additionalSemanticBoundaryParameters &&
                             parameter.type.referencesGenericOwnerParameter(owner) && when {
                         isOwnerConstructor ->
                             !parameter.type.containsVariantInterfaceSemanticHazardOf(owner)

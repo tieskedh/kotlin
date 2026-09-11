@@ -2039,7 +2039,14 @@ internal class DotNetIlTypeMapper private constructor(
             // erased captured owner may make one argument object; it does not erase the whole
             // capability or unrelated typed arguments/results. Ordinary Kotlin and foreign
             // interface constructions still follow their existing logical-type mapping below.
-            return toUserClassTypeOrNull(type)
+            val classInfo = classInfoOrNull(irClass) ?: return null
+            if (type.arguments.size != classInfo.typeParameterCount) return null
+            val arguments = type.arguments.map { argument ->
+                val projection = argument as? IrTypeProjection ?: return null
+                if (projection.variance != Variance.INVARIANT) return null
+                toDotNetIlGenericArgumentType(projection.type) ?: return null
+            }
+            return DotNetIlValueType.GenericInstance(classInfo, arguments)
         }
         return if (classifierInfo(irClass).isCharSequence) {
             DotNetRuntimeTypes.charSequenceImplementationType.also(::recordAssemblyReferences)

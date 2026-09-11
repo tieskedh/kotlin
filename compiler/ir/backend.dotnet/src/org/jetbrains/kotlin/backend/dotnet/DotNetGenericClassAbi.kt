@@ -6145,10 +6145,35 @@ private fun IrType.explicitNullableOwnerParameterIndices(owner: IrClass): List<I
     }.distinct().sorted()
 }
 
+/** Nullable logical arguments matter only where the physical edge actually substitutes them. */
+internal fun IrType.genericOwnerConditionalSupertypeParameterIndices(owner: IrClass): List<Int> {
+    val simpleType = this as? IrSimpleType ?: return emptyList()
+    val classifier = (simpleType.classifier as? IrClassSymbol)?.owner
+        ?: return explicitNullableOwnerParameterIndices(owner)
+    val runtimeClass = DotNetRuntimeTypes.classInfoFor(classifier)
+    if (runtimeClass?.typeParameterCount == 0 &&
+        !DotNetRuntimeTypes.usesDeclaredViewByDefaultInRehearsal(classifier)
+    ) {
+        // A fixed non-generic Runtime TypeDef has no argument-dependent InterfaceImpl.
+        return emptyList()
+    }
+    if (classifier.dotNetExactFunctionArity != null || classifier.dotNetTypedArgumentsFunctionArity != null) {
+        // These compiler ABI parameters denote invocation carriers. A direct open T? has
+        // the fixed object carrier; nested Kotlin/foreign constructions keep their own rules.
+        return simpleType.arguments.flatMap { argument ->
+            val type = (argument as? IrTypeProjection)?.type ?: return@flatMap emptyList()
+            if ((type as? IrSimpleType)?.classifier is IrTypeParameterSymbol) emptyList()
+            else type.explicitNullableOwnerParameterIndices(owner)
+        }.distinct().sorted()
+    }
+    return explicitNullableOwnerParameterIndices(owner)
+}
+
 private fun IrType.genericOwnerPrototypeSupertypeSnapshot(
     owner: IrClass,
     logicalClassifierKey: (IrClass) -> String?,
     physicalClassifierKey: (IrClass) -> String?,
+    conditionalParameters: List<Int>,
 ): DotNetGenericOwnerPrototypeSupertypeSnapshot {
     val simpleType = this as? IrSimpleType
     val classifier = (simpleType?.classifier as? IrClassSymbol)?.owner
@@ -6169,7 +6194,6 @@ private fun IrType.genericOwnerPrototypeSupertypeSnapshot(
             null,
             emptyList(),
         )
-    val conditionalParameters = explicitNullableOwnerParameterIndices(owner)
     if (conditionalParameters.isNotEmpty()) {
         return DotNetGenericOwnerPrototypeSupertypeSnapshot(
             kind = kind,
@@ -6506,6 +6530,9 @@ internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(
                 owner,
                 logicalClassifierKey,
                 physicalClassifierKey,
+                conditionalParameters = if (supertype in metadataFixedConditionalSupertypes) {
+                    supertype.explicitNullableOwnerParameterIndices(owner)
+                } else emptyList(),
             )
         },
         directFieldCount = owner.declarations.count { declaration -> declaration is IrField },

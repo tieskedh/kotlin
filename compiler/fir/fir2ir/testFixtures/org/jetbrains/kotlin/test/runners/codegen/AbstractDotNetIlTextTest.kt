@@ -746,6 +746,12 @@ private class BackendCliDotNetFacade(
             completedOutput.declarations, testServices.moduleStructure.originalTestDataFiles.single(),
             testServices.getOrCreateTempDirectory("generic-owner-foreign-scalar-result"),
         )
+        validateGenericOwnerNullableCallableCapture(
+            genericOwnerRehearsal, loweredInput.configuration.dotNetProducesLibrary,
+            loweredInput.configuration.dotNetTarget, completedOutput.output,
+            completedOutput.declarations, testServices.moduleStructure.originalTestDataFiles.single(),
+            testServices.getOrCreateTempDirectory("generic-owner-nullable-callable-capture"),
+        )
         validateGenericOwnerForeignSplitResult(
             genericOwnerRehearsal, loweredInput.configuration.dotNetProducesLibrary,
             loweredInput.configuration.dotNetTarget, completedOutput.output,
@@ -20608,6 +20614,134 @@ private fun validateGenericOwnerForeignScalarResult(
             source, consumer, references = references, executable = true, warningsAsErrors = true,
         )
         DotNetTarget.NETSTANDARD_2_0 -> error("The scalar consumer needs an executable profile")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    listOf(runtime, stdlib).forEach { it.copyTo(directory.resolve(it.name), overwrite = true) }
+    executeSnapshotConsumer(target, consumer, directory)
+}
+
+private fun validateGenericOwnerNullableCallableCapture(
+    genericOwnerRehearsal: Boolean,
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    declarations: Map<String, DotNetPhysicalDeclaration>,
+    testDataFile: File,
+    directory: File,
+) {
+    if ("DOTNET_GENERIC_OWNER_NULLABLE_CALLABLE_CAPTURE_PROBE" !in testDataFile.readText()) return
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+    val metadata = DotNetClrMetadataReader.read(producer)
+    val namespaceName = "generic.owner.nullable.capture"
+    if (!genericOwnerRehearsal) {
+        check(declarations.genericOwnerRehearsalEpochRecordIndexKeys().isEmpty())
+        check(metadata.typeDefinitions.none { it.namespaceName == namespaceName && '`' in it.metadataName })
+        return
+    }
+    if (producer.name.equals("lib.dll", true)) {
+        val owner = metadata.typeDefinitions.single { it.namespaceName == namespaceName && it.metadataName == "Plain`1" }
+        val state = metadata.fieldDefinitions.filter { it.declaringType == owner.handle }
+        check(state.size == 1 && state.single().signature.fieldType ==
+                DotNetClrTypeSignature.GenericParameter(DotNetClrGenericParameterKind.TYPE, 0)) {
+            "Nullable invocation must not erase or duplicate Plain<T>'s authoritative state"
+        }
+    }
+    if (producesLibrary) return
+    val platform = System.getProperty("kotlin.dotnet.test.platform.${target.description}.path")?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform for nullable callable captures")
+    val runtime = platform.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platform.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    val source = directory.resolve("NullableCaptureConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+            using System.Reflection;
+            using generic.owner.nullable.capture;
+            using Kotlin.Runtime.Internal;
+            public static class NullableCaptureConsumer
+            {
+                private static void CheckMap(object value, Type capability, Type result, params Type[] parameters)
+                {
+                    var map = value.GetType().GetInterfaceMap(capability);
+                    if (map.TargetMethods.Length != 1 || map.TargetMethods[0].ReturnType != result)
+                        throw new Exception("Nullable callable result MethodImpl");
+                    var actual = map.TargetMethods[0].GetParameters();
+                    if (actual.Length != parameters.Length) throw new Exception("Unexpected result flag/parameter");
+                    for (int i = 0; i < actual.Length; i++)
+                        if (actual[i].ParameterType != parameters[i]) throw new Exception("Callable input carrier");
+                }
+                private static void CheckCapture<T>(object callable, Plain<T> owner, int extraObjectFields)
+                {
+                    if (!callable.GetType().IsGenericType || callable.GetType().GetGenericArguments()[0] != typeof(T))
+                        throw new Exception("The callable lost its actual owner binder");
+                    int receivers = 0;
+                    int objectFields = 0;
+                    foreach (var field in callable.GetType().GetFields(
+                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
+                    {
+                        if (field.FieldType == typeof(Plain<T>))
+                        {
+                            receivers++;
+                            if (!Object.ReferenceEquals(field.GetValue(callable), owner)) throw new Exception("Receiver identity");
+                        }
+                        else if (field.FieldType == typeof(object)) objectFields++;
+                    }
+                    if (receivers != 1 || objectFields != extraObjectFields)
+                        throw new Exception("Capture was erased, duplicated, or given shadow state");
+                }
+                private static void Check<T>(Plain<T> owner)
+                {
+                    T stored = ((ExactFunction0<T>)owner.snapshot()).InvokeExact();
+                    var present = owner.maybe(false);
+                    var exact = (ExactFunction0<object>)present;
+                    if (!Object.ReferenceEquals(present, exact) || !Object.Equals(exact.InvokeExact(), stored) ||
+                        ((ExactFunction0<object>)owner.maybe(true)).InvokeExact() != null)
+                        throw new Exception("Nullable output or identity");
+                    CheckMap(present, typeof(ExactFunction0<object>), typeof(object));
+                    CheckCapture(present, owner, 0);
+                    var accepts = owner.accepts();
+                    if (!((ExactFunction1<object, bool>)accepts).InvokeExact(stored)) throw new Exception("Nullable input");
+                    CheckMap(accepts, typeof(ExactFunction1<object, bool>), typeof(bool), typeof(object));
+                    CheckCapture(accepts, owner, 0);
+                    var select = owner.select(null);
+                    var mixed = (ExactFunction2<bool, int, object>)select;
+                    if (!Object.Equals(mixed.InvokeExact(true, 0), stored) || mixed.InvokeExact(false, 0) != null ||
+                        mixed.InvokeExact(true, -1) != null)
+                        throw new Exception("Mixed nullable captures");
+                    CheckMap(select, typeof(ExactFunction2<bool, int, object>), typeof(object), typeof(bool), typeof(int));
+                    CheckMap(select, typeof(TypedArgumentsFunction2<bool, int>), typeof(object), typeof(bool), typeof(int));
+                    CheckCapture(select, owner, 1);
+                    var state = typeof(Plain<T>).GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+                    if (state.Length != 1 || state[0].FieldType != typeof(T)) throw new Exception("Owner state carrier");
+                }
+                public static int Main()
+                {
+                    Check(new Plain<int>(42));
+                    Check(new Plain<string>("text"));
+                    Check(new Plain<int?>(null));
+                    Check(new Plain<int?>(73));
+                    Check(receiverKt.nominalPlain());
+                    if (new Plain<int>(42).maybe(false) is ExactFunction0<int>)
+                        throw new Exception("An object-returning open-nullable MethodDef was reinterpreted as int");
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val consumer = directory.resolve(if (target == DotNetTarget.NET48) "NullableCaptureConsumer.exe" else "NullableCaptureConsumer.dll")
+    val references = listOf(directory.resolve("lib.dll"), runtime, stdlib)
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()),
+            source, consumer, references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()),
+            source, consumer, references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 -> error("The nullable callable-capture consumer needs an executable profile")
     }
     check(compilation.exitCode == 0) { compilation.output }
     listOf(runtime, stdlib).forEach { it.copyTo(directory.resolve(it.name), overwrite = true) }

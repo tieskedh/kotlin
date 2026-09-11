@@ -168,8 +168,32 @@ cannot infer a natural `Source<object>` view from a semantic source object.
 Nominal value-class and nullable generic-slot rules continue to apply. An
 object-carried open-nullable callable result is not silently converted into a
 different split-result MethodDef: its Runtime invocation contract is physical
-authority. Broader capture/getter routing and reference metadata remain
-separate closure requirements.
+authority.
+
+An explicitly nullable logical type argument does not by itself make a
+generated owner's supertype conditional. A fixed non-generic Runtime TypeDef
+has no substituted argument slots. On the compiler-owned invocation-carrier
+interfaces, a direct open `T?` argument denotes the fixed boxed-or-null
+`object` invocation slot. It may coexist with independently proven `!T`
+captures and state. Admission must consult that physical edge contract;
+prototype diagnostics retain the planner's decision instead of reintroducing
+a syntax-only nullable-supertype rejection downstream. The final InterfaceImpl
+and MethodImpl still require the real Runtime construction and complete
+matching signatures.
+
+The producer write analysis must likewise seed a direct boxed-or-null owner
+parameter from its actual object entry, not attempt an unavailable `!T` fact.
+The existing per-field writer policy then selects object storage for that
+nullable capture while retaining unrelated exact receiver captures. This is
+an entry fact, not permission to infer an exact field from observed callers.
+Parameters with a separately mapped primitive bound retain that distinct
+carrier contract.
+
+This does not authorize replacing arguments of ordinary Kotlin or foreign
+generic declarations. A nested nullable construction inside an invocation
+slot retains its own construction obligations. The rule selects neither state
+nor getter routing, and grants no exact provenance to broad values. Reference
+metadata remains a separate closure requirement.
 
 ### Property references reuse callable identity
 

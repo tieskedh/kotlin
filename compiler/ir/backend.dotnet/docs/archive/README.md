@@ -14,6 +14,9 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-nullable-callable-capture-2026-09-11.md`](generic-owner-nullable-callable-capture-2026-09-11.md)
+  records physical callable-supertype and boxed-or-null entry facts, preserved
+  exact/mixed captures, actual C# InterfaceMaps, and the focused verification.
 - [`generic-owner-foreign-input-contracts-2026-09-11.md`](generic-owner-foreign-input-contracts-2026-09-11.md)
   records exact/nested outward C# input contracts, the rejected different
   construction, the inverse, and the separately preserved incoming proof gap.

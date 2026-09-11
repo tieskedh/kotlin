@@ -49,21 +49,27 @@ Current representation rules are linked from the navigation section below.
 
 ## Latest verification
 
-The exact/nested foreign input contract proof passed the focused lane on
+Nullable callable captures passed the rehearsal-physical lane on
 2026-09-11. Direct JUnit XML audit found no failures, errors, or skips:
 
 | Lane | Suites | Tests |
 | --- | ---: | ---: |
-| Focused candidate, both parsers and runtimes | 4 | 12 |
-| Same production-erased inverse | 4 | 12 |
+| Focused candidate, both parsers and runtimes | 4 | 24 |
+| Same production-erased inverse | 4 | 24 |
+| Complete backend suite | 22 | 402 |
 
 The inherited production-erased full checkpoint is `17676a90e1`: 212 suites,
 2,863 tests (backend 402, physical CLI model 6, full FIR2IR 2,327, integration
 128), all green. Its actual FIR2IR Test task was explicitly rerun without
-filters. The backend's 22 suites and 402 tests are inherited from `f23e3d20cf`,
-which also passed its 36-case candidate and inverse. The latest delta changes
-only test data, a fixture-local validator, and documentation: no compiler
-implementation, physical mapping, Runtime/Stdlib, or schema changed.
+filters. This is not another full aggregate: the delta changes rehearsal-only
+physical-supertype admission, nullable entry facts, and compiler-callable
+InterfaceImpl binding. Production admission/mapping, Runtime/Stdlib, shared
+compiler, and schemas are unchanged. Prototype diagnostics consume the
+planner's conditional-edge decision; the production plan retains its old rule.
+
+The two reproduced causes, preserved exact/mixed captures, physical fields,
+C# InterfaceMaps, and final gates are recorded in the
+[nullable capture archive](docs/archive/generic-owner-nullable-callable-capture-2026-09-11.md).
 
 The exact/nested input signatures, rejected native construction, and open
 incoming evidence gap are recorded in the
@@ -76,12 +82,12 @@ The independently fixed production nominal-box defect and full gate are in the
 
 ## Active work
 
-Investigate the saved open-nullable callable capture against actual physical
-supertype/calling-convention authority. Its generated owner's earlier admission
-failure must not be repaired with a getter-name exception. Foreign-input
-authority remains a separate open gate: the incoming CLR-DLL probes stop in
-FIR before proving the disputed input conversion, and the outward contract
-proof does not justify general `object -> !K` entry casts.
+Resume foreign-input authority at the incoming DLL reference/member graph.
+The preserved probes stop in FIR before proving the disputed input conversion;
+the outward contract proof does not justify general `object -> !K` entry casts.
+Nullable callable capture is now closed for the selected fixed invocation
+contracts without a getter exception. Broader callable-reference metadata and
+nested nullable generic constructions remain separate requirements.
 
 The census
 established that `AbstractMap` and `AbstractCollection` are blocked at foreign
