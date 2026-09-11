@@ -61,7 +61,7 @@ enum class DotNetGenericOwnerCandidateDisposition {
     RETAINED_NON_ABI_IMPLEMENTATION_OWNER,
 
     BLOCKED_METADATA_FIXED_CONDITIONAL_SUPERTYPE,
-    /** No portable producer record yet seals a semantic constructor MethodDef carrier. */
+    /** The complete natural/semantic constructor contract of a reified owner remains unproved. */
     BLOCKED_SEMANTIC_CONSTRUCTOR_CARRIER_AUTHORITY,
     /** Fixed variant interface state needs one sealed object-domain FieldDef contract. */
     BLOCKED_FIXED_SEMANTIC_STATE_CARRIER,

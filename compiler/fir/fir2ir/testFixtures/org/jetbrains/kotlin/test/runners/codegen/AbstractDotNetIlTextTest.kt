@@ -696,6 +696,12 @@ private class BackendCliDotNetFacade(
             testDataFile = testServices.moduleStructure.originalTestDataFiles.single(),
             directory = testServices.getOrCreateTempDirectory("generic-owner-state-authority"),
         )
+        validateGenericOwnerClosedConstructorInput(
+            genericOwnerRehearsal, loweredInput.configuration.dotNetProducesLibrary,
+            loweredInput.configuration.dotNetTarget, completedOutput.output,
+            completedOutput.declarations, testServices.moduleStructure.originalTestDataFiles.single(),
+            testServices.getOrCreateTempDirectory("generic-owner-closed-constructor"),
+        )
         validateGenericOwnerCanonicalState(
             genericOwnerRehearsal, loweredInput.configuration.dotNetProducesLibrary,
             loweredInput.configuration.dotNetTarget, completedOutput.output,
@@ -20465,6 +20471,152 @@ private fun validateGenericOwnerAbstractForeignOutput(
             source, consumer, references = references, executable = true, warningsAsErrors = true,
         )
         DotNetTarget.NETSTANDARD_2_0 -> error("The abstract-output consumer needs an executable profile")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    listOf(runtime, stdlib).forEach { it.copyTo(directory.resolve(it.name), overwrite = true) }
+    executeSnapshotConsumer(target, consumer, directory)
+}
+
+private fun validateGenericOwnerClosedConstructorInput(
+    genericOwnerRehearsal: Boolean,
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    declarations: Map<String, DotNetPhysicalDeclaration>,
+    testDataFile: File,
+    directory: File,
+) {
+    if ("DOTNET_GENERIC_OWNER_CLOSED_CONSTRUCTOR_PROBE" !in testDataFile.readText()) return
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+    val metadata = DotNetClrMetadataReader.read(producer)
+    val namespaceName = "generic.owner.closed.constructor"
+    if (!genericOwnerRehearsal) {
+        check(declarations.genericOwnerRehearsalEpochRecordIndexKeys().isEmpty())
+        check(metadata.typeDefinitions.none { it.namespaceName == namespaceName && '`' in it.metadataName })
+    }
+    val naturalNames = when (producer.name.lowercase()) {
+        "lib.dll" -> listOf("ClosedInput", "ReferenceInput", "NullableInput")
+        "middle.dll" -> listOf("InheritedInput", "ExternalInput")
+        else -> emptyList()
+    }
+    val objectType = DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.OBJECT)
+    val ownerParameter = DotNetClrTypeSignature.GenericParameter(DotNetClrGenericParameterKind.TYPE, 0)
+    for (name in naturalNames) {
+        val expected = name + if (genericOwnerRehearsal) "`1" else ""
+        val owner = checkNotNull(metadata.typeDefinitions.singleOrNull {
+            it.namespaceName == namespaceName && it.metadataName == expected
+        }) { "Closed constructor input lost natural $expected: ${metadata.typeDefinitions.map { it.metadataName }}" }
+        val fields = metadata.fieldDefinitions.filter { it.declaringType == owner.handle }
+        check(fields.size == if (name == "InheritedInput") 0 else 1)
+        check(fields.all { it.signature.fieldType == if (genericOwnerRehearsal) ownerParameter else objectType })
+        val constructors = metadata.methodDefinitions.filter { it.declaringType == owner.handle && it.name == ".ctor" }
+        check(constructors.size == if (name == "ClosedInput") 2 else 1)
+        if (genericOwnerRehearsal) {
+            check(constructors.all { ctor ->
+                ctor.signature.parameterTypes.count { it is DotNetClrTypeSignature.GenericInstance } == 1 &&
+                        ctor.signature.parameterTypes.none { it == objectType }
+            }) { "Natural constructor parameters must remain constructed CLR interfaces: $constructors" }
+            check(declarations.values.filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerConstructorMethodDef>()
+                .none { it.ownerPath.last().substringAfterLast('.') == expected })
+        }
+    }
+    if (producer.name.equals("lib.dll", true)) {
+        for (name in listOf("ClosedOutputInput", "NullableOutputInput", "BroadInput", "ValueInput", "NullableValueInput", "OpenInput", "StarInput",
+                            "ProjectedInput", "InvariantPhysicalInput", "NestedOutputInput")) {
+            val owner = metadata.typeDefinitions.single { it.namespaceName == namespaceName && it.metadataName == name }
+            check(metadata.genericParameterDefinitions.none { it.owner == owner.handle })
+            if (genericOwnerRehearsal) {
+                val constructor = metadata.methodDefinitions.single { it.declaringType == owner.handle && it.name == ".ctor" }
+                if (constructor.signature.parameterTypes == listOf(objectType)) {
+                    check(declarations.values.filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerConstructorMethodDef>()
+                        .count { it.ownerPath.last().substringAfterLast('.') == name } == 1) {
+                        "Missing object-constructor seal for $name"
+                    }
+                }
+            }
+        }
+    }
+    if (producesLibrary || !genericOwnerRehearsal) return
+    val lib = directory.resolve("lib.dll")
+    val middle = directory.resolve("middle.dll")
+    check(lib.isFile && middle.isFile)
+    val platform = System.getProperty("kotlin.dotnet.test.platform.${target.description}.path")?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform for the closed-constructor probe")
+    val runtime = platform.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platform.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    val source = directory.resolve("ClosedConstructorConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+            using System.Reflection;
+            using generic.owner.closed.constructor;
+
+            public sealed class ObjectSink : Sink<object>
+            {
+                public object Last;
+                public int Calls;
+                public void write(object value) { Last = value; Calls++; }
+            }
+            public sealed class BaseSink : Sink<RefBase>
+            {
+                public RefBase Last;
+                public void write(RefBase value) { Last = value; }
+            }
+            public sealed class CsInput : InheritedInput<int>
+            {
+                public CsInput(Sink<string> sink) : base(51, sink) { }
+            }
+            public static class ClosedConstructorConsumer
+            {
+                public static int Main()
+                {
+                    var sink = new ObjectSink();
+                    var ints = new ClosedInput<int>(41, sink);
+                    ints.write(42);
+                    var text = new ClosedInput<string>(sink, "text");
+                    var inherited = new CsInput(sink);
+                    var external = new ExternalInput<long>(long.MaxValue - 1, sink);
+                    var nullable = new NullableInput<int?>(null, sink);
+                    if (ints.read() != 42 || text.read() != "text" || inherited.read() != 51 ||
+                        external.read() != long.MaxValue - 1 || nullable.read() != null ||
+                        sink.Last != null || sink.Calls != 5)
+                        throw new InvalidOperationException("Constructor execution/delegation or value state changed");
+                    var leaf = new RefLeaf();
+                    var baseSink = new BaseSink();
+                    var references = new ReferenceInput<int>(52, baseSink, leaf);
+                    if (references.read() != 52 || !Object.ReferenceEquals(baseSink.Last, leaf))
+                        throw new InvalidOperationException("Native variance changed object identity");
+                    const BindingFlags Fields = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
+                    if (typeof(ClosedInput<int>).GetField("value", Fields).FieldType != typeof(int) ||
+                        typeof(ClosedInput<string>).GetField("value", Fields).FieldType != typeof(string) ||
+                        typeof(NullableInput<int?>).GetField("value", Fields).FieldType != typeof(int?) ||
+                        typeof(InheritedInput<int>).BaseType != typeof(ClosedInput<int>) ||
+                        typeof(InheritedInput<int>).GetFields(Fields).Length != 0 ||
+                        !Object.ReferenceEquals((ClosedInput<int>)inherited, inherited))
+                        throw new InvalidOperationException("Constructors contaminated storage or inherited identity");
+                    var ctor = typeof(ClosedInput<int>).GetConstructor(new Type[] {
+                        typeof(int), typeof(Sink<string>) });
+                    if (ctor == null || typeof(ClosedInput<int>).GetConstructors().Length != 2)
+                        throw new InvalidOperationException("C# constructor surface is not fully typed");
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val consumer = directory.resolve(if (target == DotNetTarget.NET48) "ClosedConstructorConsumer.exe" else "ClosedConstructorConsumer.dll")
+    val references = listOf(lib, middle, runtime, stdlib)
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()),
+            source, consumer, references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()),
+            source, consumer, references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 -> error("The closed-constructor consumer needs an executable profile")
     }
     check(compilation.exitCode == 0) { compilation.output }
     listOf(runtime, stdlib).forEach { it.copyTo(directory.resolve(it.name), overwrite = true) }

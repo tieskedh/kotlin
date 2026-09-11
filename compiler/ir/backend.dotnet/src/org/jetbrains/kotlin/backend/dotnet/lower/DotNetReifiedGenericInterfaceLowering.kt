@@ -45,6 +45,7 @@ import org.jetbrains.kotlin.backend.dotnet.DOTNET_ERASED_OWNER_RELATIONAL_CONSTR
 import org.jetbrains.kotlin.backend.dotnet.dotNetDirectOwnerRelativeMethodBoundsOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetDirectInterfaceTypes
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericArgumentHasProperClrValueSubtype
+import org.jetbrains.kotlin.backend.dotnet.requiresDotNetSemanticInterfaceCarrier
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericInterfaceCanonicalSlotId
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerPhysicalMemberName
 import org.jetbrains.kotlin.backend.dotnet.dotNetImportedClrTypeAuthorityOrNull
@@ -815,13 +816,6 @@ internal class DotNetReifiedGenericInterfaceLowering(
             closeGenericClassCapabilityInterfaceSupertypes()
         }
 
-        fun IrType.hasClrValueGenericArgumentCarrier(): Boolean {
-            if (isPrimitiveType() || isPrimitiveType(nullable = true)) return true
-            val valueClassCarrier = dotNetUnboxedValueClassTypeOrNull() ?: return false
-            return valueClassCarrier.isPrimitiveType() ||
-                    valueClassCarrier.isPrimitiveType(nullable = true)
-        }
-
         val hasProperClrValueSubtype =
             dotNetGenericArgumentHasProperClrValueSubtype(context.irBuiltIns)
 
@@ -841,38 +835,11 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 ?: owner.typeParameters.map { parameter ->
                     parameter.variance.toDotNetGenericOwnerPhysicalTypeParameterVariance()
                 }
-            if (physicalVariances.size != owner.typeParameters.size) return owner
-            owner.typeParameters.zip(simpleType.arguments).forEachIndexed { index, pair ->
-                val parameter = pair.first
-                val projection = pair.second as? IrTypeProjection ?: return owner
-                if (projection.variance != Variance.INVARIANT) return owner
-                if (parameter.variance != Variance.INVARIANT &&
-                    physicalVariances[index] ==
-                    DotNetGenericOwnerPhysicalTypeParameterVariance.INVARIANT
-                ) {
-                    // The logical Kotlin view may have widened even though the natural CLR
-                    // TypeDef cannot. Keep it in the semantic domain unless producer provenance
-                    // at the declaration/expression proves the exact natural construction.
-                    return owner
-                }
-                val argumentClassifier = (projection.type as? IrSimpleType)?.classifier
-                val requiresSemanticCarrier = when (parameter.variance) {
-                    Variance.OUT_VARIANCE ->
-                        argumentClassifier is IrTypeParameterSymbol ||
-                                projection.type.hasClrValueGenericArgumentCarrier() ||
-                                hasProperClrValueSubtype(projection.type)
-                    Variance.IN_VARIANCE ->
-                        argumentClassifier is IrTypeParameterSymbol ||
-                                projection.type.hasClrValueGenericArgumentCarrier()
-                    // Invariance does not make open T? a nameable CLR argument. Record the
-                    // producer's semantic result now so a later closed MethodSpec (including
-                    // reference T) cannot fabricate an exact I<T> result in a forwarding body.
-                    Variance.INVARIANT -> argumentClassifier is IrTypeParameterSymbol &&
-                            projection.type.isMarkedNullable()
-                }
-                if (requiresSemanticCarrier) return owner
+            return owner.takeIf {
+                simpleType.requiresDotNetSemanticInterfaceCarrier(
+                    owner.typeParameters.map(IrTypeParameter::variance), physicalVariances, hasProperClrValueSubtype,
+                )
             }
-            return null
         }
 
         fun IrType.requiresUnrecordedExternalConstructorCarrier(): Boolean {

@@ -59,6 +59,8 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerWriteValueProvenanc
 import org.jetbrains.kotlin.backend.dotnet.DotNetBoundGenericOwnerMemberFamily
 import org.jetbrains.kotlin.backend.dotnet.DotNetBoundGenericOwnerPhysicalSlot
 import org.jetbrains.kotlin.backend.dotnet.dotNetLibraryAbiKeyOrNull
+import org.jetbrains.kotlin.backend.dotnet.dotNetGenericArgumentHasProperClrValueSubtype
+import org.jetbrains.kotlin.backend.dotnet.requiresDotNetSemanticInterfaceCarrier
 import org.jetbrains.kotlin.backend.dotnet.dotNetImportedClrTypeAuthorityOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerCallRouteTraceHooks
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
@@ -219,6 +221,9 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
 ) : ModuleLoweringPass {
     private val specialBridgeMethods = SpecialBridgeMethods(context)
     private val externalDeclarations = context.externalDeclarationsForLowering()
+    private val constructorArgumentHasProperClrValueSubtype by lazy {
+        dotNetGenericArgumentHasProperClrValueSubtype(context.irBuiltIns)
+    }
     private val externalSemanticPrototypesBySource = linkedMapOf<IrSimpleFunction, IrSimpleFunction>()
     private val externalForeignOverrideProbesBySource = linkedMapOf<IrSimpleFunction, IrSimpleFunction>()
 
@@ -2277,11 +2282,9 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
         !owner.isNonAbiGenericOwnerImplementation() && constructors.any { constructor ->
             constructor.semanticObjectParameterIndices.isNotEmpty()
         } ->
-            // Constructor signatures have no portable producer record in the current rehearsal.
-            // Re-deriving an object carrier from a consumer stub would make separate compilation
-            // depend on both compilers repeating the same heuristic. Keep the owner erased until
-            // one final emitted .ctor MethodDef signature is published, PE-validated and consumed
-            // by both newobj and base/this calls.
+            // The bounded L seal authenticates existing object-domain constructor endpoints;
+            // it does not yet prove the complete public natural/semantic constructor contract
+            // of a reified owner. Keep genuinely non-natural inputs outside that admission.
             DotNetGenericOwnerCandidateDisposition.BLOCKED_SEMANTIC_CONSTRUCTOR_CARRIER_AUTHORITY
         stateCarriers.any { state ->
             !state.field.type.referencesGenericOwnerParameter(owner) &&
@@ -2577,7 +2580,7 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                     // interface value may arrive through another CLR construction and require
                     // the universal carrier. Semantic member hooks use the broader predicate
                     // because their non-generic owner cannot name !T at all.
-                    constructor.parameters[index].type.containsPotentiallyReparameterizedInterfaceCarrier()
+                    constructor.parameters[index].type.requiresSemanticConstructorInterfaceCarrier()
                 },
                 delegationArgumentMapping = delegationArgumentMapping,
                 delegatedConstructorLogicalBindingKey = delegated?.let { target ->
@@ -3938,6 +3941,42 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
         return simpleType.arguments.any { argument ->
             (argument as? IrTypeProjection)?.type
                 ?.containsPotentiallyReparameterizedInterfaceCarrier() == true
+        }
+    }
+
+    /** Refines the constructor hazard only from independently selected physical variance. */
+    private fun IrType.requiresSemanticConstructorInterfaceCarrier(): Boolean {
+        if (!containsPotentiallyReparameterizedInterfaceCarrier()) return false
+        if (!context.configuration.dotNetGenericOwnerRehearsal) {
+            return true
+        }
+        val type = this as? IrSimpleType ?: return false
+        val declaredVariances = type.variantInterfaceDeclaredVariancesOrNull()
+        if (declaredVariances != null) {
+            // Even Source<String> includes Source<Nothing> in Kotlin. CLR covariance has no
+            // corresponding bottom conversion. A closed reference argument is therefore not
+            // complete constructor authority for an output parameter. Retain that hazard;
+            // the proven refinement here is reference-only contravariance.
+            if (Variance.OUT_VARIANCE in declaredVariances) return true
+            val symbol = type.classifier as? IrClassSymbol ?: return true
+            val early = context.earlyGenericInterfaceCompleteNaturalAuthorityPlans[symbol]
+            val physicalVariances = early?.selectedPhysicalVariances
+                ?: externalDeclarations.publishedGenericInterfaceNaturalTypeParameterVariancesOrNull(symbol.owner)
+            // A logical declaration (including an unadmitted Runtime owner) is no positive
+            // TypeDef authority. Retain the previous conservative hazard without one.
+            if (physicalVariances == null) return true
+            if (type.requiresDotNetSemanticInterfaceCarrier(
+                    declaredVariances, physicalVariances, constructorArgumentHasProperClrValueSubtype,
+                )
+            ) return true
+            if (early != null) {
+                // Final interface admission must realize the same frozen plan. This is a
+                // checked early obligation, never permission to emit an absent interface.
+                context.consumedEarlyGenericInterfaceNaturalAuthorityPlans += symbol
+            }
+        }
+        return type.arguments.any { argument ->
+            (argument as? IrTypeProjection)?.type?.requiresSemanticConstructorInterfaceCarrier() == true
         }
     }
 

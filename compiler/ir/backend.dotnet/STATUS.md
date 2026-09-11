@@ -49,27 +49,27 @@ Current representation rules are linked from the navigation section below.
 
 ## Latest verification
 
-The latest fixed-boundary foreign-dispatch fix passed the rehearsal-physical
+The latest reference-contravariant constructor fix passed the rehearsal-physical
 lane on 2026-09-11. Direct JUnit XML audit found no failures, errors, or skips:
 
 | Lane | Suites | Tests |
 | --- | ---: | ---: |
-| Focused candidate, both parsers and runtimes | 4 | 16 |
-| Same production-erased inverse | 4 | 16 |
+| Focused candidate, both parsers and runtimes | 4 | 20 |
+| Same production-erased inverse | 4 | 20 |
 | Complete backend suite | 22 | 402 |
 
 The inherited production-erased target-wide base is `3a2384f636`: 212 suites,
 2,821 tests (backend 400, `dotnet.ir` 6, FIR2IR 2,287, integration 128), all
 green. Its actual FIR2IR Test task was explicitly rerun without filters. This
-feature is not a new full aggregate: only rehearsal-selected class dispatch,
-canonical/inherited interface routing, and fixture-local checks changed;
+feature is not a new full aggregate: only rehearsal-selected constructor
+admission, shared negative carrier queries, and fixture-local checks changed;
 production ABI, Runtime/Stdlib, shared compiler, and artifact schemas are
 unchanged.
 
-The reproduced C# override bypasses, final MethodDef equality seals, actual
-scalar/void dispatcher CIL, separate-assembly binding, inverse, and commands are
-in the
-[fixed-boundary archive](docs/archive/generic-owner-foreign-fixed-boundary-2026-09-11.md).
+The actual constructor/field metadata, ordinary C# construction and subclassing,
+separate-assembly binding, rejected bottom-covariance extension, inverse, and
+commands are in the
+[constructor archive](docs/archive/generic-owner-reference-in-constructor-2026-09-11.md).
 The inherited full gate is recorded in the
 [invariant nullable SAM archive](docs/archive/generic-owner-invariant-nullable-sam-2026-09-11.md).
 
@@ -77,13 +77,14 @@ The inherited full gate is recorded in the
 
 Continue the source-built Runtime/Stdlib generic-owner rehearsal census within
 phase 1 of the way forward. SAM admission passes and the census reaches
-emission. Bounded abstract output families and identical-boundary virtual
-operations now preserve ordinary C# overrides, including canonical interface
-calls and a new interface implemented by an inherited method in a separate
-assembly. Broad inputs, split-result forwarding, fixed semantic fields, and
-their inheritance compositions are still separate gaps. Rerun the census from
-this green checkpoint and isolate the next physical inheritance/MethodDef-view
-mismatch; custom-shape correctness is not complete stdlib closure.
+emission, but physical inheritance/MethodDef-view closure remains incomplete.
+Closed reference-contravariant constructor inputs no longer erase unrelated
+generic owners/state. The complete natural/semantic constructor contract is
+still open: the existing `L` seal alone does not admit broad constructors, and
+closed reference covariance still includes CLR-unnameable bottom views.
+Rerun the census from this green checkpoint; custom-shape correctness is not
+complete stdlib closure. Broad inputs, split-result forwarding, fixed semantic
+fields, and their inheritance compositions remain separate gaps.
 Do not add declaration, package, collection, `Map`, member-name, IR-origin,
 or stdlib exceptions.
 

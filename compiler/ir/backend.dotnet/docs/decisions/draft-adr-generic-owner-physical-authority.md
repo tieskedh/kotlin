@@ -1275,6 +1275,30 @@ fabricates a construction such as `I<object>` from the logical KLIB view.
 
 #### Constructor MethodDef seal
 
+Constructor hazard planning and later interface lowering share one negative
+carrier policy. Declaration-site variance alone does not require an object
+parameter: a closed reference-only contravariant view may remain natural when
+the independently selected physical variance represents its legal Kotlin
+conversions. Planning may refine an existing conservative constructor hazard
+using an early local complete-surface plan or authenticated producer variance. A consumed early
+plan must be realized unchanged by final interface admission; its presence
+alone never authorizes a TypeDef. Missing authority retains the hazard.
+Nested constructions are checked recursively, not inferred exact from their
+outer reference shape. This refinement does not change field selection,
+semantic-member result hazards, or retained foreign CLR declarations.
+
+Covariance is deliberately not admitted by this refinement, even for a closed
+reference argument: `Source<Nothing?>` is a legal `Source<String?>` in Kotlin
+without being a CLR `Source<string>`. Absence of a primitive-value subtype is
+not a complete physical-view guarantee. Do not remove this hazard until the
+actual boundary can preserve bottom views as well.
+
+Open variant arguments, stars/projections, value-type variance, and logical
+variance on a physically invariant interface retain their semantic boundary.
+This rule does not admit a generic owner with a genuinely object-domain public constructor.
+That complete natural/semantic constructor contract remains a separate proof;
+the mere existence of the bounded `L` record below does not close it.
+
 The ordinary physical function record `F` identifies a constructor endpoint as
 the instance `.ctor` on its recorded owner, but it is not by itself a complete
 semantic-carrier contract. When a public generic-owner constructor exposes a

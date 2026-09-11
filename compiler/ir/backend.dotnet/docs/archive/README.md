@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-reference-in-constructor-2026-09-11.md`](generic-owner-reference-in-constructor-2026-09-11.md)
+  records natural reference-contravariant constructors, retained typed state,
+  separate Kotlin/C# construction, rejected bottom covariance, and the focused
+  candidate/inverse gate.
 - [`generic-owner-foreign-fixed-boundary-2026-09-11.md`](generic-owner-foreign-fixed-boundary-2026-09-11.md)
   records fixed-boundary natural dispatch without probes or boxing, canonical
   and separately inherited interface routing, and ordinary C# override proofs.
