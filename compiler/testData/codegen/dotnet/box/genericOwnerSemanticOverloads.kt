@@ -40,6 +40,18 @@ class ExactRenderer {
     fun result(value: Source<String>): String = render(value) + ":" + render(null)
 }
 
+class IteratorRenderer<T>(private val source: Iterator<T>) {
+    private fun render(value: Iterator<T>): String = if (value.hasNext()) "iterator" else "empty"
+    private fun render(value: Any?): String = "other"
+    fun result(): String = render(source) + ":" + render(null)
+}
+
+class EntryRenderer<K, V>(private val source: Map.Entry<K, V>) {
+    private fun render(value: Map.Entry<K, V>): String = "entry"
+    private fun render(value: Any?): String = "other"
+    fun result(): String = render(source) + ":" + render(null)
+}
+
 // MODULE: main(lib)
 // FILE: main.kt
 
@@ -55,5 +67,15 @@ fun box(): String {
     if (StarRenderer(source).result() != "star:other") return "star"
     val text = object : Source<String> { override fun read(): String = "text" }
     if (ExactRenderer().result(text) != "text:other") return "exact"
+    val iterator = object : Iterator<Int> {
+        override fun hasNext(): Boolean = true
+        override fun next(): Int = 7
+    }
+    if (IteratorRenderer(iterator).result() != "iterator:other") return "runtime iterator"
+    val entry = object : Map.Entry<Int, String> {
+        override val key: Int get() = 7
+        override val value: String get() = "text"
+    }
+    if (EntryRenderer(entry).result() != "entry:other") return "runtime entry"
     return "OK"
 }

@@ -49,13 +49,13 @@ Current representation rules are linked from the navigation section below.
 
 ## Latest verification
 
-The latest private semantic-overload identity fix passed the rehearsal-physical
+The latest Runtime-declared private overload fix passed the rehearsal-physical
 lane on 2026-09-11. Direct JUnit XML audit found no failures, errors, or skips:
 
 | Lane | Suites | Tests |
 | --- | ---: | ---: |
-| Focused candidate, both parsers and runtimes | 4 | 40 |
-| Same production-erased inverse | 4 | 40 |
+| Focused candidate, both parsers and runtimes | 4 | 24 |
+| Same production-erased inverse | 4 | 24 |
 | Complete backend suite | 22 | 402 |
 
 The inherited production-erased target-wide base is `3a2384f636`: 212 suites,
@@ -66,10 +66,12 @@ method naming and fixture-local checks changed;
 production ABI, Runtime/Stdlib, shared compiler, and artifact schemas are
 unchanged.
 
-The reproduced overload collision, stable logical discriminators, unchanged
-public/exact entries, separate Kotlin/C# execution, inverse, and commands are
-in the
-[private overload archive](docs/archive/generic-owner-private-semantic-overloads-2026-09-11.md).
+The reproduced Runtime-interface overload collisions, shared logical name
+selection, separate Kotlin/C# execution, inverse, census advancement, and
+commands are in the
+[Runtime overload archive](docs/archive/generic-owner-runtime-semantic-overloads-2026-09-11.md).
+The initial custom-interface proof and unchanged public/exact controls are in
+the [private overload archive](docs/archive/generic-owner-private-semantic-overloads-2026-09-11.md).
 The independently repaired result-chain regression is recorded in the
 [semantic result archive](docs/archive/generic-owner-semantic-owner-result-2026-09-11.md).
 The inherited full gate is recorded in the
@@ -77,9 +79,11 @@ The inherited full gate is recorded in the
 
 ## Active work
 
-Rerun the census after the private-overload identity repair. Public semantic
-overload families and callable-reference closure remain outside that bounded
-fix. The expanded matrix also retains the semantic iterator result repair:
+Close the generated callable physical-view gap exposed after the private
+overload repair. The census no longer rejects the private overload in
+`AbstractMap`, but its lambda has no proven exact `ExactFunction1` construction.
+Public/top-level semantic overload families remain separate. The expanded
+matrix also retains the semantic iterator result repair:
 no closed invariant interface is fabricated from a widened logical result,
 and unrelated typed state stays typed.
 

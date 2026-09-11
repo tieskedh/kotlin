@@ -20627,7 +20627,7 @@ private fun validateGenericOwnerSemanticOverloads(
     }
     if (producer.name.equals("lib.dll", true)) {
         val objectType = DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.OBJECT)
-        val selectedNames = listOf("Renderer", "Reordered", "Single", "StarRenderer").map { name ->
+        val selectedNames = listOf("Renderer", "Reordered", "Single", "StarRenderer", "IteratorRenderer", "EntryRenderer").map { name ->
             val owner = metadata.typeDefinitions.single {
                 it.namespaceName == "generic.owner.semantic.overloads" && it.metadataName == name
             }
@@ -20645,7 +20645,8 @@ private fun validateGenericOwnerSemanticOverloads(
         check(selectedNames.take(3).distinct().size == 1) {
             "Private physical names depend on owner/order/overload set: $selectedNames"
         }
-        check(selectedNames.last() != selectedNames.first()) { "Star and open Kotlin signatures collapsed" }
+        check(selectedNames[3] != selectedNames.first()) { "Star and open Kotlin signatures collapsed" }
+        check(selectedNames.drop(3).distinct().size == 3) { "Different interface signatures collapsed" }
         val exact = metadata.typeDefinitions.single { it.metadataName == "ExactRenderer" }
         val exactMethods = metadata.methodDefinitions.filter { it.declaringType == exact.handle }
         check(exactMethods.none { "__KotlinSemantic__" in it.name })
@@ -20667,6 +20668,16 @@ private fun validateGenericOwnerSemanticOverloads(
             using generic.owner.semantic.overloads;
             public sealed class IntSource : Source<int> { public int read() { return 7; } }
             public sealed class StringSource : Source<string> { public string read() { return "text"; } }
+            public sealed class IntIterator : Kotlin.Collections.Iterator<int>
+            {
+                public bool HasNext() { return true; }
+                public int Next() { return 7; }
+            }
+            public sealed class IntEntry : Kotlin.Collections.Map.Entry<int, string>
+            {
+                public int Key { get { return 7; } }
+                public string Value { get { return "text"; } }
+            }
             public static class SemanticOverloadConsumer
             {
                 public static int Main()
@@ -20682,6 +20693,16 @@ private fun validateGenericOwnerSemanticOverloads(
                     const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
                     if (!Object.ReferenceEquals(typeof(Renderer).GetField("source", Private).GetValue(renderer), value))
                         throw new InvalidOperationException("Overload routing changed receiver state/identity");
+                    var iterator = new IntIterator();
+                    var iteratorRenderer = new IteratorRenderer(iterator);
+                    var entry = new IntEntry();
+                    var entryRenderer = new EntryRenderer(entry);
+                    if (iteratorRenderer.result() != "iterator:other" || entryRenderer.result() != "entry:other" ||
+                        !Object.ReferenceEquals(typeof(IteratorRenderer).GetField("source", Private).GetValue(iteratorRenderer), iterator) ||
+                        !Object.ReferenceEquals(typeof(EntryRenderer).GetField("source", Private).GetValue(entryRenderer), entry))
+                        throw new InvalidOperationException("Runtime-declared overload dispatch or identity changed");
+                    if (typeof(IntIterator).GetInterfaces().Length != 1 || typeof(IntEntry).GetInterfaces().Length != 1)
+                        throw new InvalidOperationException("Foreign probe accidentally implements compiler ABI");
                     foreach (var method in typeof(Renderer).GetMethods(BindingFlags.Public | BindingFlags.Instance))
                         if (method.Name.Contains("__KotlinSemantic__"))
                             throw new InvalidOperationException("Private name escaped into the public CLR contract");

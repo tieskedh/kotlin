@@ -624,7 +624,7 @@ internal fun IrSimpleFunction.dotNetAbiMethodNameOrNull(
  */
 internal fun IrSimpleFunction.dotNetPrivateSemanticInterfaceMethodNameOrNull(
     signature: DotNetIlMethodSignature,
-    isReifiedGenericInterface: (IrClass) -> Boolean,
+    hasNaturalGenericInterfaceOwner: (IrClass) -> Boolean,
 ): String? {
     if (visibility != DescriptorVisibilities.PRIVATE || modality != Modality.FINAL ||
         overriddenSymbols.isNotEmpty() || (parent as? IrClass)?.isInterface != false
@@ -632,7 +632,7 @@ internal fun IrSimpleFunction.dotNetPrivateSemanticInterfaceMethodNameOrNull(
     val losesInterfaceIdentity = parameters.withIndex().any { [index, parameter] ->
         parameter.kind != IrParameterKind.DispatchReceiver &&
                 signature.parameterTypes.getOrNull(index) == DotNetIlValueType.Object &&
-                parameter.type.classOrNull?.owner?.let(isReifiedGenericInterface) == true
+                parameter.type.classOrNull?.owner?.let(hasNaturalGenericInterfaceOwner) == true
     }
     if (!losesInterfaceIdentity) return null
     val logicalSignature = with(DotNetIrMangler) {

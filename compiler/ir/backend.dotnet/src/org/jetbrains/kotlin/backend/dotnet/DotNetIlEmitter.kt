@@ -1348,7 +1348,10 @@ internal class DotNetIlEmitter(
                         ) {
                             member.dotNetPrivateSemanticInterfaceMethodNameOrNull(
                                 signature,
-                                typeMapper::isReifiedGenericInterface,
+                                hasNaturalGenericInterfaceOwner = { owner ->
+                                    typeMapper.isReifiedGenericInterface(owner) ||
+                                            typeMapper.isRuntimeReifiedGenericInterface(owner)
+                                },
                             )
                         } else null
                     }

@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-runtime-semantic-overloads-2026-09-11.md`](generic-owner-runtime-semantic-overloads-2026-09-11.md)
+  records Runtime descriptor authority in the shared private naming rule,
+  two reproduced collisions, separate Kotlin/C# execution, the advanced
+  callable census boundary, and the focused candidate/inverse gate.
 - [`generic-owner-private-semantic-overloads-2026-09-11.md`](generic-owner-private-semantic-overloads-2026-09-11.md)
   records stable private overload identities after interface-to-object mapping,
   unchanged public/exact contracts, separate Kotlin/C# execution, and the

@@ -221,6 +221,14 @@ endpoints, or already-bound compiler methods. It does not admit colliding
 constructors or general nested/capability-carrier overloads. Those require their
 own complete declaration-family naming contract, not collision-order suffixes.
 
+For this name-selection query, an already selected Runtime natural-interface
+descriptor is physical declaration authority just as a current or producer-
+recorded natural owner is. The query must not depend on whether that authority
+arrived through the Runtime catalogue or the local/library owner index. This
+does not select a new Runtime family, change its parameter carrier, or rename
+an imported declaration; it only preserves a local private signature which
+has already lost its interface identity at an object boundary.
+
 ### 3. Callable contracts compose independent policies
 
 Every admitted physical callable has one producer-owned contract containing at
