@@ -1451,9 +1451,21 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
             target
         }
         return sequenceOf(target, declaringSource).firstNotNullOfOrNull { source ->
-            context.genericOwnerSemanticHooks[source]
-                ?: context.externalGenericOwnerSemanticHooks[source]
-                ?: context.genericOwnerFunctionInputEntries[source]
+            val dispatcher = context.genericOwnerCapabilityDispatchers[source]
+            if (dispatcher != null && dispatcher in context.genericOwnerDirectForeignOverrideDispatches) {
+                // The source's operation policy, including ordinary C# virtual dispatch, is
+                // stronger than a bare semantic body. A private dispatcher is callable only on
+                // its owner; inherited implementations use the same published capability slot.
+                dispatcher.takeIf { it.parent === implementingClass }
+                    ?: checkNotNull(context.genericOwnerCapabilitySlots[source]) {
+                        "An inherited foreign-aware operation has no class capability slot"
+                    }
+            } else {
+                context.externalGenericOwnerCapabilitySlots[source]
+                    ?: context.genericOwnerSemanticHooks[source]
+                    ?: context.externalGenericOwnerSemanticHooks[source]
+                    ?: context.genericOwnerFunctionInputEntries[source]
+            }
         }
     }
 

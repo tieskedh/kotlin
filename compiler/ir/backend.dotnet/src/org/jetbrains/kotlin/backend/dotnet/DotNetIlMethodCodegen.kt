@@ -1908,10 +1908,8 @@ internal class DotNetIlMethodCodegen(
     ) {
         check(function is IrSimpleFunction &&
                 function.origin == DOTNET_GENERIC_OWNER_CAPABILITY_DISPATCHER &&
-                signature.parameterTypes.isNotEmpty() &&
-                signature.returnType == DotNetIlReturnType.Value(DotNetIlValueType.Object)) {
-            "Direct foreign override dispatch requires an object-returning capability dispatcher " +
-                    "with an instance receiver"
+                signature.parameterTypes.isNotEmpty()) {
+            "Direct foreign override dispatch requires a capability dispatcher with an instance receiver"
         }
         val typedInfo = checkNotNull(
             availableFunctions[dispatch.typedEntry]
@@ -1925,9 +1923,52 @@ internal class DotNetIlMethodCodegen(
         ) {
             "Direct foreign override dispatch lacks its semantic MethodDef"
         }
+        val probe = dispatch.foreignOverrideProbe
+        if (probe == null) {
+            // A compiler-owned wrapper with identical fixed carriers is already the correct
+            // semantic operation, including ordinary virtual C# dispatch. Unlike owner-dependent
+            // outputs it needs neither override detection nor an object-domain return carrier.
+            check(dispatch.typedEntry.parent === function.parent &&
+                    dispatch.semanticHook.parent === function.parent &&
+                    typedInfo.owner == functionInfo.owner && semanticInfo.owner == functionInfo.owner &&
+                    dispatch.typedEntry.typeParameters.isEmpty() &&
+                    dispatch.semanticHook.typeParameters.isEmpty() && function.typeParameters.isEmpty() &&
+                    signature.hasThis && !signature.hasSplitNullableResult &&
+                    typedInfo.signature == signature && semanticInfo.signature == signature) {
+                "Natural semantic dispatch requires identical final physical MethodDef signatures"
+            }
+            val ownerToken = if (typedInfo.owner.typeParameterCount == 0) {
+                typedInfo.owner.ilTypeRef
+            } else {
+                DotNetIlValueType.GenericInstance(
+                    typedInfo.owner,
+                    List(typedInfo.owner.typeParameterCount) { index ->
+                        DotNetIlValueType.TypeParameter(index, isMethodParameter = false)
+                    },
+                ).nameInSignature
+            }
+            signature.parameterTypes.indices.forEach { index ->
+                methodContext.emit(if (index <= 3) "ldarg.$index" else "ldarg $index", pushes = 1)
+            }
+            val resultCount = if (signature.returnType is DotNetIlReturnType.Value) 1 else 0
+            methodContext.emit(
+                typedInfo.renderCallInstruction(
+                    typedInfo.physicalMethodName ?: dispatch.typedEntry.dotNetIlMethodName(),
+                    virtual = true,
+                    ownerToken = ownerToken,
+                ),
+                pops = signature.parameterTypes.size,
+                pushes = resultCount,
+            )
+            methodContext.emitReturn(pops = resultCount)
+            return
+        }
+        check(signature.returnType == DotNetIlReturnType.Value(DotNetIlValueType.Object)) {
+            "Probed foreign override dispatch requires the established object result carrier"
+        }
         val probeInfo = checkNotNull(
-            availableFunctions[dispatch.foreignOverrideProbe]
-                ?: typeMapper.referencedFunctionInfoOrNull(dispatch.foreignOverrideProbe)
+            availableFunctions[probe]
+                ?: typeMapper.referencedFunctionInfoOrNull(probe)
         ) {
             "Direct foreign override dispatch lacks its virtual probe MethodDef"
         }
@@ -1935,7 +1976,7 @@ internal class DotNetIlMethodCodegen(
         val familyOwner = dispatch.typedEntry.parent as? IrClass
         val familyMembersShareOwner = familyOwner != null &&
                 dispatch.semanticHook.parent == familyOwner &&
-                dispatch.foreignOverrideProbe.parent == familyOwner
+                probe.parent == familyOwner
         val familyIsOnDispatcherAncestry = dispatcherOwner != null && familyOwner != null &&
                 (dispatcherOwner == familyOwner || dispatcherOwner.isSubclassOf(familyOwner))
         val familyOwnerToken = typedInfo.owner.ilTypeRef
@@ -1971,27 +2012,27 @@ internal class DotNetIlMethodCodegen(
         val dispatcherGenericParameters = function.physicalGenericParameterConstraints()
         check(dispatch.typedEntry.physicalGenericParameterConstraints() == dispatcherGenericParameters &&
                 dispatch.semanticHook.physicalGenericParameterConstraints() == dispatcherGenericParameters &&
-                dispatch.foreignOverrideProbe.physicalGenericParameterConstraints() ==
+                probe.physicalGenericParameterConstraints() ==
                 dispatcherGenericParameters) {
             "Direct foreign override dispatch requires identical emitted MethodSpec binders: " +
                     "dispatcher=$dispatcherGenericParameters, " +
                     "typed=${dispatch.typedEntry.physicalGenericParameterConstraints()}, " +
                     "semantic=${dispatch.semanticHook.physicalGenericParameterConstraints()}, " +
-                    "probe=${dispatch.foreignOverrideProbe.physicalGenericParameterConstraints()}"
+                    "probe=${probe.physicalGenericParameterConstraints()}"
         }
         fun DotNetIlFunctionInfo.reference(target: IrSimpleFunction): String = renderMethodReference(
             physicalMethodName ?: target.dotNetIlMethodName(),
             ownerToken = openOwnerToken(),
             methodInstantiation = methodInstantiation,
         )
-        val probeReference = probeInfo.reference(dispatch.foreignOverrideProbe)
+        val probeReference = probeInfo.reference(probe)
         val typedReturn = (typedInfo.signature.returnType as? DotNetIlReturnType.Value)?.type
         check(typedInfo.signature.parameterTypes.size == signature.parameterTypes.size &&
                 typedInfo.signature.parameterTypes.drop(1) == signature.parameterTypes.drop(1) &&
                 probeInfo.signature.parameterTypes.size == 1 &&
                 semanticInfo.signature.parameterTypes.size == signature.parameterTypes.size &&
                 semanticInfo.signature.parameterTypes.drop(1) == signature.parameterTypes.drop(1) &&
-                dispatch.foreignOverrideProbe.typeParameters.size == function.typeParameters.size &&
+                probe.typeParameters.size == function.typeParameters.size &&
                 !typedInfo.signature.hasSplitNullableResult &&
                 !semanticInfo.signature.hasSplitNullableResult &&
                 !probeInfo.signature.hasSplitNullableResult &&

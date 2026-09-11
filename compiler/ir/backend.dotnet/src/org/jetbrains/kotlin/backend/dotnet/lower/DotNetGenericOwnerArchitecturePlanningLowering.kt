@@ -1534,7 +1534,25 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 context.genericOwnerCapabilityDispatchers[source] = dispatcher
                 val semanticHook = semanticHooksBySource[source]
                 val foreignOverrideProbe = foreignOverrideProbesBySource[source]
-                if (semanticHook != null && foreignOverrideProbe != null) {
+                val mayUseEquivalentNaturalWrapper = semanticHook != null &&
+                        context.genericOwnerMemberBodyPlacements[source] ==
+                        DotNetGenericOwnerMemberBodyPlacement.SEMANTIC_BODY_WITH_NATURAL_WRAPPER &&
+                        source.typeParameters.isEmpty() &&
+                        family.returnSlotDomain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
+                        !family.requiresSemanticResultCapability &&
+                        family.supportsDirectForeignOverrideProbe()
+                if (mayUseEquivalentNaturalWrapper) {
+                    // The natural wrapper changes neither input nor output carrier. Re-enter it
+                    // virtually instead of bypassing a C# override through the protected hook.
+                    // The final emitter must seal all three physical signatures before using
+                    // this no-probe route; the early fixed-leaf proof grants no new MethodDef.
+                    context.genericOwnerDirectForeignOverrideDispatches[dispatcher] =
+                        org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerDirectForeignOverrideDispatch(
+                            typedEntry = source,
+                            semanticHook = checkNotNull(semanticHook),
+                            foreignOverrideProbe = null,
+                        )
+                } else if (semanticHook != null && foreignOverrideProbe != null) {
                     // The object-domain result cannot in general pass through the typed wrapper:
                     // an incompatible value installed through @UnsafeVariance must remain readable
                     // from a widened Kotlin view. A direct C# subclass, however, overrides only the
@@ -1970,7 +1988,6 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
         // un-emitted semantic prototype and bind it to the family record carried by the producer
         // assembly. Codegen can then use the same call path as a local capability slot while the
         // physical owner/name remain entirely producer-authoritative.
-        val externalSlots = context.externalGenericOwnerCapabilitySlots
         val externalDefaultSlots = linkedMapOf<IrSimpleFunction, IrSimpleFunction>()
         // Override-family closure may already have materialized this producer-bound stub for an
         // inherited semantic family. It is the same physical MethodDef needed by an exact
@@ -2142,48 +2159,47 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                     return@forEachIndexed
                 }
             }
-            val slot = externalSlots.getOrPut(source) {
-                createDetachedPrototypeMember(
-                    owner = route.calleeOwner,
-                    source = source,
-                    role = DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
-                    memberIndex = index,
-                    requiresSemanticResultCapability =
-                        binding.family.requiresSemanticResultCapability,
-                    authoritativeSemanticObjectParameterIndices =
-                        binding.family.semanticObjectParameterIndices,
-                ).function.also { prototype ->
-                    prototype.modality = Modality.ABSTRACT
-                    if (exactResultNeedsSemanticRoute) {
-                        context.genericOwnerCapabilityDeclarations += prototype
-                    }
-                    // Unlike a local slot, this un-emitted prototype is parented by the logical
-                    // external C<T>; its implicit receiver must therefore be remapped to the
-                    // producer's non-generic capability as well as its explicit value slots.
-                    context.genericOwnerCapabilityDeclarations += prototype.parameters.first()
-                    markSemanticParameterCarriers(
-                        route.calleeOwner,
-                        source.parameters.drop(1),
-                        prototype.parameters.drop(1),
-                        binding.family.semanticObjectParameterIndices,
-                    )
-                    if (exactResultNeedsSemanticRoute) {
-                        // The producer's projected Nested<T> capability result is an object
-                        // carrier: it may contain either Kotlin's sibling capability or an
-                        // ordinary foreign natural construction. Reconstruct that same MethodRef
-                        // result instead of narrowing it to the nested capability in this DLL.
-                        context.genericOwnerForeignDispatchDeclarations += prototype
-                    }
-                    context.externalGenericOwnerPhysicalSlots[prototype] =
-                        DotNetBoundGenericOwnerPhysicalSlot(
-                            binding.library,
-                            binding.family,
-                            binding.family.ownerPath,
-                            binding.family.capabilityMethodName,
-                        )
-                }
-            }
+            val slot = externalCapabilitySlot(route.calleeOwner, source, binding)
             context.genericOwnerCapabilityCallTargets[route.call] = slot
+        }
+    }
+
+    /** One producer-bound operation for both direct calls and inherited interface bridges. */
+    private fun externalCapabilitySlot(
+        owner: IrClass,
+        source: IrSimpleFunction,
+        binding: DotNetBoundGenericOwnerMemberFamily,
+    ): IrSimpleFunction = context.externalGenericOwnerCapabilitySlots.getOrPut(source) {
+        createDetachedPrototypeMember(
+            owner = owner,
+            source = source,
+            role = DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+            memberIndex = context.externalGenericOwnerCapabilitySlots.size,
+            requiresSemanticResultCapability = binding.family.requiresSemanticResultCapability,
+            authoritativeSemanticObjectParameterIndices = binding.family.semanticObjectParameterIndices,
+        ).function.also { prototype ->
+            prototype.modality = Modality.ABSTRACT
+            if (binding.family.requiresSemanticResultCapability) {
+                context.genericOwnerCapabilityDeclarations += prototype
+                // A semantic result can contain either a Kotlin capability or a foreign natural
+                // construction. Preserve the producer's object carrier, not a narrower capability.
+                context.genericOwnerForeignDispatchDeclarations += prototype
+            }
+            // The un-emitted stub belongs to logical C<T>, but its physical receiver is the
+            // producer's non-generic capability. Its MethodDef is entirely record-authoritative.
+            context.genericOwnerCapabilityDeclarations += prototype.parameters.first()
+            markSemanticParameterCarriers(
+                owner,
+                source.parameters.drop(1),
+                prototype.parameters.drop(1),
+                binding.family.semanticObjectParameterIndices,
+            )
+            context.externalGenericOwnerPhysicalSlots[prototype] = DotNetBoundGenericOwnerPhysicalSlot(
+                binding.library,
+                binding.family,
+                binding.family.ownerPath,
+                binding.family.capabilityMethodName,
+            )
         }
     }
 
@@ -3611,7 +3627,7 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
         }
 
         // A reified local class can inherit a semantic family without declaring an override.
-        // Its later interface MethodImpl still needs the producer's protected semantic MethodDef;
+        // Its later interface MethodImpl needs the producer's semantic operation, not just a body;
         // a fake override is only the logical selector and owns no callable CLR declaration.
         // Materialize that producer-bound stub eagerly from the family record rather than making
         // bridge correctness depend on whether this module also happens to contain a direct call.
@@ -3626,6 +3642,7 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                     ?: return@forEach
                 if (binding.family.semanticHookMethodName != null) {
                     externalSemanticPrototype(declaringSource, binding)
+                    externalCapabilitySlot(declaringSource.parent as IrClass, declaringSource, binding)
                 }
             }
         }

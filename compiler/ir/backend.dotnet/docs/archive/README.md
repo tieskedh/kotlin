@@ -14,6 +14,9 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-foreign-fixed-boundary-2026-09-11.md`](generic-owner-foreign-fixed-boundary-2026-09-11.md)
+  records fixed-boundary natural dispatch without probes or boxing, canonical
+  and separately inherited interface routing, and ordinary C# override proofs.
 - [`generic-owner-abstract-foreign-output-2026-09-11.md`](generic-owner-abstract-foreign-output-2026-09-11.md)
   records concrete compiler forwarders for abstract natural output slots,
   separate Kotlin/C# inheritance and reabstraction, unchanged broad/split

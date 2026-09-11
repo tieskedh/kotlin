@@ -600,6 +600,29 @@ argument requiring an unproved broad/owner-relative conversion keeps the class
 owner erased. A protected compiler hook is never an extra C# authoring
 obligation.
 
+When a compiler-owned natural wrapper and its semantic body have identical
+physical boundaries, the natural virtual operation can itself implement the
+class capability. No override probe or object-result convention is necessary:
+ordinary CLR virtual dispatch observes both Kotlin and foreign overrides. This
+requires the proven `SEMANTIC_BODY_WITH_NATURAL_WRAPPER` placement, identical
+fixed input carriers, no method binders or split-result channel, and no
+semantic-result conversion. A declaration-independent result domain is only
+an admission candidate, not physical authority. Emission must seal the same
+physical owner and complete final MethodDef signature for the natural entry,
+hook, and dispatcher before selecting the direct call. Preserve the existing
+value or void result carrier without boxing. Different boundaries retain their
+own semantic/foreign-override policy; equal result types alone prove nothing.
+
+An interface bridge must not bypass this authoritative class operation by
+selecting its bare semantic body. When the class family owns foreign-aware
+dispatch, use its dispatcher on the same physical class or its published
+capability slot from an inheriting class. A bound external capability MethodDef
+likewise outranks the external body hook for ordinary virtual operations.
+Inherited interface obligations must materialize that producer-bound slot even
+when the consumer has no independent call which would otherwise bind it.
+Explicit nonvirtual `super` calls remain body calls; these two operation kinds
+must not be conflated.
+
 An abstract natural slot whose semantic obligation is an interface result may
 use the same dispatch family when every input already has the identical fixed
 physical carrier, there are no method binders or split-result channels, and no

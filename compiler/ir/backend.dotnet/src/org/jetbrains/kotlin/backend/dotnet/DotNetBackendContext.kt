@@ -105,11 +105,13 @@ internal data class DotNetGenericOwnerFunctionInputEntryAuthority(
  * an ordinary foreign subclass supplied the natural C# override and capability dispatch must use
  * it; otherwise the raw semantic hook remains authoritative. The admitted method-generic shape
  * carries one declaration-independent input and preserves that method argument on either route.
+ * A null probe selects the natural entry unconditionally, but only after emission proves that
+ * the compiler-owned natural wrapper and semantic hook have identical physical signatures.
  */
 internal data class DotNetGenericOwnerDirectForeignOverrideDispatch(
     val typedEntry: IrSimpleFunction,
     val semanticHook: IrSimpleFunction,
-    val foreignOverrideProbe: IrSimpleFunction,
+    val foreignOverrideProbe: IrSimpleFunction?,
 )
 
 internal data class DotNetLoweredInterfaceDefaultPromotion(

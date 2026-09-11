@@ -709,6 +709,12 @@ private class BackendCliDotNetFacade(
             completedOutput.declarations, testServices.moduleStructure.originalTestDataFiles.single(),
             testServices.getOrCreateTempDirectory("generic-owner-abstract-foreign-output"),
         )
+        validateGenericOwnerForeignScalarResult(
+            genericOwnerRehearsal, loweredInput.configuration.dotNetProducesLibrary,
+            loweredInput.configuration.dotNetTarget, completedOutput.output,
+            completedOutput.declarations, testServices.moduleStructure.originalTestDataFiles.single(),
+            testServices.getOrCreateTempDirectory("generic-owner-foreign-scalar-result"),
+        )
         validateGenericOwnerRuntimeIteratorCSharp(
             genericOwnerRehearsal = genericOwnerRehearsal,
             producesLibrary = loweredInput.configuration.dotNetProducesLibrary,
@@ -20161,6 +20167,153 @@ private fun validateGenericOwnerSplitNullableResultCSharp(
  * seals and actual PE fields, then exercise separately compiled Kotlin/C# inheritance on the
  * same receiver without hidden ABI or duplicate state.
  */
+private fun validateGenericOwnerForeignScalarResult(
+    genericOwnerRehearsal: Boolean,
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    declarations: Map<String, DotNetPhysicalDeclaration>,
+    testDataFile: File,
+    directory: File,
+) {
+    if ("DOTNET_GENERIC_OWNER_FOREIGN_SCALAR_RESULT_PROBE" !in testDataFile.readText()) return
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+    val capabilityNames = declarations.values.filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerMemberFamily>()
+        .mapTo(linkedSetOf()) { it.capabilityMethodName }
+    val metadata = DotNetClrMetadataReader.readWithSelectedMethodBodies(producer) { assembly ->
+        assembly.methodDefinitions.filter { it.name in capabilityNames }.mapTo(linkedSetOf()) { it.handle }
+    }
+    if (!genericOwnerRehearsal) {
+        check(declarations.genericOwnerRehearsalEpochRecordIndexKeys().isEmpty())
+        check(metadata.typeDefinitions.none { it.namespaceName == "generic.owner.scalar" && '`' in it.metadataName })
+        check(metadata.methodBodies.isEmpty())
+        return
+    }
+    if (producer.name.equals("lib.dll", true)) {
+        val owner = metadata.typeDefinitions.single {
+            it.namespaceName == "generic.owner.scalar" && it.metadataName == "KotlinDecision`1"
+        }
+        val methods = metadata.methodDefinitions.filter { it.declaringType == owner.handle }
+        val resultTypes = mapOf(
+            "decide" to DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.BOOLEAN),
+            "score" to DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.INT64),
+            "touch" to DotNetClrTypeSignature.Void,
+        )
+        resultTypes.forEach { entry ->
+            val method = methods.single { it.name == entry.key }
+            check(method.isVirtual && method.signature.returnType == entry.value &&
+                    method.signature.parameterTypes == listOf(DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.OBJECT)))
+        }
+        val families = declarations.values.filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerMemberFamily>()
+            .filter { it.semanticHookMethodName != null }
+        check(families.size == 3 && families.all { it.foreignOverrideProbeMethodName == null }) {
+            "Identical scalar boundaries must not introduce runtime override probes: $families"
+        }
+        val hooks = families.map { family -> methods.single { it.name == family.semanticHookMethodName } }
+        check(hooks.map { it.signature.returnType }.toSet() == resultTypes.values.toSet())
+        val dispatchers = methods.filter { it.name in capabilityNames }
+        check(dispatchers.size == 3 && dispatchers.map { it.signature.returnType }.toSet() == resultTypes.values.toSet())
+        dispatchers.forEach { dispatcher ->
+            val body = metadata.methodBodies.single { it.method == dispatcher.handle }
+            val code = body.code.toUnsignedIntList()
+            // Exactly ldarg.0, ldarg.1, callvirt <token>, ret: no boxing, probe, or reflection.
+            check(!body.hasExtraSections && body.localVariableSignature == null && code.size == 8 &&
+                    code.take(3) == listOf(0x02, 0x03, 0x6f) && code.last() == 0x2a) {
+                "A fixed-carrier dispatcher is not a direct natural call: ${dispatcher.name}: $code"
+            }
+        }
+    }
+    if (producesLibrary) return
+    val lib = directory.resolve("lib.dll")
+    check(lib.isFile)
+    val platform = System.getProperty("kotlin.dotnet.test.platform.${target.description}.path")?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform for foreign scalar results")
+    val runtime = platform.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platform.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    val source = directory.resolve("ScalarConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+            using generic.owner.scalar;
+            public sealed class CsDecision : KotlinDecision<int>
+            {
+                public int Touches;
+                public override bool decide(object candidate) { return true; }
+                public override long score(object candidate) { return 9223372036854775700L; }
+                public override void touch(object candidate) { Touches++; }
+            }
+            public sealed class CsInherited : InheritedDecision<int>
+            {
+                public override bool decide(object candidate) { return true; }
+            }
+            public class CsOverriding : OverridingDecision<int>
+            {
+                public int Touches;
+                public override bool decide(object candidate) { return true; }
+                public override long score(object candidate) { return 9223372036854775701L; }
+                public override void touch(object candidate) { Touches++; }
+            }
+            public sealed class CsGrandchild : CsOverriding
+            {
+                public override bool decide(object candidate) { return false; }
+                public override long score(object candidate) { return 9223372036854775702L; }
+            }
+            public static class ScalarConsumer
+            {
+                public static int Main()
+                {
+                    var decision = new CsDecision();
+                    if (!decision.decide(null)) throw new Exception("natural");
+                    if (!decisionsKt.decideExact(decision, 41)) throw new Exception("exact Kotlin call bypassed C#");
+                    if (!decisionsKt.decideStar(decision, "value")) throw new Exception("star Kotlin call bypassed C#");
+                    if (!decisionsKt.decideInterface(decision, null)) throw new Exception("interface Kotlin call bypassed C#");
+                    if (decisionsKt.scoreStar(decision, null) != 9223372036854775700L ||
+                        decisionsKt.scoreInterface(decision, null) != 9223372036854775700L) throw new Exception("scalar result");
+                    decisionsKt.touchStar(decision, "first");
+                    decisionsKt.touchInterface(decision, 47);
+                    if (decision.Touches != 2) throw new Exception("void result");
+                    var inherited = new CsInherited();
+                    if (!decisionsKt.decideStar(inherited, null) || !decisionsKt.decideInterface(inherited, null))
+                        throw new Exception("inherited operation");
+                    if (!inheritedKt.decideOther(inherited, null)) throw new Exception("new interface on inherited foreign family");
+                    var overriding = new CsOverriding();
+                    if (!decisionsKt.decideStar(overriding, null) || !decisionsKt.decideInterface(overriding, null) ||
+                        decisionsKt.scoreStar(overriding, null) != 9223372036854775701L ||
+                        decisionsKt.scoreInterface(overriding, null) != 9223372036854775701L) throw new Exception("override chain");
+                    decisionsKt.touchStar(overriding, null);
+                    decisionsKt.touchInterface(overriding, null);
+                    if (overriding.Touches != 2) throw new Exception("void override chain");
+                    if (overriding.parentScore(null) != -1L) throw new Exception("nonvirtual Kotlin super call");
+                    var grandchild = new CsGrandchild();
+                    if (decisionsKt.decideStar(grandchild, null) || decisionsKt.decideInterface(grandchild, null) ||
+                        decisionsKt.scoreStar(grandchild, null) != 9223372036854775702L ||
+                        decisionsKt.scoreInterface(grandchild, null) != 9223372036854775702L)
+                        throw new Exception("most-derived C# override");
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val consumer = directory.resolve(if (target == DotNetTarget.NET48) "ScalarConsumer.exe" else "ScalarConsumer.dll")
+    val references = listOf(lib, directory.resolve("middle.dll"), runtime, stdlib)
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()),
+            source, consumer, references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()),
+            source, consumer, references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 -> error("The scalar consumer needs an executable profile")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    listOf(runtime, stdlib).forEach { it.copyTo(directory.resolve(it.name), overwrite = true) }
+    executeSnapshotConsumer(target, consumer, directory)
+}
+
 private fun validateGenericOwnerAbstractForeignOutput(
     genericOwnerRehearsal: Boolean,
     producesLibrary: Boolean,
