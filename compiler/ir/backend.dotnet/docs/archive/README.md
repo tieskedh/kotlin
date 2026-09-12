@@ -14,6 +14,9 @@ Use:
 
 Archived snapshots:
 
+- [`invariant-recursive-owner-state-2026-09-12.md`](invariant-recursive-owner-state-2026-09-12.md)
+  records the self-admission cycle, conditional invariant binder coordinates,
+  physical field/seal checks, hostile state and the candidate/inverse gates.
 - [`local-fixed-interface-call-results-2026-09-12.md`](local-fixed-interface-call-results-2026-09-12.md)
   records proven fixed results through getters and ordinary calls, preserved
   field/foreign metadata, broad-value negatives and the candidate/inverse gate.

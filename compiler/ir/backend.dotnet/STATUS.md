@@ -60,9 +60,9 @@ audit found no failures, errors, or skips:
 | Full FIR2IR, both parsers and runtimes | 187 | 2,383 |
 | CLI/library integration | 2 | 129 |
 | **Full production total** | **214** | **2,932** |
-| Post-full fixed-result candidate matrix | 4 | 32 |
-| Post-full fixed-result backend model gate | 24 | 414 |
-| Post-full fixed-result erased inverse | 4 | 32 |
+| Post-full recursive-state candidate matrix | 4 | 48 |
+| Post-full recursive-state backend model gate | 24 | 414 |
+| Post-full recursive-state erased inverse | 4 | 48 |
 
 Full checkpoint `3724aeab9c` supersedes `2a13f45341`. The actual FIR2IR and
 CLI integration Test tasks were explicitly rerun without filters and without
@@ -85,27 +85,29 @@ identity, owner-generic value/reference substitutions and nested results.
 CLI negatives cover use-site nullability, erased stars, stronger Kotlin bounds,
 missing dependencies and class/typealias lookalikes.
 
-The subsequent fixed-result repair preserves already-proven closed interface
-results across ordinary local calls. The field and getter were already exact;
-the caller no longer discards that proof. Its matrix covers effectful helpers
-with broad inputs, mutable and bottom-view negatives, physical field/return
-types, retained foreign slots and ordinary C# overrides. All changed compiler
-code is behind the rehearsal flag; production mapping, ABI, Runtime and Stdlib
-are unchanged. This inherits the full checkpoint above without claiming that
-the older full run executed the new assertions. See the
-[fixed call-result evidence](docs/archive/local-fixed-interface-call-results-2026-09-12.md)
-and preceding
-[exact override-result proof](docs/archive/foreign-kotlin-interface-override-results-2026-09-12.md).
-Broader object-domain state and open result substitutions remain unclosed.
+The latest repair resolves a self-admission cycle in invariant recursive-owner
+state. Its matrix verifies typed recursive fields, reordered binders, nullable
+and value-class substitutions, separate Kotlin/C# consumers, broad-writer
+negatives and an unchanged covariant boundary. The new rule is explicitly
+rehearsal-only; production mapping, ABI, Runtime and Stdlib are unchanged.
+It inherits the full checkpoint above without claiming that the older full
+run executed the new assertions. Source hashes match all three delta gates.
+See the
+[recursive-state evidence](docs/archive/invariant-recursive-owner-state-2026-09-12.md).
+The preceding
+[fixed call-result repair](docs/archive/local-fixed-interface-call-results-2026-09-12.md)
+and [exact override-result proof](docs/archive/foreign-kotlin-interface-override-results-2026-09-12.md)
+remain separately verified. Broader object-domain state and open result
+substitutions remain unclosed.
 
 ## Active work
 
 Continue the source-built Runtime/Stdlib generic-owner rehearsal inside phase 1
-of the way forward. The latest census, on `3724aeab9c`, contains 215 error
-lines, unchanged from `2a13f45341`;
+of the way forward. The latest census, on `f132c354f5`, contains 215 error
+lines, exactly unchanged from `3724aeab9c` and `2a13f45341`;
 `AbstractMap` and its generated views no longer fail there. These are
 diagnostics, not independent bugs or a completion percentage. That census
-predates the fixed local call-result repair and must be rerun before claiming
+predates the recursive-owner state repair and must be rerun before claiming
 a changed source-built frontier.
 
 Owner-admission evidence still identifies foreign semantic interface inputs,

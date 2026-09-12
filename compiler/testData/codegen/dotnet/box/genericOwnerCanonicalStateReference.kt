@@ -30,6 +30,34 @@ open class Observer<T>(private var source: LibraryData<T, *>, private var value:
 fun describeInt(parent: Parent<Int>): String = parent.describe()
 fun describeString(parent: Parent<String>): String = parent.describe()
 
+// A self-reference does not need a completed state plan to identify its own TypeDef binder.
+class RecursiveState<T>(private val value: T, private val previous: RecursiveState<T>?) {
+    fun read(): T = value
+    fun previous(): RecursiveState<T>? = previous
+}
+
+value class StateId(val raw: Int)
+
+class ReorderedRecursive<K, V>(private val previous: ReorderedRecursive<V, K>?) {
+    fun previous(): ReorderedRecursive<V, K>? = previous
+}
+
+class BroadRecursive<T>(private val value: T, previous: BroadRecursive<T>?) {
+    private var previous: BroadRecursive<T>? = previous
+
+    @Suppress("UNCHECKED_CAST")
+    fun install(candidate: Any?) { previous = candidate as BroadRecursive<T>? }
+    fun same(candidate: Any?): Boolean = previous === candidate
+    fun read(): T = value
+}
+
+// Covariance admits a logically matching argument which is not the same CLR construction.
+// The conditional invariant-self proof must not accidentally admit this owner too.
+class CovariantRecursive<out T>(private val value: T, private val previous: CovariantRecursive<T>?) {
+    fun read(): T = value
+    fun previous(): CovariantRecursive<T>? = previous
+}
+
 // MODULE: middle(lib)
 // FILE: inherited.kt
 
@@ -45,6 +73,27 @@ fun inheritedRead(value: Observer<Int>): Int = value.read()
 package generic.owner.canonical.state
 
 fun box(): String {
+    val first = RecursiveState(31, null)
+    val second = RecursiveState(37, first)
+    if (second.previous() !== first || first.previous() != null || second.read() != 37) return "recursive state"
+    val text = RecursiveState("text", null)
+    if (text.read() != "text") return "recursive reference"
+    val absent = RecursiveState<Int?>(null, null)
+    val present = RecursiveState<Int?>(41, absent)
+    if (present.read() != 41 || present.previous() !== absent || absent.read() != null) return "recursive nullable"
+    if (RecursiveState(StateId(43), null).read().raw != 43) return "recursive value class"
+    val reverse = ReorderedRecursive<String, Int>(null)
+    val forward = ReorderedRecursive<Int, String>(reverse)
+    if (forward.previous() !== reverse) return "reordered recursive binder"
+    val broadFirst = BroadRecursive(47, null)
+    val broadSecond = BroadRecursive(53, broadFirst)
+    broadSecond.install(null)
+    if (!broadSecond.same(null) || broadSecond.read() != 53) return "broad recursive null"
+    broadSecond.install(broadFirst)
+    if (!broadSecond.same(broadFirst)) return "broad recursive identity"
+    val covariantInt = CovariantRecursive(59, null)
+    val covariantWide = CovariantRecursive<Any?>("wide", covariantInt)
+    if (covariantWide.previous() !== covariantInt || covariantWide.previous()!!.read() != 59) return "covariant self view"
     val input = object : Input<String> {
         override fun read(): String = "input"
     }

@@ -746,6 +746,7 @@ private class BackendCliDotNetFacade(
             genericOwnerRehearsal, loweredInput.configuration.dotNetProducesLibrary,
             loweredInput.configuration.dotNetTarget, completedOutput.output,
             completedOutput.declarations, completedOutput.genericOwnerPhysicalStateEmissionSnapshots,
+            completedOutput.genericOwnerPrototypes,
             testServices.moduleStructure.originalTestDataFiles.single(),
             testServices.getOrCreateTempDirectory("generic-owner-canonical-state"),
         )
@@ -22530,6 +22531,7 @@ private fun validateGenericOwnerCanonicalState(
     producer: File,
     declarations: Map<String, DotNetPhysicalDeclaration>,
     stateEmissions: List<DotNetGenericOwnerPhysicalStateEmissionSnapshot>,
+    prototypes: List<DotNetGenericOwnerPrototypeSnapshot>,
     testDataFile: File,
     directory: File,
 ) {
@@ -22549,6 +22551,12 @@ private fun validateGenericOwnerCanonicalState(
         }
         val helper = requireType("LibraryData")
         check(metadata.genericParameterDefinitions.none { it.owner == helper.handle })
+        val recursiveName = if (genericOwnerRehearsal) "RecursiveState`1" else "RecursiveState"
+        check(metadata.typeDefinitions.any { it.namespaceName == namespaceName && it.metadataName == recursiveName }) {
+            "Recursive state lost its physical owner: expected $recursiveName, found " +
+                    metadata.typeDefinitions.filter { it.namespaceName == namespaceName }.map { it.metadataName } +
+                    "; plan=" + prototypes.filter { it.ownerName.endsWith("RecursiveState") }
+        }
         val observer = requireType(if (genericOwnerRehearsal) "Observer`1" else "Observer")
         val fields = metadata.fieldDefinitions.filter { it.declaringType == observer.handle }
         check(fields.size == 2 && fields.all { it.visibility == DotNetClrFieldVisibility.PRIVATE && !it.isStatic })
@@ -22563,6 +22571,26 @@ private fun validateGenericOwnerCanonicalState(
         }
         check(fields.single { it.name == "value" }.signature.fieldType == valueType)
         if (genericOwnerRehearsal) {
+            val recursive = requireType("RecursiveState`1")
+            val recursiveFields = metadata.fieldDefinitions.filter { it.declaringType == recursive.handle }
+            val recursiveType = DotNetClrTypeSignature.GenericInstance(
+                DotNetClrTypeSignature.Named(recursive.handle, isValueType = false), listOf(valueType),
+            )
+            check(recursiveFields.size == 2 && recursiveFields.all {
+                it.visibility == DotNetClrFieldVisibility.PRIVATE && !it.isStatic
+            } && recursiveFields.single { it.name == "value" }.signature.fieldType == valueType &&
+                    recursiveFields.single { it.name == "previous" }.signature.fieldType == recursiveType)
+            val recursiveSeals = stateEmissions.filter { it.ownerName == "$namespaceName.RecursiveState" }
+            check(recursiveSeals.size == 2 && recursiveSeals.all {
+                it.requirement == DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN
+            }) { "Recursive state lacks complete BOUND-to-final seals: $recursiveSeals" }
+            val broad = requireType("BroadRecursive`1")
+            val broadFields = metadata.fieldDefinitions.filter { it.declaringType == broad.handle }
+            check(broadFields.single { it.name == "previous" }.signature.fieldType ==
+                    DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.OBJECT) &&
+                    broadFields.single { it.name == "value" }.signature.fieldType == valueType)
+            requireType("ReorderedRecursive`2")
+            requireType("CovariantRecursive")
             val seals = stateEmissions.filter { it.ownerName == "$namespaceName.Observer" }
             check(seals.size == 2 && seals.all {
                 it.requirement == DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN
@@ -22603,6 +22631,25 @@ private fun validateGenericOwnerCanonicalState(
                 {
                     const BindingFlags Flags = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
                     var open = typeof(Observer<>);
+                    var recursive = typeof(RecursiveState<>);
+                    if (recursive.GetFields(Flags).Length != 2 ||
+                        recursive.GetField("value", Flags).FieldType != recursive.GetGenericArguments()[0] ||
+                        recursive.GetField("previous", Flags).FieldType != recursive ||
+                        typeof(RecursiveState<int>).GetField("value", Flags).FieldType != typeof(int) ||
+                        typeof(RecursiveState<string>).GetField("value", Flags).FieldType != typeof(string) ||
+                        typeof(RecursiveState<int?>).GetField("value", Flags).FieldType != typeof(int?) ||
+                        typeof(RecursiveState<StateId>).GetField("value", Flags).FieldType != typeof(StateId))
+                        throw new InvalidOperationException("Recursive state lost its physical field construction");
+                    var first = new RecursiveState<int>(61, null);
+                    var second = new RecursiveState<int>(67, first);
+                    if (first.previous() != null || second.read() != 67 || !Object.ReferenceEquals(second.previous(), first))
+                        throw new InvalidOperationException("Recursive state changed identity or value");
+                    var reordered = typeof(ReorderedRecursive<,>);
+                    var previous = reordered.GetField("previous", Flags).FieldType;
+                    if (previous.GetGenericTypeDefinition() != reordered ||
+                        previous.GetGenericArguments()[0] != reordered.GetGenericArguments()[1] ||
+                        previous.GetGenericArguments()[1] != reordered.GetGenericArguments()[0])
+                        throw new InvalidOperationException("Recursive state changed binder coordinates");
                     if (open.GetFields(Flags).Length != 2 ||
                         open.GetField("source", Flags).FieldType != typeof(LibraryData) ||
                         open.GetField("value", Flags).FieldType != open.GetGenericArguments()[0] ||

@@ -5420,8 +5420,15 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             if (classifier.isValue || classifier.typeParameters.isEmpty() ||
                 simple.arguments.size != classifier.typeParameters.size ||
                 (!classifier.isDotNetGenericClassDeclaration && classifier.kind != ClassKind.INTERFACE) ||
-                !classifier.hasExactGenericOwnerTypeDefAuthority()
+                !(classifier.hasExactGenericOwnerTypeDefAuthority() ||
+                        context.configuration.dotNetGenericOwnerRehearsal && classifier === owner &&
+                        owner.typeParameters.all { it.variance == Variance.INVARIANT })
             ) return null
+            // Like OwnerParameter above, the invariant current-owner coordinate is conditional
+            // on this owner's complete admission. Its own binder does not depend on its fields
+            // already being resolved: requiring that would deadlock a Node<T> field on itself.
+            // This grants no other TypeDef and no covariance conversion. Whole-owner admission
+            // and subsequent BOUND/final FieldDef checks must still discharge the state proof.
             val arguments = mutableListOf<TypedWriteCarrierCoordinate>()
             for (argument in simple.arguments) {
                 val projection = argument as? IrTypeProjection ?: return null

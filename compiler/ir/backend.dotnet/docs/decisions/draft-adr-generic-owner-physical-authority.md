@@ -318,7 +318,14 @@ backing fields, including fields for `val`, are emitted non-init-only today.
 For typed state, the exact logical field type must bind either to one direct
 owner parameter or to one exact invariant construction of already admitted
 local class/natural-interface TypeDefs whose recursive leaves are declaration-
-independent carriers or parameters of the same physical owner. Native invariant
+independent carriers or parameters of the same physical owner. The early
+writer analysis may also form a symbolic construction of its invariant current
+owner, conditional on that owner's complete admission. Like a bare owner
+parameter, that coordinate identifies the current binder without requiring its
+own fields to have resolved first. It proves neither another owner's existence
+nor a variance conversion. All writers, independent owner exclusions, and later
+BOUND/final state seals still apply; mutually dependent owners are not admitted
+by assuming each other. Native invariant
 SZ-array carriers bind recursively through the same element grammar; they do
 not require or create a nominal `Array` TypeDef. Reference nullability on the
 vector does not change its carrier, but open-nullable element parameters,
