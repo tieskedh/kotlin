@@ -112,6 +112,7 @@ internal data class DotNetGenericOwnerDirectForeignOverrideDispatch(
     val typedEntry: IrSimpleFunction,
     val semanticHook: IrSimpleFunction,
     val foreignOverrideProbe: IrSimpleFunction?,
+    val nullInputBarrier: DotNetGenericOwnerForeignNullInputBarrier? = null,
 )
 
 internal data class DotNetLoweredInterfaceDefaultPromotion(

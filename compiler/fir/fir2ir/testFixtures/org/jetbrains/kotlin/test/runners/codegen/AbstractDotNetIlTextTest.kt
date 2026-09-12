@@ -773,6 +773,12 @@ private class BackendCliDotNetFacade(
             completedOutput.declarations, testServices.moduleStructure.originalTestDataFiles.single(),
             testServices.getOrCreateTempDirectory("generic-owner-nullable-callable-capture"),
         )
+        validateGenericOwnerForeignBarrierInput(
+            genericOwnerRehearsal, loweredInput.configuration.dotNetProducesLibrary,
+            loweredInput.configuration.dotNetTarget, completedOutput.output, completedOutput.declarations,
+            testServices.moduleStructure.originalTestDataFiles.single(),
+            testServices.getOrCreateTempDirectory("generic-owner-foreign-barrier"),
+        )
         validateGenericOwnerForeignSplitResult(
             genericOwnerRehearsal, loweredInput.configuration.dotNetProducesLibrary,
             loweredInput.configuration.dotNetTarget, completedOutput.output,
@@ -20496,6 +20502,209 @@ private fun validateGenericOwnerForeignNullableInput(
             source, consumer, references = references, executable = true, warningsAsErrors = true,
         )
         DotNetTarget.NETSTANDARD_2_0 -> error("The nullable input consumer needs an executable profile")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    listOf(runtime, stdlib).forEach { it.copyTo(directory.resolve(it.name), overwrite = true) }
+    executeSnapshotConsumer(target, consumer, directory)
+}
+
+private fun validateGenericOwnerForeignBarrierInput(
+    rehearsal: Boolean,
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    declarations: Map<String, DotNetPhysicalDeclaration>,
+    testDataFile: File,
+    directory: File,
+) {
+    if ("DOTNET_GENERIC_OWNER_FOREIGN_BARRIER_INPUT_PROBE" !in testDataFile.readText()) return
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+    val metadata = DotNetClrMetadataReader.read(producer)
+    val namespace = "generic.owner.foreign.barrier"
+    if (!rehearsal) {
+        check(declarations.genericOwnerRehearsalEpochRecordIndexKeys().isEmpty())
+        check(metadata.typeDefinitions.none { it.namespaceName == namespace && '`' in it.metadataName })
+        return
+    }
+    val boolType = DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.BOOLEAN)
+    val keyType = DotNetClrTypeSignature.GenericParameter(DotNetClrGenericParameterKind.TYPE, 0)
+    val valueType = DotNetClrTypeSignature.GenericParameter(DotNetClrGenericParameterKind.TYPE, 1)
+    if (producer.name.equals("lib.dll", true)) {
+        val owner = metadata.typeDefinitions.single { it.namespaceName == namespace && it.metadataName == "Store`2" }
+        val natural = checkNotNull(metadata.methodDefinitions.singleOrNull {
+            it.declaringType == owner.handle && it.visibility == DotNetClrMethodVisibility.PUBLIC &&
+                    it.signature.returnType == valueType &&
+                    it.signature.parameterTypes == listOf(keyType, DotNetClrTypeSignature.ByReference(boolType))
+        }) {
+            "No split input/result MethodDef: " +
+                    metadata.methodDefinitions.filter { it.declaringType == owner.handle }.map { it.name to it.signature }
+        }
+        check(natural.isVirtual && metadata.parameterDefinitions.single {
+            it.declaringMethod == natural.handle && it.parameterIndex == 1
+        }.isOut)
+        val fields = metadata.fieldDefinitions.filter { it.declaringType == owner.handle }
+        check(fields.size == 2 && fields.single { it.name == "key" }.signature.fieldType == keyType &&
+                fields.single { it.name == "value" }.signature.fieldType ==
+                DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.OBJECT))
+        check(metadata.typeDefinitions.any { it.namespaceName == namespace && it.metadataName == "Strict" })
+        check(metadata.typeDefinitions.none { it.namespaceName == namespace && it.metadataName == "Strict`2" })
+        val objectOwner = metadata.typeDefinitions.single { it.namespaceName == namespace && it.metadataName == "ObjectResult`2" }
+        check(metadata.methodDefinitions.single {
+            it.declaringType == objectOwner.handle && it.name == "get" && it.visibility == DotNetClrMethodVisibility.PUBLIC
+        }.signature.let {
+            it.returnType == DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.OBJECT) && it.parameterTypes == listOf(keyType)
+        })
+    }
+    if (producesLibrary) return
+    val lib = directory.resolve("lib.dll")
+    val middle = directory.resolve("middle.dll")
+    val libMetadata = DotNetClrMetadataReader.read(lib)
+    val owner = libMetadata.typeDefinitions.single { it.namespaceName == namespace && it.metadataName == "Store`2" }
+    val methodName = libMetadata.methodDefinitions.single {
+        it.declaringType == owner.handle && it.visibility == DotNetClrMethodVisibility.PUBLIC &&
+                it.signature.returnType == valueType &&
+                it.signature.parameterTypes == listOf(keyType, DotNetClrTypeSignature.ByReference(boolType))
+    }.name
+    val platform = System.getProperty("kotlin.dotnet.test.platform.${target.description}.path")?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET platform for foreign input barriers")
+    val runtime = platform.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platform.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    val source = directory.resolve("BarrierConsumer.cs").apply {
+        writeText("""
+            using System;
+            using generic.owner.foreign.barrier;
+            public class CsDirect : Store<int, int>
+            {
+                public int Calls;
+                public CsDirect() : base(1, 41) { }
+                public override int $methodName(int key, out bool isNull) { Calls++; isNull = key == 2; return 61; }
+            }
+            public sealed class CsGrandchild : CsDirect
+            {
+                public override int $methodName(int key, out bool isNull) { Calls++; isNull = key == 2; return 67; }
+            }
+            public sealed class CsInherited : Middle<int, int>
+            {
+                public CsInherited() : base(1, 43) { }
+                public override int $methodName(int key, out bool isNull) { isNull = key == 2; return 71; }
+            }
+            public sealed class CsFixed : KotlinFixed
+            {
+                public CsFixed() : base(47) { }
+                public override int $methodName(int key, out bool isNull) { isNull = key == 2; return 73; }
+            }
+            public sealed class CsGeneric : KotlinGeneric<int, int>
+            {
+                public CsGeneric() : base(1, 53) { }
+                public override int $methodName(int key, out bool isNull) { isNull = key == 2; return 79; }
+            }
+            public sealed class CsNullable : Store<int?, int?>
+            {
+                public int Calls;
+                public CsNullable() : base(null, null) { }
+                public override int? $methodName(int? key, out bool isNull) { Calls++; isNull = key == 2; return key; }
+            }
+            public sealed class CsReference : Store<string, string>
+            {
+                public CsReference() : base("key", "base") { }
+                public override string $methodName(string key, out bool isNull) { isNull = key == "missing"; return "reference"; }
+            }
+            public sealed class CsNominal : Store<Id, Id>
+            {
+                public readonly Id Result;
+                public CsNominal(Id key, Id value) : base(key, value) { Result = value; }
+                public override Id $methodName(Id key, out bool isNull) { isNull = key == null; return Result; }
+            }
+            public sealed class CsNonNull : NonNullKey<string, int>
+            {
+                public int Calls;
+                public CsNonNull() : base("key", 59) { }
+                public override int $methodName(string key, out bool isNull) { Calls++; isNull = false; return 101; }
+            }
+            public sealed class CsObject : ObjectResult<int, int>
+            {
+                public int Calls;
+                public CsObject() : base(1, 59) { }
+                public override object get(int key) { Calls++; return key == 2 ? null : (object)103; }
+            }
+            public static class BarrierConsumer
+            {
+                private static void Check(Store<int, int> value, int expected)
+                {
+                    bool isNull;
+                    Kotlin.Collections.Map<int, int> runtimeView = value;
+                    TypedLookup<int, int> typedView = value;
+                    if (!Object.ReferenceEquals(runtimeView, typedView) ||
+                        !Object.Equals(runtimeView.Get(1), expected) || runtimeView.Get(2) != null ||
+                        typedView.get(1, out isNull) != expected || isNull ||
+                        typedView.get(2, out isNull) != expected || !isNull ||
+                        typeof(Kotlin.Collections.Map<int, int>).GetMethod("Get").ReturnType != typeof(object))
+                        throw new Exception("Existing and split MethodDefs lost their independent contracts");
+                    if (value.$methodName(1, out isNull) != expected || isNull ||
+                        storeKt.exact(value, 1) != expected || storeKt.exact(value, 2) != null ||
+                        storeKt.throughTyped(value, 1) != expected || storeKt.throughTyped(value, 2) != null ||
+                        !Object.Equals(storeKt.throughWide(value, 1), expected) || storeKt.throughWide(value, 2) != null ||
+                        !Object.Equals(storeKt.wide(value, 1), expected) || storeKt.wide(value, 2) != null ||
+                        !Object.Equals(storeKt.star(value, 1), expected) || storeKt.star(value, 2) != null ||
+                        storeKt.star(value, "wrong") != null || storeKt.star(value, null) != null ||
+                        !storeKt.same(value, value)) throw new Exception("Foreign barrier dispatch diverged");
+                }
+                public static int Main()
+                {
+                    var direct = new CsDirect();
+                    Check(direct, 61);
+                    int calls = direct.Calls;
+                    if (storeKt.star(direct, "wrong") != null || storeKt.star(direct, null) != null || direct.Calls != calls)
+                        throw new Exception("Wrong input reached the typed override");
+                    Check(new CsGrandchild(), 67);
+                    Check(new CsInherited(), 71);
+                    var fixedChild = new CsFixed();
+                    Check(fixedChild, 73);
+                    if (fixedChild.parent(1) != 47 || fixedChild.parent(2) != null) throw new Exception("Fixed super dispatch");
+                    var genericChild = new CsGeneric();
+                    Check(genericChild, 79);
+                    if (!Object.Equals(genericChild.parent(1), 53) || genericChild.parent(2) != null) throw new Exception("Generic super dispatch");
+                    var nullable = new CsNullable();
+                    if (storeKt.star(nullable, null) != null || nullable.Calls != 1 ||
+                        !Object.Equals(storeKt.star(nullable, 83), 83) || nullable.Calls != 2 ||
+                        storeKt.star(nullable, "wrong") != null || nullable.Calls != 2) throw new Exception("Nullable key");
+                    bool isNull;
+                    if (nullable.$methodName(null, out isNull) != null || isNull ||
+                        nullable.$methodName(2, out isNull) != 2 || !isNull) throw new Exception("Nullable payload/flag");
+                    var reference = new CsReference();
+                    if (!Object.Equals(storeKt.star(reference, null), "reference") ||
+                        storeKt.star(reference, 1) != null || storeKt.star(reference, "missing") != null) throw new Exception("Reference key");
+                    var key = (Id)storeKt.id(89);
+                    var nominal = new CsNominal(key, (Id)storeKt.id(97));
+                    if (!Object.ReferenceEquals(storeKt.star(nominal, key), nominal.Result) ||
+                        storeKt.star(nominal, "wrong") != null) throw new Exception("Nominal key/payload");
+                    var nonNull = new CsNonNull();
+                    if (!Object.Equals(storeKt.star(nonNull, null), 101) || nonNull.Calls != 1 ||
+                        !Object.Equals(storeKt.star(nonNull, "key"), 101) || nonNull.Calls != 2)
+                        throw new Exception("A Kotlin bound changed the selected foreign reference contract");
+                    var objectResult = new CsObject();
+                    if (!Object.Equals(storeKt.star(objectResult, 1), 103) || objectResult.Calls != 1 ||
+                        storeKt.star(objectResult, "wrong") != null || storeKt.star(objectResult, null) != null ||
+                        objectResult.Calls != 1 || storeKt.star(objectResult, 2) != null || objectResult.Calls != 2 ||
+                        !storeKt.same(objectResult, objectResult)) throw new Exception("Existing object-result override");
+                    return 0;
+                }
+            }
+        """.trimIndent())
+    }
+    val consumer = directory.resolve(if (target == DotNetTarget.NET48) "BarrierConsumer.exe" else "BarrierConsumer.dll")
+    val references = listOf(lib, middle, runtime, stdlib)
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()), source, consumer,
+            references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()), source, consumer,
+            references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 -> error("The barrier consumer needs an executable profile")
     }
     check(compilation.exitCode == 0) { compilation.output }
     listOf(runtime, stdlib).forEach { it.copyTo(directory.resolve(it.name), overwrite = true) }

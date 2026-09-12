@@ -2032,8 +2032,18 @@ internal class DotNetIlMethodCodegen(
         )
         val probeReference = probeInfo.reference(probe)
         val typedReturn = (typedInfo.signature.returnType as? DotNetIlReturnType.Value)?.type
+        val nullInputBarrier = dispatch.nullInputBarrier
+        val hasBoundNullInputBarrier = nullInputBarrier?.binds(
+            typedInfo.signature.parameterTypes.drop(1),
+            semanticInfo.signature.parameterTypes.drop(1),
+            signature.parameterTypes.drop(1),
+            typedInfo.owner.typeParameterCount,
+        ) == true
+        check(nullInputBarrier == null || hasBoundNullInputBarrier) {
+            "Foreign input barrier does not match its actual MethodDef carriers"
+        }
         check(typedInfo.signature.parameterTypes.size == signature.parameterTypes.size &&
-                typedInfo.signature.parameterTypes.drop(1) == signature.parameterTypes.drop(1) &&
+                (typedInfo.signature.parameterTypes.drop(1) == signature.parameterTypes.drop(1) || hasBoundNullInputBarrier) &&
                 probeInfo.signature.parameterTypes.size == 1 &&
                 semanticInfo.signature.parameterTypes.size == signature.parameterTypes.size &&
                 semanticInfo.signature.parameterTypes.drop(1) == signature.parameterTypes.drop(1) &&
@@ -2054,6 +2064,32 @@ internal class DotNetIlMethodCodegen(
         val semanticLabel = methodContext.nextLabel("semanticOutput")
         methodContext.emitBranch("brfalse", semanticLabel, pops = 1)
 
+        if (nullInputBarrier != null) {
+            val inputType = typedInfo.signature.parameterTypes[1]
+            val nonNullLabel = methodContext.nextLabel("foreignInputNonNull")
+            val validLabel = methodContext.nextLabel("foreignInputValid")
+            val invalidLabel = methodContext.nextLabel("foreignInputInvalid")
+            methodContext.emit("ldarg.1", pushes = 1)
+            methodContext.emitBranch("brtrue", nonNullLabel, pops = 1)
+            // The foreign body may accept null whenever its actual CLR parameter can. A later
+            // Kotlin upper bound cannot strengthen that virtual slot's physical contract.
+            val defaultSlot = methodContext.declareSyntheticLocal(inputType, "<foreignInputDefault>")
+            methodContext.emit(loadLocalAddressInstruction(defaultSlot.index), pushes = 1)
+            methodContext.emit("initobj ${inputType.nameInSignature}", pops = 1)
+            methodContext.emit(loadLocalInstruction(defaultSlot.index), pushes = 1)
+            methodContext.emit("box ${inputType.nameInSignature}", pops = 1, pushes = 1)
+            methodContext.emitBranch("brfalse", validLabel, pops = 1)
+            methodContext.emitGoto(invalidLabel)
+            methodContext.emitLabel(nonNullLabel)
+            methodContext.emit("ldarg.1", pushes = 1)
+            methodContext.emit("isinst ${inputType.nameInSignature}", pops = 1, pushes = 1)
+            methodContext.emitBranch("brtrue", validLabel, pops = 1)
+            methodContext.emitLabel(invalidLabel)
+            methodContext.emit("ldnull", pushes = 1)
+            methodContext.emitReturn(pops = 1)
+            methodContext.emitLabel(validLabel)
+        }
+
         // The signature's regular parameter vector excludes its physical trailing bool&.
         // Bind the payload from that same MethodDef, never from a substituted logical T?.
         val nullFlagSlot = if (typedInfo.signature.hasSplitNullableResult) {
@@ -2067,6 +2103,9 @@ internal class DotNetIlMethodCodegen(
                 if (index <= 3) "ldarg.$index" else "ldarg $index",
                 pushes = 1,
             )
+            if (nullInputBarrier != null) {
+                methodContext.emit("unbox.any ${typedInfo.signature.parameterTypes[index].nameInSignature}", pops = 1, pushes = 1)
+            }
         }
         if (nullFlagSlot != null) {
             methodContext.emit(loadLocalAddressInstruction(nullFlagSlot.index), pushes = 1)

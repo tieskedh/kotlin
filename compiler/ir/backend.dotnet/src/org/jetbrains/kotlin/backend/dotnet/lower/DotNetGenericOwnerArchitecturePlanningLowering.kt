@@ -8,10 +8,11 @@ package org.jetbrains.kotlin.backend.dotnet.lower
 import org.jetbrains.kotlin.backend.common.IrElementTransformerVoidWithContext
 import org.jetbrains.kotlin.backend.common.ModuleLoweringPass
 import org.jetbrains.kotlin.backend.common.defaultArgumentsOriginalFunction
-import org.jetbrains.kotlin.backend.common.lower.at
-import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
+import org.jetbrains.kotlin.backend.common.lower.SpecialBridgeDefaultValueKind
 import org.jetbrains.kotlin.backend.common.lower.SpecialBridgeMethods
 import org.jetbrains.kotlin.backend.common.lower.VariableRemapper
+import org.jetbrains.kotlin.backend.common.lower.at
+import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
 import org.jetbrains.kotlin.backend.common.lower.irNot
 import org.jetbrains.kotlin.backend.common.ir.moveBodyTo
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
@@ -23,6 +24,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallReceiverProvena
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallRoutePlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallRouteRequirement
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerDirectSuperCallPlan
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerForeignNullInputBarrier
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberFamilyPlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberBodyPlacement
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberFamilyRole
@@ -1582,6 +1584,7 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                             typedEntry = source,
                             semanticHook = semanticHook,
                             foreignOverrideProbe = foreignOverrideProbe,
+                            nullInputBarrier = family.foreignNullInputBarrierOrNull(),
                         )
                 }
 
@@ -2398,8 +2401,8 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
      * The virtual probe compares MethodDefs and therefore does not consume the source arguments.
      * Its dispatcher may forward inputs with identical natural and semantic prototype carriers,
      * subject to the final emitted MethodDef equality check. Neither a logical owner dependency
-     * nor `DECLARATION_INDEPENDENT` alone decides that equality. Broad candidate policies and
-     * different-carrier inputs still need an independent conversion proof. A non-generic
+     * nor `DECLARATION_INDEPENDENT` alone decides that equality. Common's one-input NULL barrier
+     * has a separate checked-conversion proof; other broad/different inputs remain unproved. A non-generic
      * capability's `!!R : object` cannot satisfy a natural `<R : !T>` slot merely because both value carriers
      * are `!!R`.
      */
@@ -2475,8 +2478,28 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
         // unconstrained capability MethodSpec. This is still an early candidate, not physical
         // authority: emission seals equality of the resulting typed/semantic binder vectors
         // before it may issue the natural MethodSpec call.
-        return supportsIdenticalCarrierArguments ||
+        return supportsIdenticalCarrierArguments || foreignNullInputBarrierOrNull() != null ||
                 supportsErasedOwnerRelativeMethodArgumentCandidate
+    }
+
+    /** Common policy, not a source member name, permits this checked foreign input boundary. */
+    private fun DotNetGenericOwnerMemberFamilyPlan.foreignNullInputBarrierOrNull():
+            DotNetGenericOwnerForeignNullInputBarrier? {
+        if (!context.configuration.dotNetGenericOwnerRehearsal || source.typeParameters.isNotEmpty()) return null
+        val info = specialBridgeMethods.findSpecialWithOverride(source, includeSelf = true)?.second ?: return null
+        if (info.argumentsToCheck != 1 || info.defaultValueKind != SpecialBridgeDefaultValueKind.NULL ||
+            parameterSlotDomains != listOf(DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT)
+        ) return null
+        val owner = source.parent as? IrClass ?: return null
+        val input = source.parameters.drop(1).singleOrNull()?.type as? IrSimpleType ?: return null
+        val parameter = (input.classifier as? IrTypeParameterSymbol)?.owner ?: return null
+        val index = owner.typeParameters.indexOf(parameter)
+        if (index < 0 || input.isMarkedNullable() || input.dotNetPrimitiveTypeParameterUpperBoundOrNull() != null) return null
+        val result = source.returnType as? IrSimpleType ?: return null
+        if (!result.isMarkedNullable() ||
+            (result.classifier as? IrTypeParameterSymbol)?.owner?.parent !== owner
+        ) return null
+        return DotNetGenericOwnerForeignNullInputBarrier(index)
     }
 
     /**

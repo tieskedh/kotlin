@@ -81,29 +81,33 @@ overrides. The nominal value-class input regression passes on all production
 lanes, but its generic class-slot parameter adaptation remains an independently
 reproduced candidate gap. It is not claimed by the 16-test candidate matrix.
 
+The current Common-authorized foreign-input feature inherits that full
+checkpoint (`b35b6f646c`). Its rehearsal-physical gate passes 48 candidate tests,
+411 backend tests and the same 48-test production inverse, with zero failures,
+errors or skips. The seven semantic source hashes match across both gates.
+Production-selected paths remain structurally unchanged. See the
+[foreign-input archive](docs/archive/generic-owner-foreign-input-barrier-2026-09-12.md)
+for the exact boundary, physical evidence and inherited checkpoint.
+
 ## Active work
 
-The production-erased class-slot input-policy repair is complete. Resume the
-separately preserved Common-authorized foreign-input rehearsal feature and
-reverify its candidate and inverse before promotion. Its exact preservation
-point and the independent nominal candidate gap are recorded in the
-[class-slot bridge evidence](docs/archive/covariant-bridge-input-policy-2026-09-12.md).
+Continue the source-built Runtime/Stdlib generic-owner rehearsal inside phase 1
+of the way forward. The census after `5ff1de08d0` contains 225 error lines versus
+228: the three projected-allocation failures are gone. These are diagnostics,
+not independent bugs or a completion percentage. The admitted constructor,
+array-state and fresh-allocation rules are recorded in the
+[allocation archive](docs/archive/generic-owner-projected-allocation-2026-09-11.md)
+and owning ADR. Raw public projected-array entries, broader nullable array
+state and unproved element constructions remain outside those proofs.
 
-Canonical array factories now accept an instruction-free widening of their
-actual Iterator/Iterable result to an already-selected object destination.
-Exact invariant array operands now preserve the selected generic constructor
-through their independently proven element/field/parameter carriers. Native
-arrays no longer require a fictitious nominal TypeDef in that proof. Fixed
-output-projected array state now also preserves a generic owner through its
-complete private writer graph, using System.Array rather than a fabricated
-T[] or object[]. A fresh allocation behind an all-star logical result now uses
-its independently selected constructor vector, with ordinary MethodDef input
-and destination checks. This does not make existing star values exact or
-promote an unadmitted interface to a natural C# contract. The census after
-`5ff1de08d0` contains 225 error lines versus 228; the three projected-allocation
-failures are gone. These are diagnostics, not independent bugs. Raw public projected-array
-entries, broader nullable array state, and unproven element constructions remain
-outside these proofs.
+Final owner-admission diagnostics identify `AbstractMap.get` and
+`AbstractCollection.containsAll` as unsupported foreign semantic overrides.
+Their children's unavailable generic base binders are downstream, not a reason
+to invent a base construction or another capture exception. The current slice
+closes one Common NULL-default bare-owner input on the ordinary foreign branch,
+independently of the actual object or split result layout. It does not close
+containsAll's semantic interface input. Rerun the census from this green
+checkpoint to identify the next complete structural boundary.
 
 The incoming DLL investigation isolates a missing Kotlin/foreign reference
 graph in both candidate and production: a C# MethodDef can reference a
@@ -112,35 +116,13 @@ reference to the existing KLIB classifier. See the
 [reference-graph evidence](docs/archive/foreign-kotlin-interface-reference-graph-2026-09-11.md).
 This is not an input-conversion failure. Complete incoming binding remains
 open; neither that failure nor the outward contract proof justifies general
-`object -> !K` entry casts. Foreign-input forwarding now covers proven equal
-natural/semantic carriers, including boxed-or-null owner inputs and projected
-arrays. Different-carrier conversion, unbound named carriers, and unclosed
-broad-input policies require their own proof. The natural-interface grammar
-for nullable owner inputs with split-nullable results remains separate.
-Nullable callable capture is now closed for the selected fixed invocation
-contracts without a getter exception. Broader callable-reference metadata and
-nested nullable generic constructions remain separate requirements.
-
-The census
-established that `AbstractMap` and `AbstractCollection` are blocked at foreign
-semantic override admission; their anonymous children's unavailable generic
-base binders are downstream, not permission for another capture exception.
-Split-result forwarding with proven equal input carriers is now closed.
-Different-carrier owner-relative inputs and Common broad-candidate inputs
-still need their own complete physical conversion/semantic policy; a logical
-strict `K` alone is not that proof.
-Public/top-level semantic overload families also remain separate.
-
-Continue the source-built Runtime/Stdlib generic-owner rehearsal census within
-phase 1 of the way forward. SAM admission passes and the census reaches
-emission, but physical inheritance/MethodDef-view closure remains incomplete.
-Closed reference-contravariant constructor inputs no longer erase unrelated
-generic owners/state. The complete natural/semantic constructor contract is
-still open: the existing `L` seal alone does not admit broad constructors, and
+`object -> !K` entry casts. Unclosed broad-input policies, nested inputs,
+unbound named carriers, refined/nested split results, public semantic overloads,
+broader callable-reference metadata and their inheritance compositions remain
+separate requirements. The complete natural/semantic constructor contract is
+also open: the existing `L` seal alone does not admit broad constructors, and
 closed reference covariance still includes CLR-unnameable bottom views.
-Rerun the census from this green checkpoint; custom-shape correctness is not
-complete stdlib closure. Broad inputs, refined/nested split-result forwarding,
-fixed semantic fields, and their inheritance compositions remain separate gaps.
+Custom-shape correctness is not complete stdlib closure.
 Do not add declaration, package, collection, `Map`, member-name, IR-origin,
 or stdlib exceptions.
 

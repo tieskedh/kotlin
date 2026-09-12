@@ -14,6 +14,9 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-foreign-input-barrier-2026-09-12.md`](generic-owner-foreign-input-barrier-2026-09-12.md)
+  records Common-authorized foreign input checks, independent object/split
+  result MethodDefs, JVM null-bound evidence, Kotlin/C# chains and the inverse.
 - [`covariant-bridge-input-policy-2026-09-12.md`](covariant-bridge-input-policy-2026-09-12.md)
   records Common input checks before specialized class-slot casts, separate
   Kotlin regression coverage and the pre-existing nominal candidate gap.

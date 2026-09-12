@@ -1274,6 +1274,40 @@ layout must all be present. A genuinely broad source still selects the semantic
 endpoint; the bounded immutable external alias is logically widened but retains
 independently proven exact provenance.
 
+#### Common-authorized foreign input barriers
+
+A Common special-bridge policy may authorize a checked input conversion on the
+foreign branch of a natural/semantic owner dispatcher. That policy supplies the
+checked argument and wrong-input outcome; a broad slot or `@UnsafeVariance`
+alone supplies neither. The bounded rule admits one NULL-default argument whose
+natural prototype is a bare owner parameter, no method binders or primitive-bound
+shortcut, and a direct nullable owner result. Other default kinds, nested inputs,
+and arbitrary strict inputs remain outside this proof.
+
+Before emitting the conversion, the actual natural MethodDef must name precisely
+that owner `!n`, and the semantic hook and dispatcher must both accept `object`
+at that position. Arity, binder kind/index, the whole remaining input vector,
+family identity and result contracts remain independently sealed. The early
+policy is not carrier authority and cannot repair a changed MethodDef.
+
+Only after the virtual probe selects an ordinary foreign override may the route
+test the object against that physical parameter and unbox/cast it. Null may enter
+a CLR construction whose boxed default is null. A logical non-null upper bound
+on a Kotlin intermediate declaration must not strengthen the selected foreign
+virtual MethodDef: an ordinary foreign override may accept that reference null.
+An incompatible input returns Common's null result without invoking the
+typed override. The Kotlin semantic branch retains its original broad input and
+authoritative state, including its own Common null checks. No checked conversion
+produces an identity/provenance fact for an unrelated value or changes the
+object's construction.
+
+Input policy remains independent of result layout. A split result is reconstructed
+from the same natural MethodDef's payload and trailing flag; an existing object
+result remains object. Two interfaces may impose different physical layouts on
+one logical override: explicit MethodImpl adaptation must preserve each slot,
+not reinterpret an existing Runtime MethodDef as split merely because the source
+returns `T?`. State selection, production ABI and BK-1 are unchanged.
+
 The emitter consumes the selected route. It does not rediscover representation
 from declaration names, packages, stdlib membership, member names, IR origins,
 or logical supertypes.
