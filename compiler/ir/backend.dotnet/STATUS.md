@@ -108,15 +108,17 @@ lines, exactly unchanged from `f132c354f5`, `3724aeab9c` and `2a13f45341`;
 `AbstractMap` and its generated views no longer fail there. These are
 diagnostics, not independent bugs or a completion percentage.
 
-The public natural/semantic constructor contract is the immediate architecture
-boundary. A parked experiment generated typed forwarding constructors, but a
-C# object implementing two constructions of the input interface lost its
-selected view when forwarded as object. The original admission guard is
-retained; no constructor expansion is promoted. Natural-body preservation and
-selected-view transport must be assessed, including calls, delegation and
-stored inputs, before reopening that guard. The actual failure and recoverable
-experiment are in the
-[constructor view-loss archive](docs/archive/constructor-natural-view-loss-2026-09-12.md).
+Preserving selected interface views through semantic calls and storage is the
+immediate architecture boundary. Natural constructor bodies passed direct and
+local-delegation subcases, but external delegation and a later read of an
+object-stored interface still lost selection on an ordinary C# dual-interface
+object. The original constructor admission guard remains; neither experiment
+is promoted. A standalone CLR probe preserves checked selection in a compound
+storage value on net48-target/CLR4 and .NET 10, but this is not compiler
+integration or an accepted storage ABI. The candidate must first be reconciled
+with one-state/identity rules, `Any` conversions, mutable/volatile state and
+separate compilation. See the
+[constructor and storage evidence](docs/archive/selected-interface-view-storage-2026-09-12.md).
 
 Owner-admission evidence still identifies foreign semantic interface inputs,
 including `AbstractCollection.containsAll`, as unclosed. The unavailable base

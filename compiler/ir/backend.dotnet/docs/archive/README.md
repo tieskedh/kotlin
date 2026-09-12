@@ -14,6 +14,9 @@ Use:
 
 Archived snapshots:
 
+- [`selected-interface-view-storage-2026-09-12.md`](selected-interface-view-storage-2026-09-12.md)
+  records successful direct/local constructor subcases, view loss through state,
+  and a standalone CLR storage proof with its unclosed architecture gates.
 - [`constructor-natural-view-loss-2026-09-12.md`](constructor-natural-view-loss-2026-09-12.md)
   records a rejected constructor-forwarding experiment which lost a valid
   C# interface view, its hostile executable failure and recoverable source.
