@@ -14,6 +14,9 @@ Use:
 
 Archived snapshots:
 
+- [`foreign-kotlin-interface-results-2026-09-12.md`](foreign-kotlin-interface-results-2026-09-12.md)
+  records authenticated Kotlin references in foreign method results, logical
+  classifier ownership, executable mixed assemblies and hostile negatives.
 - [`nominal-class-slot-inputs-2026-09-12.md`](nominal-class-slot-inputs-2026-09-12.md)
   records nominal generic-slot inputs, nullable value-class unboxing, separate
   Kotlin/C# overrides, physical MethodDef checks and the fresh full gate.

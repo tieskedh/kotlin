@@ -9,6 +9,7 @@ plugins {
 // assemblies, interpret Kotlin semantics, construct FIR/IR, or map declarations to CIL.
 dependencies {
     api(project(":core:compiler.common"))
+    api(project(":core:names"))
     api(project(":compiler:frontend.common.dotnet"))
     api(kotlinStdlib())
 }

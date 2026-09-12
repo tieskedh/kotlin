@@ -21,7 +21,7 @@ import java.util.IdentityHashMap
  * unfamiliar carrier from names or tokens.
  */
 enum class DotNetClrImportedDeclarationCarrierVersion {
-    V3,
+    V4,
 }
 
 /**
@@ -44,17 +44,35 @@ class DotNetClrImportedDeclarationGraph(
     val assemblies: List<DotNetClrClasspathAssembly.WithoutCarrier>,
     val hierarchies: List<DotNetClrResolvedTypeHierarchy>,
     val physicalCoreTypes: DotNetClrPhysicalTypeCoreTypes? = null,
+    val kotlinTypeReferences: List<DotNetClrKotlinTypeReference> = emptyList(),
 ) {
     private val assembliesByMetadata =
         IdentityHashMap<DotNetClrAssemblyMetadata, DotNetClrClasspathAssembly.WithoutCarrier>()
     private val hierarchiesByAssembly =
         IdentityHashMap<DotNetClrAssemblyMetadata, Map<DotNetClrMetadataHandle, DotNetClrResolvedTypeHierarchy>>()
+    private val kotlinReferencesByAssembly =
+        IdentityHashMap<DotNetClrAssemblyMetadata, MutableMap<DotNetClrMetadataHandle, DotNetClrKotlinTypeReference>>()
 
     init {
+        require(kotlinTypeReferences.map { it.logicalClassId }.distinct().size == kotlinTypeReferences.size) {
+            "Imported CLR graph has ambiguous Kotlin classifier references"
+        }
+        require(kotlinTypeReferences.all { reference ->
+            kotlinReferencesByAssembly.getOrPut(reference.metadata, ::linkedMapOf)
+                .put(reference.definition.handle, reference) == null
+        }) {
+            "Imported CLR graph retains a Kotlin TypeDef more than once"
+        }
         require(assemblies.all { assembly ->
             assembliesByMetadata.put(assembly.metadata, assembly) == null
         }) {
             "Imported CLR declaration graph retains one selected assembly more than once"
+        }
+        require(kotlinTypeReferences.none { reference ->
+            reference.metadata in assembliesByMetadata ||
+                    assemblies.any { it.assemblyFile.canonicalFile == reference.assembly.assemblyFile.canonicalFile }
+        }) {
+            "A Kotlin reference dependency cannot also supply foreign declaration authority"
         }
         require(hierarchies.all { hierarchy ->
             hierarchy.type.type.assembly in assembliesByMetadata
@@ -106,6 +124,9 @@ class DotNetClrImportedDeclarationGraph(
         metadata: DotNetClrAssemblyMetadata,
     ): DotNetClrClasspathAssembly.WithoutCarrier? = assembliesByMetadata[metadata]
 
+    fun kotlinTypeReferenceOrNull(type: DotNetClrResolvedTypeDefinition): DotNetClrKotlinTypeReference? =
+        kotlinReferencesByAssembly[type.assembly]?.get(type.definition.handle)?.takeIf { it.refersTo(type) }
+
     fun hierarchyOrNull(
         type: DotNetClrResolvedTypeDefinition,
     ): DotNetClrResolvedTypeHierarchy? =
@@ -119,7 +140,7 @@ class DotNetClrImportedTypeSource(
     override val graph: DotNetClrImportedDeclarationGraph,
 ) : DotNetClrImportedTypeAuthority {
     override val carrierVersion: DotNetClrImportedDeclarationCarrierVersion =
-        DotNetClrImportedDeclarationCarrierVersion.V3
+        DotNetClrImportedDeclarationCarrierVersion.V4
 
     init {
         validateImportedTypeAuthority()
@@ -136,7 +157,7 @@ sealed class DotNetClrImportedDeclarationSource(
     override val graph: DotNetClrImportedDeclarationGraph,
 ) : DeserializedContainerSource, DotNetClrImportedTypeAuthority {
     override val carrierVersion: DotNetClrImportedDeclarationCarrierVersion =
-        DotNetClrImportedDeclarationCarrierVersion.V3
+        DotNetClrImportedDeclarationCarrierVersion.V4
 
     init {
         validateImportedTypeAuthority()

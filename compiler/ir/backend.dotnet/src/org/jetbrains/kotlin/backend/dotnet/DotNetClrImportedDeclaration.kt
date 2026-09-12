@@ -37,6 +37,7 @@ import java.util.IdentityHashMap
 internal class DotNetClrImportedDeclarations(
     private val assemblyReferenceSink: (DotNetClrClasspathAssembly.WithoutCarrier) -> Unit,
     private val coreLibraryReference: String,
+    private val kotlinReferenceAssemblySink: (String) -> Unit = {},
 ) {
     private val classInfos = IdentityHashMap<IrClass, DotNetIlClassInfo>()
     private val resolvedClassInfos = hashMapOf<DotNetClrResolvedTypeDefinition, DotNetIlClassInfo>()
@@ -185,8 +186,9 @@ internal class DotNetClrImportedDeclarations(
         type: DotNetClrResolvedTypeDefinition,
         source: DotNetClrImportedTypeAuthority,
     ): DotNetIlClassInfo = resolvedClassInfos.getOrPut(type) {
-        val selectedAssembly = source.linkedAssembly(type)
-        validateAssemblyIdentity(selectedAssembly)
+        val kotlinReference = source.graph.kotlinTypeReferenceOrNull(type)
+        val selectedAssembly = if (kotlinReference == null) source.linkedAssembly(type) else null
+        selectedAssembly?.let(::validateAssemblyIdentity)
         val owner = type.definition
         val parameters = type.assembly.genericParameterDefinitions
             .filter { parameter -> parameter.owner == owner.handle }
@@ -210,8 +212,14 @@ internal class DotNetClrImportedDeclarations(
             },
             assemblyName = type.assembly.identity.name,
         ).also { classInfo ->
-            retainedClassInfos[classInfo] = Unit
-            assemblyReferenceSink(selectedAssembly)
+            if (selectedAssembly != null) {
+                retainedClassInfos[classInfo] = Unit
+                assemblyReferenceSink(selectedAssembly)
+            } else {
+                // This row is a referenced Kotlin declaration, not another imported classifier.
+                // The physical signature still uses the exact producer-validated TypeDef.
+                kotlinReferenceAssemblySink(checkNotNull(kotlinReference).metadata.identity.name)
+            }
         }
     }
 
@@ -407,7 +415,7 @@ private fun validateAssemblyIdentity(assembly: DotNetClrClasspathAssembly.Withou
 
 private fun DotNetClrImportedTypeAuthority.requireSupportedCarrierVersion() {
     when (carrierVersion) {
-        DotNetClrImportedDeclarationCarrierVersion.V3 -> Unit
+        DotNetClrImportedDeclarationCarrierVersion.V4 -> Unit
     }
 }
 

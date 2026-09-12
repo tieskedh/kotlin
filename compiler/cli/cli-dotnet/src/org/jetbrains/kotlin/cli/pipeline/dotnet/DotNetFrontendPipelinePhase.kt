@@ -19,6 +19,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetKotlinMetadataResource
 import org.jetbrains.kotlin.backend.dotnet.DotNetPlatformAssemblyIdentity
 import org.jetbrains.kotlin.backend.dotnet.DotNetPhysicalDeclaration
+import org.jetbrains.kotlin.backend.dotnet.bindDotNetKotlinTypeReferences
 import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetStdlibArtifact
 import org.jetbrains.kotlin.backend.dotnet.validateDotNetGenericOwnerNaturalMethodDefAgainstClrMetadata
@@ -144,7 +145,7 @@ object DotNetFrontendPipelinePhase : PipelinePhase<ConfigurationPipelineArtifact
                 groupedSources.isCommonSourceForLt,
                 groupedSources.fileBelongsToModuleForLt,
                 incrementalCompilationContext = null,
-                additionalProviders = configuration.dotNetForeignClrProviders(),
+                additionalProviders = configuration.dotNetForeignClrProviders(preparedLibraries),
                 metadataCompilationMode = false,
             )
             sessionsWithSources.map { (session, files) ->
@@ -173,7 +174,7 @@ object DotNetFrontendPipelinePhase : PipelinePhase<ConfigurationPipelineArtifact
                 isCommonSourceForPsi,
                 fileBelongsToModuleForPsi,
                 incrementalCompilationContext = null,
-                additionalProviders = configuration.dotNetForeignClrProviders(),
+                additionalProviders = configuration.dotNetForeignClrProviders(preparedLibraries),
                 metadataCompilationMode = false,
             )
             sessionsWithSources.map { (session, files) ->
@@ -193,31 +194,56 @@ object DotNetFrontendPipelinePhase : PipelinePhase<ConfigurationPipelineArtifact
     }
 }
 
-private fun org.jetbrains.kotlin.config.CompilerConfiguration.dotNetForeignClrProviders() =
-    AdditionalProvidersSupplier { session, _, scopeProvider, _ ->
-        val assemblies = dotNetExternalClrAssemblies
-        if (assemblies.isEmpty()) {
-            emptyList()
-        } else {
-            val moduleData = FirBinaryDependenciesModuleData(
-                Name.special("<foreign CLR dependencies>")
-            ).apply {
-                bindSession(session)
-            }
-            listOf(
-                DotNetClrFirSymbolProvider(
-                    session,
-                    moduleData,
-                    scopeProvider,
-                    assemblies,
-                )
+private fun org.jetbrains.kotlin.config.CompilerConfiguration.dotNetForeignClrProviders(
+    preparedLibraries: PreparedDotNetLibraries,
+): AdditionalProvidersSupplier {
+    val assemblies = dotNetExternalClrAssemblies
+    if (assemblies.isEmpty()) return AdditionalProvidersSupplier { _, _, _, _ -> emptyList() }
+    // This name set only avoids reading unreferenced Kotlin PE tables. The selected CLR resolver
+    // still validates the complete AssemblyRef identity; names never establish a binding.
+    val referencedAssemblyNames = assemblies.flatMap { it.metadata.assemblyReferences }
+        .mapTo(hashSetOf()) { it.name }
+    val referencesByLibrary = preparedLibraries.embeddedSourceByLibrary.mapValues { entry ->
+        val source = entry.value
+        val external = dotNetExternalLibraries.singleOrNull { it.assemblyFile == source.assemblyFile }
+        if (external == null) {
+            null
+        } else try {
+            bindDotNetKotlinTypeReferences(
+                entry.key, external, source.classpathAssembly,
+                bindPhysicalReferences = source.assemblyIdentity.name in referencedAssemblyNames,
             )
+        } catch (exception: DotNetBadImageFormatException) {
+            report(COMPILER_ARGUMENTS_ERROR, "Invalid Kotlin CLR reference dependency: ${exception.message}")
+            null
+        } catch (exception: IllegalArgumentException) {
+            report(COMPILER_ARGUMENTS_ERROR, "Invalid Kotlin CLR type binding: ${exception.message}")
+            null
         }
     }
+    return AdditionalProvidersSupplier { session, _, scopeProvider, libraries ->
+        val moduleData = FirBinaryDependenciesModuleData(
+            Name.special("<foreign CLR dependencies>")
+        ).apply {
+            bindSession(session)
+        }
+        listOf(
+            DotNetClrFirSymbolProvider(
+                session,
+                moduleData,
+                scopeProvider,
+                assemblies,
+                kotlinTypeReferences = libraries.flatMap { referencesByLibrary[it]?.physicalReferences.orEmpty() },
+                kotlinClassifierIds = libraries.flatMapTo(hashSetOf()) { referencesByLibrary[it]?.classifierIds.orEmpty() },
+            )
+        )
+    }
+}
 
 private data class DotNetEmbeddedMetadataSource(
     val assemblyFile: File,
     val assemblyIdentity: DotNetManagedAssemblyIdentity,
+    val classpathAssembly: DotNetClrClasspathAssembly.WithCarrier,
 )
 
 private data class PreparedDotNetLibraries(
@@ -291,7 +317,7 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.prepareDotNetDllLi
             return null
         }
         embeddedLibraryByAssembly[canonicalAssembly] = library
-        sourceByLibrary[library] = DotNetEmbeddedMetadataSource(canonicalAssembly, resource.assemblyIdentity)
+        sourceByLibrary[library] = DotNetEmbeddedMetadataSource(canonicalAssembly, resource.assemblyIdentity, classification)
         return library
     }
 

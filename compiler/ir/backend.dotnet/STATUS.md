@@ -49,50 +49,49 @@ Current representation rules are linked from the navigation section below.
 
 ## Latest verification
 
-The full production-erased aggregate passed on 2026-09-12 after preserving
-nominal generic-slot inputs and nullable value-class unboxing. Direct JUnit XML
+The full production-erased aggregate passed on 2026-09-12 after binding
+Kotlin-owned interface results in foreign CLR signatures. Direct JUnit XML
 audit found no failures, errors, or skips:
 
 | Lane | Suites | Tests |
 | --- | ---: | ---: |
-| Backend | 24 | 411 |
+| Backend | 24 | 414 |
 | Physical CLI model | 1 | 6 |
-| Full FIR2IR, both parsers and runtimes | 187 | 2,379 |
-| CLI/library integration | 2 | 128 |
-| **Full production total** | **214** | **2,924** |
-| Focused nominal-input candidate | 4 | 36 |
+| Full FIR2IR, both parsers and runtimes | 187 | 2,383 |
+| CLI/library integration | 2 | 129 |
+| **Full production total** | **214** | **2,932** |
+| Focused foreign/Kotlin result candidate | 4 | 4 |
+| Focused production-erased inverse | 4 | 4 |
 
-This supersedes the full checkpoint `b35b6f646c`. The actual FIR2IR
-Test task was explicitly rerun without filters and without the rehearsal
-property. The unchanged physical CLI dependency remained up to date; its full
-six-test XML was audited too. Candidate execution covers PSI and LightTree on
-Framework 4.8 and .NET 10. The full production corpus includes all 36 focused
-fixture inverses, individually checked in the audited XML.
+This supersedes the full checkpoint `2a13f45341`. The actual FIR2IR and
+CLI integration Test tasks were explicitly rerun without filters and without
+the rehearsal property. The unchanged physical CLI dependency remained up to
+date; its full six-test XML was audited too. Candidate execution covers PSI
+and LightTree on Framework 4.8 and .NET 10. The full production corpus includes
+all four focused fixture inverses, individually checked in the audited XML.
 
-The reproduced failures, unchanged MethodDefs, separate Kotlin/C# execution,
-source hashes and full gate are recorded in the
-[nominal class-slot archive](docs/archive/nominal-class-slot-inputs-2026-09-12.md).
+The reproduced reference and classifier-collision failures, unchanged foreign
+MethodDefs, separate Kotlin/C# execution, source hashes and full gate are in the
+[foreign/Kotlin result archive](docs/archive/foreign-kotlin-interface-results-2026-09-12.md).
 Earlier bounded feature evidence remains indexed in the
 [archive](docs/archive/README.md); this full gate does not establish complete
 candidate Runtime/Stdlib closure or authorize a production generic-owner switch.
 
-The candidate matrix covers ordinary generic bases, specialized nominal
-inputs, multiple argument positions, nullable and generic value classes,
-ordinary C# overrides of natural and precise Kotlin slots, existing physical
-covariant slots, Common input barriers and split-result overrides. Nullable
-nominal-to-underlying conversion also reproduces and repairs a production bug;
-this feature therefore uses a fresh full gate, not an inherited checkpoint.
-Earlier foreign-input candidate evidence remains in the
-[foreign-input archive](docs/archive/generic-owner-foreign-input-barrier-2026-09-12.md).
+The new candidate covers consuming native and Kotlin-owned results from
+separate C# factories, ordinary C# and Kotlin implementations, same-object
+identity, owner-generic value/reference substitutions and nested results.
+CLI negatives cover use-site nullability, erased stars, stronger Kotlin bounds,
+missing dependencies and class/typealias lookalikes. Kotlin implementations of
+these foreign result slots remain a separately exposed override/state boundary.
 
 ## Active work
 
 Continue the source-built Runtime/Stdlib generic-owner rehearsal inside phase 1
-of the way forward. The latest census, on `9ada71a395`, contains 215 error
-lines versus 225 on `5ff1de08d0`; `AbstractMap` and its generated views no longer
-fail there. These are diagnostics, not independent bugs or a completion
-percentage. Rerun from the new nominal-input checkpoint before selecting the
-next complete structural boundary.
+of the way forward. The latest census, on `2a13f45341`, contains 215 error
+lines, unchanged from `9ada71a395` and down from 225 on `5ff1de08d0`;
+`AbstractMap` and its generated views no longer fail there. These are
+diagnostics, not independent bugs or a completion percentage. Rerun from the
+new incoming-reference checkpoint before selecting the next complete boundary.
 
 Owner-admission evidence still identifies foreign semantic interface inputs,
 including `AbstractCollection.containsAll`, as unclosed. The unavailable base
@@ -105,13 +104,13 @@ are recorded in the
 and owning ADR. Raw public projected-array entries, broader nullable array
 state and unproved element constructions remain outside those proofs.
 
-The incoming DLL investigation isolates a missing Kotlin/foreign reference
-graph in both candidate and production: a C# MethodDef can reference a
-Kotlin-produced interface, but the native importer graph cannot yet bind that
-reference to the existing KLIB classifier. See the
-[reference-graph evidence](docs/archive/foreign-kotlin-interface-reference-graph-2026-09-11.md).
-This is not an input-conversion failure. Complete incoming binding remains
-open; neither that failure nor the outward contract proof justifies general
+The incoming reference graph now binds the admitted public root-interface
+results of foreign MethodDefs to their existing KLIB classifiers. Physical
+Kotlin references do not become foreign declarations. Foreign inputs,
+properties, inheritance, stronger bounds and Kotlin overrides supplying these
+results remain outside this proof. See the
+[bounded result evidence](docs/archive/foreign-kotlin-interface-results-2026-09-12.md).
+Neither reference binding nor the outward contract proof justifies general
 `object -> !K` entry casts. Unclosed broad-input policies, nested inputs,
 unbound named carriers, refined/nested split results, public semantic overloads,
 broader callable-reference metadata and their inheritance compositions remain

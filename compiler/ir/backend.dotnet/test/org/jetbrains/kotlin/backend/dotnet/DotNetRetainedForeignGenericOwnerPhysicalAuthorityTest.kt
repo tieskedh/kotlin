@@ -30,6 +30,7 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterKind
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedDeclarationGraph
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedMethodSource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedTypeSource
+import org.jetbrains.kotlin.load.dotnet.DotNetClrKotlinTypeReference
 import org.jetbrains.kotlin.load.dotnet.DotNetClrInterfaceImplementation
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMetadataHandle
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodDefinition
@@ -48,6 +49,8 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeReference
 import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeSignature
 import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeSpecification
 import org.jetbrains.kotlin.load.dotnet.DotNetManagedAssemblyIdentity
+import org.jetbrains.kotlin.load.dotnet.DotNetManagedResource
+import org.jetbrains.kotlin.name.ClassId
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.storage.LockBasedStorageManager
@@ -63,6 +66,72 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 class DotNetRetainedForeignGenericOwnerPhysicalAuthorityTest {
+    @Test
+    fun `Kotlin physical references retain row identity without becoming foreign declarations`() {
+        val reference = kotlinReference()
+        val type = DotNetClrResolvedTypeDefinition(reference.metadata, reference.definition)
+        val graph = DotNetClrImportedDeclarationGraph(emptyList(), emptyList(), kotlinTypeReferences = listOf(reference))
+        assertEquals(reference, graph.kotlinTypeReferenceOrNull(type))
+        assertNull(graph.assemblyOrNull(reference.metadata))
+        assertNull(graph.hierarchyOrNull(type))
+        assertNull(graph.kotlinTypeReferenceOrNull(DotNetClrResolvedTypeDefinition(reference.metadata, reference.definition.copy())))
+        assertNull(graph.kotlinTypeReferenceOrNull(DotNetClrResolvedTypeDefinition(reference.metadata.copy(), reference.definition)))
+    }
+
+    @Test
+    fun `Kotlin physical references reject ambiguous classifiers and mixed authorities`() {
+        val reference = kotlinReference()
+        assertFailsWith<IllegalArgumentException> {
+            DotNetClrImportedDeclarationGraph(emptyList(), emptyList(), kotlinTypeReferences = listOf(reference, reference))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            DotNetClrImportedDeclarationGraph(
+                listOf(DotNetClrClasspathAssembly.WithoutCarrier(reference.assembly.assemblyFile, reference.metadata)),
+                emptyList(), kotlinTypeReferences = listOf(reference),
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            DotNetClrImportedDeclarationGraph(
+                listOf(DotNetClrClasspathAssembly.WithoutCarrier(reference.assembly.assemblyFile, reference.metadata.copy())),
+                emptyList(), kotlinTypeReferences = listOf(reference),
+            )
+        }
+    }
+
+    @Test
+    fun `Kotlin physical references reject detached rows wrong identities and invented arity`() {
+        val reference = kotlinReference()
+        fun copyReference(
+            definition: DotNetClrTypeDefinition = reference.definition,
+            assembly: DotNetClrClasspathAssembly.WithCarrier = reference.assembly,
+            logicalArity: Int = 1,
+            physicalArity: Int = 1,
+        ) = DotNetClrKotlinTypeReference(
+            assembly, reference.metadata, definition, reference.logicalClassId, reference.logicalClassifierKey,
+            logicalArity, physicalArity,
+        )
+        assertFailsWith<IllegalArgumentException> { copyReference(definition = reference.definition.copy()) }
+        assertFailsWith<IllegalArgumentException> { copyReference(physicalArity = 0) }
+        assertFailsWith<IllegalArgumentException> { copyReference(logicalArity = 2) }
+        assertFailsWith<IllegalArgumentException> {
+            copyReference(assembly = reference.assembly.copy(carrierResource = reference.assembly.carrierResource.copy(
+                assemblyIdentity = reference.metadata.identity.copy(name = "Other.Assembly"),
+            )))
+        }
+    }
+
+    private fun kotlinReference(): DotNetClrKotlinTypeReference {
+        val native = fixture().source
+        val metadata = native.assembly.metadata
+        return DotNetClrKotlinTypeReference(
+            DotNetClrClasspathAssembly.WithCarrier(
+                native.assembly.assemblyFile,
+                DotNetManagedResource(metadata.identity, "Model.Kotlin.Resource", 2, byteArrayOf()),
+            ),
+            metadata, native.declaringType, ClassId.topLevel(FqName("logical.Source")), "C:logical/Source|null[0]", 1, 1,
+        )
+    }
+
     @Test
     fun `retained foreign provenance is the terminal TypeDef and MethodDef authority`() {
         val fixture = fixture()

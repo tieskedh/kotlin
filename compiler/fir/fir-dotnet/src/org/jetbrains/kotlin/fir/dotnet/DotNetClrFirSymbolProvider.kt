@@ -27,6 +27,7 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterContextResolver
 import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterKind
 import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterVariance
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedDeclarationGraph
+import org.jetbrains.kotlin.load.dotnet.DotNetClrKotlinTypeReference
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedMethodSource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedPropertySource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodDefinition
@@ -173,6 +174,8 @@ class DotNetClrFirSymbolProvider(
     private val moduleData: FirModuleData,
     private val scopeProvider: FirScopeProvider,
     assemblies: List<DotNetClrClasspathAssembly.WithoutCarrier>,
+    private val kotlinTypeReferences: List<DotNetClrKotlinTypeReference> = emptyList(),
+    private val kotlinClassifierIds: Set<ClassId> = kotlinTypeReferences.mapTo(hashSetOf()) { it.logicalClassId },
 ) : FirSymbolProvider(session) {
     private data class Candidate(
         val assembly: DotNetClrClasspathAssembly.WithoutCarrier,
@@ -226,7 +229,16 @@ class DotNetClrFirSymbolProvider(
     }
 
     private val foreignAssemblies = assemblies
-    private val metadata = foreignAssemblies.map(DotNetClrClasspathAssembly.WithoutCarrier::metadata)
+    private val kotlinReferencesByAssembly = java.util.IdentityHashMap<
+            DotNetClrAssemblyMetadata, MutableMap<DotNetClrMetadataHandle, DotNetClrKotlinTypeReference>>().apply {
+        for (reference in kotlinTypeReferences) {
+            require(getOrPut(reference.metadata, ::linkedMapOf).put(reference.definition.handle, reference) == null) {
+                "Duplicate Kotlin TypeDef reference in selected CLR graph"
+            }
+        }
+    }
+    private val metadata = foreignAssemblies.map(DotNetClrClasspathAssembly.WithoutCarrier::metadata) +
+            kotlinTypeReferences.distinctBy { it.assembly.assemblyFile }.map { it.metadata }
     private val selectedAssemblyBinder = DotNetClrSelectedAssemblyBinder(metadata)
     private val typeResolver = DotNetClrTypeResolver(selectedAssemblyBinder)
     private val signatureResolver = DotNetClrSignatureResolver(typeResolver)
@@ -264,6 +276,8 @@ class DotNetClrFirSymbolProvider(
         },
         hierarchies = selectedHierarchies,
         physicalCoreTypes = annotationServices.physicalCoreTypes,
+        kotlinTypeReferences = candidates.values.flatMap { candidate -> candidate.referencedTypes() }
+            .mapNotNull(::kotlinTypeReferenceOrNull).distinct(),
     )
     private val symbols = ConcurrentHashMap<ClassId, FirRegularClassSymbol>()
     private val classifierNamesByPackage: Map<FqName, Set<Name>> =
@@ -332,6 +346,7 @@ class DotNetClrFirSymbolProvider(
         for (assembly in foreignAssemblies) {
             for (type in assembly.metadata.typeDefinitions) {
                 val classId = type.classIdOrNull(assembly.metadata) ?: continue
+                if (classId in kotlinClassifierIds) continue
                 val contract = type.completeSupportedContractOrNull(assembly.metadata) ?: continue
                 candidatesById.getOrPut(classId, ::mutableListOf) +=
                     Candidate(
@@ -364,6 +379,7 @@ class DotNetClrFirSymbolProvider(
                         }
                 }
                 constraintsSupported && candidate.referencedTypes().all { referenced ->
+                    if (kotlinTypeReferenceOrNull(referenced) != null) return@all true
                     val classId = referenced.definition.classIdOrNull(referenced.assembly)
                         ?: return@all false
                     val target = selected[classId] ?: return@all false
@@ -380,6 +396,9 @@ class DotNetClrFirSymbolProvider(
             selected = supported.filterKeys { classId -> classId !in cyclic }
         }
     }
+
+    private fun kotlinTypeReferenceOrNull(type: DotNetClrResolvedTypeDefinition): DotNetClrKotlinTypeReference? =
+        kotlinReferencesByAssembly[type.assembly]?.get(type.definition.handle)?.takeIf { it.refersTo(type) }
 
     private fun Candidate.referencedTypes(): Set<DotNetClrResolvedTypeDefinition> = buildSet {
         hierarchy.interfaces.forEach { implementation ->
@@ -685,7 +704,9 @@ class DotNetClrFirSymbolProvider(
             is DotNetClrResolvedMethodSignatureResolution.UnresolvedType,
             -> return null
         }
-        if (!resolvedSignature.returnType.isSupportedMethodType(genericContext, allowVoid = true)) {
+        if (!resolvedSignature.returnType.isSupportedMethodType(
+                genericContext, allowVoid = true, allowKotlinReferences = true,
+            )) {
             return null
         }
         if (!hasSupportedGenericUseNullability(assembly, resolvedSignature)) return null
@@ -856,6 +877,7 @@ class DotNetClrFirSymbolProvider(
     private fun DotNetClrResolvedTypeSignature.isSupportedMethodType(
         context: DotNetClrResolvedGenericParameterContext?,
         allowVoid: Boolean,
+        allowKotlinReferences: Boolean = false,
     ): Boolean =
         when (this) {
             DotNetClrResolvedTypeSignature.Void -> allowVoid
@@ -872,11 +894,14 @@ class DotNetClrFirSymbolProvider(
             }
             is DotNetClrResolvedTypeSignature.Named ->
                 !isValueType &&
+                        (if (type.assembly in kotlinReferencesByAssembly) {
+                            allowKotlinReferences && kotlinTypeReferenceOrNull(type)?.physicalTypeParameterCount == 0
+                        } else true) &&
                         type.definition.isInterface &&
                         type.assembly.genericParameterDefinitions.none { parameter ->
                             parameter.owner == type.definition.handle
                         } &&
-                        type.definition.classIdOrNull(type.assembly) != null
+                        (kotlinTypeReferenceOrNull(type) != null || type.definition.classIdOrNull(type.assembly) != null)
             is DotNetClrResolvedTypeSignature.GenericInstance -> {
                 if (isSystemNullable(annotationServices.physicalCoreTypes)) {
                     val element = arguments.singleOrNull()
@@ -892,8 +917,13 @@ class DotNetClrFirSymbolProvider(
                         parameters.any { parameter -> parameter.handle == constraint.owner }
                     }
                 !genericType.isValueType &&
+                        (if (genericType.type.assembly in kotlinReferencesByAssembly) {
+                            allowKotlinReferences && kotlinTypeReferenceOrNull(genericType.type)
+                                ?.physicalTypeParameterCount == arguments.size
+                        } else true) &&
                         genericType.type.definition.isInterface &&
-                        genericType.type.definition.classIdOrNull(genericType.type.assembly) != null &&
+                        (kotlinTypeReferenceOrNull(genericType.type) != null ||
+                                genericType.type.definition.classIdOrNull(genericType.type.assembly) != null) &&
                         parameters.size == arguments.size &&
                         parameters.all { parameter ->
                             !parameter.hasReferenceTypeConstraint &&
@@ -901,7 +931,7 @@ class DotNetClrFirSymbolProvider(
                                     !parameter.hasDefaultConstructorConstraint &&
                                     !parameter.allowsByRefLike
                         } &&
-                        arguments.all { argument -> argument.isSupportedGenericArgument(context) } &&
+                        arguments.all { argument -> argument.isSupportedGenericArgument(context, allowKotlinReferences) } &&
                         (
                                 nominalConstraints.isEmpty() ||
                                         constraintServices?.satisfies(
@@ -915,6 +945,7 @@ class DotNetClrFirSymbolProvider(
 
     private fun DotNetClrResolvedTypeSignature.isSupportedGenericArgument(
         context: DotNetClrResolvedGenericParameterContext?,
+        allowKotlinReferences: Boolean = false,
     ): Boolean = when (this) {
         is DotNetClrResolvedTypeSignature.Primitive -> type in SUPPORTED_PRIMITIVES
         is DotNetClrResolvedTypeSignature.GenericParameter ->
@@ -922,7 +953,7 @@ class DotNetClrFirSymbolProvider(
         is DotNetClrResolvedTypeSignature.SzArray,
         is DotNetClrResolvedTypeSignature.Named,
         is DotNetClrResolvedTypeSignature.GenericInstance,
-        -> isSupportedMethodType(context, allowVoid = false)
+        -> isSupportedMethodType(context, allowVoid = false, allowKotlinReferences = allowKotlinReferences)
         else -> false
     }
 
@@ -1691,9 +1722,13 @@ class DotNetClrFirSymbolProvider(
                 )
             }
             is DotNetClrResolvedTypeSignature.Named -> {
-                val classId = type.definition.classIdOrNull(type.assembly)
+                val kotlinReference = kotlinTypeReferenceOrNull(type)
+                val classId = kotlinReference?.logicalClassId ?: type.definition.classIdOrNull(type.assembly)
                     ?: error("Unsupported named CLR type entered FIR")
-                classId.toLookupTag().constructClassType()
+                val arguments = Array<org.jetbrains.kotlin.fir.types.ConeTypeProjection>(
+                    kotlinReference?.logicalTypeParameterCount ?: 0,
+                ) { org.jetbrains.kotlin.fir.types.ConeStarProjection }
+                classId.toLookupTag().constructClassType(arguments)
                     .withQualifier(qualifiers.consume(this))
             }
             is DotNetClrResolvedTypeSignature.GenericInstance -> {
@@ -1709,7 +1744,8 @@ class DotNetClrFirSymbolProvider(
                         ?: error("Selected System.Nullable<T> entered FIR with a flexible element")
                     rigidElement.withNullability(nullable = true, session.typeContext)
                 } else {
-                    val classId = genericType.type.definition.classIdOrNull(genericType.type.assembly)
+                    val classId = kotlinTypeReferenceOrNull(genericType.type)?.logicalClassId
+                        ?: genericType.type.definition.classIdOrNull(genericType.type.assembly)
                         ?: error("Unsupported constructed CLR type entered FIR")
                     val qualifier = qualifiers.consume(this)
                     val arguments = arguments.map { argument ->

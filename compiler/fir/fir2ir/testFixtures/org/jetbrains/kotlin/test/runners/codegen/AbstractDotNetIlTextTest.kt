@@ -213,6 +213,12 @@ import org.jetbrains.kotlin.fir.pipeline.SingleModuleFrontendOutput
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.symbols.UnsafeDuringIrConstructionAPI
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMetadataReader
+import org.jetbrains.kotlin.load.dotnet.DotNetClrSelectedAssemblyBinder
+import org.jetbrains.kotlin.load.dotnet.DotNetClrSignatureResolver
+import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeResolver
+import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeResolutionFailure
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedMethodSignatureResolution
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedTypeSignature
 import org.jetbrains.kotlin.load.dotnet.DotNetClrFieldVisibility
 import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterKind
 import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterVariance
@@ -790,6 +796,12 @@ private class BackendCliDotNetFacade(
             loweredInput.configuration.dotNetTarget, completedOutput.output,
             completedOutput.declarations, testServices.moduleStructure.originalTestDataFiles.single(),
             testServices.getOrCreateTempDirectory("generic-owner-foreign-split-result"),
+        )
+        validateForeignKotlinInterfaceResult(
+            genericOwnerRehearsal, loweredInput.configuration.dotNetProducesLibrary,
+            loweredInput.configuration.dotNetTarget, completedOutput.output, completedOutput.declarations,
+            testServices.moduleStructure.originalTestDataFiles.single(),
+            testServices.getOrCreateTempDirectory("foreign-kotlin-interface-result"),
         )
         validateGenericOwnerForeignOwnerInput(
             genericOwnerRehearsal, loweredInput.configuration.dotNetProducesLibrary,
@@ -20251,6 +20263,193 @@ private fun validateGenericOwnerSplitNullableResultCSharp(
     executeSnapshotConsumer(target, authoringConsumer, directory)
 }
 
+private fun validateForeignKotlinInterfaceResult(
+    genericOwnerRehearsal: Boolean,
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    declarations: Map<String, DotNetPhysicalDeclaration>,
+    testDataFile: File,
+    directory: File,
+) {
+    if ("DOTNET_FOREIGN_KOTLIN_INTERFACE_RESULT_PROBE" !in testDataFile.readText()) return
+    if (!genericOwnerRehearsal) check(declarations.genericOwnerRehearsalEpochRecordIndexKeys().isEmpty())
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+    if (producesLibrary) return
+    val producerIdentity = DotNetClrMetadataReader.read(producer).identity.name
+    producer.copyTo(directory.resolve("$producerIdentity.dll"), overwrite = true)
+    producer.parentFile.resolve("ForeignReturn.dll").copyTo(directory.resolve("ForeignReturn.dll"), overwrite = true)
+    val platform = System.getProperty("kotlin.dotnet.test.platform.${target.description}.path")?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform for mixed reference execution")
+    val runtime = platform.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platform.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    val sourceType = if (genericOwnerRehearsal) "Source<int>" else "Source"
+    val sourceMetadata = DotNetClrMetadataReader.read(directory.resolve("lib.dll"))
+    val sourceDefinition = sourceMetadata.typeDefinitions.single {
+        it.namespaceName == "foreign.result.kotlin" && it.metadataName == if (genericOwnerRehearsal) "Source`1" else "Source"
+    }
+    // Production still exposes its single erased, mangled public contract. The candidate
+    // exposes the ordinary value() member. Neither may gain a second hidden obligation.
+    val sourceValueMethod = sourceMetadata.methodDefinitions.single { it.declaringType == sourceDefinition.handle }
+    check(sourceValueMethod.visibility == DotNetClrMethodVisibility.PUBLIC && sourceValueMethod.isAbstract &&
+            sourceValueMethod.signature.parameterTypes.isEmpty())
+    if (genericOwnerRehearsal) check(sourceValueMethod.name == "value")
+    val sourceValueName = sourceValueMethod.name
+    val source = directory.resolve("MixedConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+            using foreign.result.kotlin;
+            public sealed class CsSource : $sourceType
+            {
+                public ${if (genericOwnerRehearsal) "int" else "object"} $sourceValueName() { return 97; }
+            }
+            public sealed class CsFactory : ForeignReturn.KotlinFactory
+            {
+                private readonly $sourceType source;
+                public CsFactory($sourceType source) { this.source = source; }
+                public $sourceType read() { return source; }
+            }
+            public sealed class CsGenericSource<T> : ${if (genericOwnerRehearsal) "Source<T>" else "Source"}
+            {
+                private readonly T item;
+                public CsGenericSource(T item) { this.item = item; }
+                public ${if (genericOwnerRehearsal) "T" else "object"} $sourceValueName() { return item; }
+            }
+            public sealed class CsGenericFactory<T> : ForeignReturn.GenericFactory<T>
+            {
+                public ${if (genericOwnerRehearsal) "Source<T>" else "Source"} read() { return new CsGenericSource<T>(default(T)); }
+            }
+            public sealed class CsNestedFactory : ForeignReturn.NestedFactory
+            {
+                public ${if (genericOwnerRehearsal) "Source<Source<int>>" else "Source"} read()
+                {
+                    return new CsGenericSource<$sourceType>(new CsSource());
+                }
+            }
+            public static class MixedConsumer
+            {
+                public static int Main()
+                {
+                    var kotlin = new IntSource();
+                    var cs = new CsSource();
+                    var factory = new CsFactory(cs);
+                    if ((int)mainKt.owned(factory) != 97 || !mainKt.identity(factory, cs))
+                        throw new Exception("Foreign result lost the original Kotlin classifier or identity");
+                    if ((int)mainKt.owned(new CsFactory(kotlin)) != 73 || !mainKt.identity(new CsFactory(kotlin), kotlin))
+                        throw new Exception("Mixed Kotlin/C#/Kotlin execution");
+                    if (typeof(ForeignReturn.KotlinFactory).GetMethod("read").ReturnType != typeof($sourceType))
+                        throw new Exception("Retained foreign MethodDef was reinterpreted");
+                    if (typeof($sourceType).Assembly != typeof(IntSource).Assembly)
+                        throw new Exception("Kotlin classifier was duplicated into a foreign assembly");
+                    if ((int)mainKt.genericInt(new CsGenericFactory<int>()) != 0 ||
+                        mainKt.genericString(new CsGenericFactory<string>()) != null ||
+                        (int)mainKt.nested(new CsNestedFactory()) != 97)
+                        throw new Exception("Owner substitution, reference null, or nested result construction");
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val consumer = directory.resolve(if (target == DotNetTarget.NET48) "MixedConsumer.exe" else "MixedConsumer.dll")
+    val references = listOf(producer, directory.resolve("lib.dll"), directory.resolve("ForeignReturn.dll"), runtime, stdlib)
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()),
+            source, consumer, references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()),
+            source, consumer, references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 -> error("Mixed reference execution needs an executable profile")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    listOf(runtime, stdlib).forEach { it.copyTo(directory.resolve(it.name), overwrite = true) }
+    executeSnapshotConsumer(target, consumer, directory)
+}
+
+private fun compileForeignKotlinInterfaceResultFixture(
+    target: DotNetTarget,
+    genericOwnerRehearsal: Boolean,
+    library: File,
+    directory: File,
+): File {
+    directory.mkdirs()
+    val source = directory.resolve("ForeignReturn.cs").apply {
+        writeText(
+            """
+            namespace ForeignReturn
+            {
+                public interface NativeSource { int value(); }
+                public interface PrimitiveFactory { int read(); }
+                public interface NativeFactory { NativeSource read(); }
+                public interface KotlinFactory
+                {
+                    foreign.result.kotlin.${if (genericOwnerRehearsal) "Source<int>" else "Source"} read();
+                }
+                public interface GenericFactory<T>
+                {
+                    foreign.result.kotlin.${if (genericOwnerRehearsal) "Source<T>" else "Source"} read();
+                }
+                public interface NestedFactory
+                {
+                    foreign.result.kotlin.${if (genericOwnerRehearsal) "Source<foreign.result.kotlin.Source<int>>" else "Source"} read();
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val output = directory.resolve("ForeignReturn.dll")
+    val platform = System.getProperty("kotlin.dotnet.test.platform.${target.description}.path")?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform for foreign Kotlin interface results")
+    val references = listOf(
+        library,
+        platform.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME),
+        platform.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME),
+    )
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()),
+            source, output, references = references, executable = false, warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()),
+            source, output, references = references, executable = false, warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 -> error("The foreign result probe needs an executable profile")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    val foreignMetadata = DotNetClrMetadataReader.read(output)
+    val kotlinMetadata = DotNetClrMetadataReader.read(library)
+    val foreignOnly = DotNetClrSignatureResolver(DotNetClrTypeResolver(
+        DotNetClrSelectedAssemblyBinder(listOf(foreignMetadata)),
+    ))
+    val complete = DotNetClrSignatureResolver(DotNetClrTypeResolver(
+        DotNetClrSelectedAssemblyBinder(listOf(foreignMetadata, kotlinMetadata)),
+    ))
+    for (factory in listOf("PrimitiveFactory", "NativeFactory", "KotlinFactory")) {
+        val owner = foreignMetadata.typeDefinitions.single { it.namespaceName == "ForeignReturn" && it.metadataName == factory }
+        val method = foreignMetadata.methodDefinitions.single { it.declaringType == owner.handle && it.name == "read" }
+        val restrictedResult = foreignOnly.resolve(foreignMetadata, method.signature)
+        if (factory == "KotlinFactory") {
+            check(restrictedResult is DotNetClrResolvedMethodSignatureResolution.UnresolvedType &&
+                    restrictedResult.resolution.failure == DotNetClrTypeResolutionFailure.UNBOUND_ASSEMBLY_REFERENCE)
+            val resolved = complete.resolve(foreignMetadata, method.signature) as DotNetClrResolvedMethodSignatureResolution.Resolved
+            val result = resolved.signature.returnType
+            val named = if (genericOwnerRehearsal) {
+                val construction = result as DotNetClrResolvedTypeSignature.GenericInstance
+                check(construction.arguments == listOf(DotNetClrResolvedTypeSignature.Primitive(DotNetClrPrimitiveType.INT32)))
+                construction.genericType
+            } else result as DotNetClrResolvedTypeSignature.Named
+            check(named.type.assembly === kotlinMetadata)
+        } else check(restrictedResult is DotNetClrResolvedMethodSignatureResolution.Resolved)
+    }
+    return output
+}
+
 /** Exact inputs and nested semantic inputs bind different honest natural constructions. */
 private fun validateGenericOwnerForeignOwnerInput(
     genericOwnerRehearsal: Boolean,
@@ -35248,6 +35447,19 @@ private class DotNetEnvironmentConfigurator(
             val dependencyOutput = getProducedAssembly(dependencyModule, getArtifactName(dependencyModule))
             check(dependencyOutput.isFile) { "Missing compiled test dependency: ${dependencyOutput.path}" }
             configuration.addDotNetClasspathRoot(dependencyOutput)
+        }
+        if (testServices.moduleStructure.originalTestDataFiles.single().name == "foreignKotlinInterfaceResult.kt" &&
+            module.name == "main"
+        ) {
+            val libraryModule = binaryLibraries.single { it.name == "lib" }
+            configuration.addDotNetClasspathRoot(
+                compileForeignKotlinInterfaceResultFixture(
+                    target,
+                    System.getProperty(GENERIC_OWNER_REHEARSAL_PROPERTY) == "true",
+                    getProducedAssembly(libraryModule, getArtifactName(libraryModule)),
+                    configuration.dotNetOutput!!.parentFile,
+                )
+            )
         }
         if (DotNetCodegenDirectives.DOTNET_FOREIGN_MEMBERLESS_INTERFACE in module.directives) {
             configuration.addDotNetClasspathRoot(getOrCreateForeignMemberlessInterface())

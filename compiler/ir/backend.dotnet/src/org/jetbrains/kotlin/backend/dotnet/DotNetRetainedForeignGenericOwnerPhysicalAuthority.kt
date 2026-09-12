@@ -692,7 +692,7 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                 DotNetGenericOwnerPhysicalBindingResult.Unavailable -> return binding
             }
             when (receiverSource.carrierVersion) {
-                DotNetClrImportedDeclarationCarrierVersion.V3 -> Unit
+                DotNetClrImportedDeclarationCarrierVersion.V4 -> Unit
             }
             if (receiverSource.graph !== source.graph) {
                 return DotNetGenericOwnerPhysicalBindingResult.Unavailable
@@ -1650,7 +1650,7 @@ internal class DotNetRetainedForeignGenericOwnerPhysicalDeclarations private con
                 DotNetRetainedForeignGenericOwnerPhysicalDeclarations,
                 > {
             when (source.carrierVersion) {
-                DotNetClrImportedDeclarationCarrierVersion.V3 -> Unit
+                DotNetClrImportedDeclarationCarrierVersion.V4 -> Unit
             }
             if (method.declaringType != source.declaringType.handle ||
                 source.assembly.metadata.methodDefinitions.none { candidate -> candidate === method }

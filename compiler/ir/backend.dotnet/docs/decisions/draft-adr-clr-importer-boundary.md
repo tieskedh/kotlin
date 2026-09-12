@@ -441,6 +441,46 @@ make objective PE metadata depend on compiler transport types.
 only the IR consumer and physical CIL mapping. Neither FIR nor backend imports the other's
 implementation package.
 
+### 14. Kotlin-produced types may be physical reference dependencies
+
+Eligibility for TypeRef resolution is not eligibility for foreign declaration import. A foreign
+MethodDef may refer to a selected Kotlin-produced TypeDef without giving that TypeDef a second
+foreign classifier. Such a reference must join the exact containing DLL, its producer-recorded
+physical class binding, and the logical classifier in that DLL's KLIB. A matching namespace/name
+alone is not that join. Missing, ambiguous or contradictory evidence rejects the reference.
+
+The first bounded reference grammar is a public, top-level, non-expect Kotlin interface with no
+physical parent-interface edges and only default nullable-Any parameter bounds. Stronger logical
+bounds require a separate argument-validity proof; absent CLR constraints never waive them.
+The logical public signature is computed from its KLIB identity
+using the shared signature representation and matched to the producer's class record; that record
+is then checked against the actual TypeDef and ordered GenericParams. Compiler capabilities and
+other physical siblings do not acquire logical classifier bindings by resemblance.
+Every selected KLIB classifier, including typealiases, remains ineligible for duplicate foreign
+import, including those outside the physical-reference grammar or in a Kotlin DLL not named by
+a foreign AssemblyRef.
+
+The foreign provider reuses the KLIB ClassId. A full-arity constructed TypeSpec keeps its physical
+argument vector and maps it positionally to the existing logical parameters. An arity-zero erased
+TypeDef supplies stars for the logical parameters whose arguments it cannot encode. It must never
+invent a concrete Kotlin type argument. Nullable-reference annotations describe the foreign use
+site only; KLIB continues to own the referenced declaration's semantics.
+
+Admission initially applies to consuming foreign method results. It does not prove that a Kotlin
+implementation can supply that result through an override: the logical Kotlin result carrier may
+be broader than the retained foreign slot, and its existing physical-signature check must still
+reject an incompatible implementation without inventing a construction. Input positions, foreign
+inheritance and constraints containing Kotlin references remain unadmitted until their complete physical/Kotlin
+conversion and override contracts are proved. This is a complete-classifier restriction: a foreign
+interface containing such a required unsupported member is withheld, not partially imported.
+
+The neutral retained graph carries the validated reference independently of its foreign declaration
+owners. Backend signature binding consumes its exact physical TypeDef and construction, while
+ordinary Kotlin member lookup and lowering still consume the original KLIB declaration. No wrapper,
+proxy, shadow state, new Kotlin classifier, or foreign-annotation interpretation supplies the link.
+Extending this in-process graph changes its explicit carrier version; it does not redefine an
+existing emitted MethodDef or change the production-erased owner epoch.
+
 ## Kotlin Common invariant
 
 - Kotlin-owned declarations retain KLIB identity, nullability, contracts, and declaration shape.

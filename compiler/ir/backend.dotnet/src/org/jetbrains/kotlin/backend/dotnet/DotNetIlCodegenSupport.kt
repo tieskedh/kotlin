@@ -881,6 +881,7 @@ internal class DotNetIlTypeMapper private constructor(
         DotNetClrImportedDeclarations(
             foreignAssemblyReferenceSink,
             coreLibrary.reference,
+            kotlinReferenceAssemblySink = assemblyReferenceSink,
         ),
         genericInterfaces,
         genericClasses,

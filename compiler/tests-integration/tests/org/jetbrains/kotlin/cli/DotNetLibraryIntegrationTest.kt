@@ -20568,7 +20568,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             method,
             methodSignature,
         )
-        assertEquals(DotNetClrImportedDeclarationCarrierVersion.V3, methodSource.carrierVersion)
+        assertEquals(DotNetClrImportedDeclarationCarrierVersion.V4, methodSource.carrierVersion)
         assertSame(assembly, methodSource.assembly)
         assertSame(declaringType, methodSource.declaringType)
         assertSame(method, methodSource.method)
@@ -20585,7 +20585,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             getterSignature,
             setterSignature,
         )
-        assertEquals(DotNetClrImportedDeclarationCarrierVersion.V3, propertySource.carrierVersion)
+        assertEquals(DotNetClrImportedDeclarationCarrierVersion.V4, propertySource.carrierVersion)
         assertSame(property, propertySource.property)
         assertSame(getter, propertySource.getter)
         assertSame(setter, propertySource.setter)
@@ -20704,6 +20704,115 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 setterSignature,
             )
         }
+    }
+
+    @Test
+    fun testForeignKotlinResultReferencesKeepLogicalOwnershipAndRejectUnsupportedEdges() {
+        val modern = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(modern != null, "Modern C# compiler is not available")
+        val toolchain = checkNotNull(modern)
+        val directory = File(tmpdir, "mixed-reference").apply { mkdirs() }
+        val librarySource = directory.resolve("source.kt").apply {
+            writeText("""
+                package mixed.reference
+                interface Source<out T> { fun value(): T }
+                interface Child<out T> : Source<T>
+                interface Bounded<out T : Any> { fun value(): T }
+                typealias Alias = Source<Int>
+            """.trimIndent())
+        }
+        compileInProcess(
+            K2DotNetCompiler(), librarySource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Kotlin.Reference",
+            K2DotNetCompilerArguments::destination.cliArgument, directory.path,
+        )
+        val library = directory.resolve("Kotlin.Reference.dll")
+        val foreignSource = directory.resolve("Foreign.Reference.cs").apply {
+            writeText("""
+                #nullable enable
+                using mixed.reference;
+                namespace ForeignReference {
+                    public interface Offered { Source Read(); }
+                    public interface NullableOffered { Source? Read(); }
+                    public interface BlockedInput { Source Read(); void Write(Source value); }
+                    public interface BlockedParent : Source { }
+                    public interface BlockedConstraint<T> where T : Source { T Read(); }
+                    public interface BlockedChild { Child Read(); }
+                    public interface BlockedProperty { Source Value { get; } }
+                    public interface BlockedBound { Bounded Read(); }
+                }
+            """.trimIndent())
+        }
+        val foreign = directory.resolve("Foreign.Reference.dll")
+        val compiled = runModernCSharpCompiler(toolchain, foreignSource, foreign, library)
+        assertEquals(0, compiled.exitCode, compiled.output)
+        val core = toolchain.referenceDirectory.resolve("System.Runtime.dll")
+        fun consume(name: String, source: String, dependencies: List<File> = listOf(library, foreign, core)): Pair<String, ExitCode> {
+            val file = directory.resolve("$name.kt").apply { writeText(source) }
+            return AbstractCliTest.executeCompilerGrabOutput(K2DotNetCompiler(), listOf(
+                file.path, K2DotNetCompilerArguments::noStdlib.cliArgument,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+                K2DotNetCompilerArguments::classpath.cliArgument, dependencies.joinToString(File.pathSeparator) { it.path },
+                K2DotNetCompilerArguments::moduleName.cliArgument, "Consumer.$name",
+                K2DotNetCompilerArguments::destination.cliArgument, directory.resolve("$name.il").path,
+            ))
+        }
+        val [positiveDiagnostics, positiveExit] = consume("accepted", """
+            fun read(api: ForeignReference.Offered): Any? = api.Read().value()
+            fun source(api: ForeignReference.Offered): mixed.reference.Source<*> = api.Read()
+            fun nullable(api: ForeignReference.NullableOffered): Any? = api.Read()?.value()
+            fun alias(source: mixed.reference.Source<Int>): mixed.reference.Alias = source
+        """.trimIndent())
+        assertEquals(ExitCode.OK, positiveExit, positiveDiagnostics)
+        val [arityDiagnostics, arityExit] = consume("erasure", """
+            fun invented(api: ForeignReference.Offered): mixed.reference.Source<Int> = api.Read()
+            fun nullable(api: ForeignReference.NullableOffered): mixed.reference.Source<*> = api.Read()
+        """.trimIndent())
+        assertEquals(ExitCode.COMPILATION_ERROR, arityExit, arityDiagnostics)
+        assertTrue("type mismatch" in arityDiagnostics, arityDiagnostics)
+        for (blocked in listOf("BlockedInput", "BlockedParent", "BlockedConstraint<Int>", "BlockedChild", "BlockedProperty", "BlockedBound")) {
+            val [diagnostics, exit] = consume("blocked${blocked.substringBefore('<')}", "fun rejected(api: ForeignReference.$blocked) = api")
+            assertEquals(ExitCode.COMPILATION_ERROR, exit, diagnostics)
+            assertTrue(diagnostics.contains("unresolved reference", ignoreCase = true), diagnostics)
+        }
+        val [missingDiagnostics, missingExit] = consume(
+            "missing", "fun rejected(api: ForeignReference.Offered) = api", listOf(foreign, core),
+        )
+        assertEquals(ExitCode.COMPILATION_ERROR, missingExit, missingDiagnostics)
+        assertTrue(missingDiagnostics.contains("unresolved reference", ignoreCase = true), missingDiagnostics)
+
+        val lookalikeSource = directory.resolve("Lookalike.cs").apply {
+            writeText("""
+                namespace mixed.reference { public interface Source { } public interface Alias { } }
+                namespace Lookalike {
+                    public interface Factory { mixed.reference.Source Read(); }
+                    public interface AliasFactory { mixed.reference.Alias Read(); }
+                }
+            """.trimIndent())
+        }
+        val lookalike = directory.resolve("Lookalike.dll")
+        val lookalikeCompiled = runModernCSharpCompiler(toolchain, lookalikeSource, lookalike)
+        assertEquals(0, lookalikeCompiled.exitCode, lookalikeCompiled.output)
+        val [lookalikeDiagnostics, lookalikeExit] = consume(
+            "lookalike", "fun rejected(api: Lookalike.Factory) = api.Read()",
+            listOf(library, foreign, lookalike, core),
+        )
+        assertEquals(ExitCode.COMPILATION_ERROR, lookalikeExit, lookalikeDiagnostics)
+        assertTrue(lookalikeDiagnostics.contains("unresolved reference", ignoreCase = true), lookalikeDiagnostics)
+        val [unreferencedDiagnostics, unreferencedExit] = consume(
+            "unreferencedLookalike", "fun rejected(api: Lookalike.Factory) = api.Read()",
+            listOf(library, lookalike, core),
+        )
+        assertEquals(ExitCode.COMPILATION_ERROR, unreferencedExit, unreferencedDiagnostics)
+        assertTrue(unreferencedDiagnostics.contains("unresolved reference", ignoreCase = true), unreferencedDiagnostics)
+        val [aliasDiagnostics, aliasExit] = consume(
+            "aliasLookalike", "fun rejected(api: Lookalike.AliasFactory) = api.Read()",
+            listOf(library, lookalike, core),
+        )
+        assertEquals(ExitCode.COMPILATION_ERROR, aliasExit, aliasDiagnostics)
+        assertTrue(aliasDiagnostics.contains("unresolved reference", ignoreCase = true), aliasDiagnostics)
     }
 
     @Test
