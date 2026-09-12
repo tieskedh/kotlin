@@ -129,6 +129,17 @@ would give the CLR two textually different Kotlin declarations with one physical
 virtual call from that bridge could resolve back to the bridge itself. Return and every value
 parameter carrier are therefore compared before a MethodImpl is created.
 
+A class-slot bridge which narrows an input must also preserve any applicable
+Common `SpecialBridgeMethods` checked-argument policy. The generated guard
+precedes the cast into the selected forwarding body and returns Common's
+recorded wrong-input value without calling that body. An interface adapter
+earlier in the dispatch chain is not sufficient: it can still accept an erased
+argument which a later specialized class slot cannot consume. Apply the check
+to the actual selected body's input domain, not blindly to a natural wrapper;
+an authoritative broad semantic body must continue receiving broad values.
+Methods without a Common special policy retain their ordinary casts and failure
+behavior. The guard changes no MethodDef, MethodImpl identity or source body.
+
 An abstract class refinement may own a concrete bridge which dispatches to its precise abstract
 slot. A concrete subclass then implements that precise slot normally. An abstract interface
 refinement instead remains a separate abstract CLR slot: portable interfaces cannot contain the

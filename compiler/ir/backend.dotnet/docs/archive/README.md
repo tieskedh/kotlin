@@ -14,6 +14,9 @@ Use:
 
 Archived snapshots:
 
+- [`covariant-bridge-input-policy-2026-09-12.md`](covariant-bridge-input-policy-2026-09-12.md)
+  records Common input checks before specialized class-slot casts, separate
+  Kotlin regression coverage and the pre-existing nominal candidate gap.
 - [`generic-owner-projected-allocation-2026-09-11.md`](generic-owner-projected-allocation-2026-09-11.md)
   records constructor-selected fresh allocations behind star result views,
   preserved array identity and broad inputs, Kotlin/C# execution, and the inverse.

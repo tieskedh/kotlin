@@ -49,43 +49,45 @@ Current representation rules are linked from the navigation section below.
 
 ## Latest verification
 
-The full production-erased aggregate passed on 2026-09-11 after correcting
-array-factory result widening. Direct JUnit XML audit found no failures,
+The full production-erased aggregate passed on 2026-09-12 after preserving
+Common input policies in class-slot bridges. Direct JUnit XML audit found no failures,
 errors, or skips:
 
 | Lane | Suites | Tests |
 | --- | ---: | ---: |
-| Backend | 22 | 402 |
+| Backend | 23 | 409 |
 | Physical CLI model | 1 | 6 |
-| Full FIR2IR, both parsers and runtimes | 187 | 2,351 |
+| Full FIR2IR, both parsers and runtimes | 187 | 2,371 |
 | CLI/library integration | 2 | 128 |
-| **Full production total** | **212** | **2,887** |
-| Focused array-result candidate | 4 | 4 |
+| **Full production total** | **213** | **2,914** |
+| Focused class-slot candidate | 4 | 16 |
 
-This supersedes the inherited full checkpoint `17676a90e1`. The actual FIR2IR
+This supersedes the full checkpoint `cafb56a4e8`. The actual FIR2IR
 Test task was explicitly rerun without filters and without the rehearsal
 property. The unchanged physical CLI dependency remained up to date; its full
 six-test XML was audited too. Candidate execution covers PSI and LightTree on
 Framework 4.8 and .NET 10. The full production corpus includes the same fixture.
 
-The reproduced failures, unchanged factory MethodDefs, separate-assembly
-execution, source hashes, and full gate are recorded in the
-[array-result archive](docs/archive/array-factory-object-results-2026-09-11.md).
+The reproduced failure, unchanged MethodDefs, separate-assembly execution,
+source hashes and full gate are recorded in the
+[class-slot bridge archive](docs/archive/covariant-bridge-input-policy-2026-09-12.md).
 Earlier bounded feature evidence remains indexed in the
 [archive](docs/archive/README.md); this full gate does not establish complete
 candidate Runtime/Stdlib closure or authorize a production generic-owner switch.
 
-The latest fresh-allocation feature inherits that full checkpoint (`cafb56a4e8`).
-Its rehearsal-physical gate passed 36 candidate tests, 409 backend tests, and
-the same 36-test production inverse, with no failures, errors, or skips. Both
-parsers and runtimes execute the separate Kotlin/C# fixture, including original
-array identity, broad inputs and nullable/value-class substitutions. Production
-selected paths remain structurally unchanged. The matrix also covers the two
-preceding array constructor/state features. See the
-[allocation archive](docs/archive/generic-owner-projected-allocation-2026-09-11.md)
-for the exact boundary, physical evidence and inherited checkpoint.
+The focused candidate matrix covers the repaired class-slot boundary and
+existing physical covariant slots, closed semantic inputs and C# split-result
+overrides. The nominal value-class input regression passes on all production
+lanes, but its generic class-slot parameter adaptation remains an independently
+reproduced candidate gap. It is not claimed by the 16-test candidate matrix.
 
 ## Active work
+
+The production-erased class-slot input-policy repair is complete. Resume the
+separately preserved Common-authorized foreign-input rehearsal feature and
+reverify its candidate and inverse before promotion. Its exact preservation
+point and the independent nominal candidate gap are recorded in the
+[class-slot bridge evidence](docs/archive/covariant-bridge-input-policy-2026-09-12.md).
 
 Canonical array factories now accept an instruction-free widening of their
 actual Iterator/Iterable result to an already-selected object destination.
@@ -97,9 +99,9 @@ complete private writer graph, using System.Array rather than a fabricated
 T[] or object[]. A fresh allocation behind an all-star logical result now uses
 its independently selected constructor vector, with ordinary MethodDef input
 and destination checks. This does not make existing star values exact or
-promote an unadmitted interface to a natural C# contract. Rerun the source-built
-candidate census from this checkpoint; the census after `a43d1db5cf` contained
-228 error lines and exposed this allocation failure. Raw public projected-array
+promote an unadmitted interface to a natural C# contract. The census after
+`5ff1de08d0` contains 225 error lines versus 228; the three projected-allocation
+failures are gone. These are diagnostics, not independent bugs. Raw public projected-array
 entries, broader nullable array state, and unproven element constructions remain
 outside these proofs.
 

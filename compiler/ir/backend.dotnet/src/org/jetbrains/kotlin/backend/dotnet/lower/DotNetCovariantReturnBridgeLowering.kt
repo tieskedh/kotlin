@@ -6,7 +6,9 @@
 package org.jetbrains.kotlin.backend.dotnet.lower
 
 import org.jetbrains.kotlin.backend.common.ModuleLoweringPass
+import org.jetbrains.kotlin.backend.common.lower.SpecialBridgeMethods
 import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
+import org.jetbrains.kotlin.backend.common.lower.irNot
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberBodyPlacement
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
@@ -29,7 +31,9 @@ import org.jetbrains.kotlin.ir.builders.declarations.addValueParameter
 import org.jetbrains.kotlin.ir.builders.irBlockBody
 import org.jetbrains.kotlin.ir.builders.irCall
 import org.jetbrains.kotlin.ir.builders.irGet
+import org.jetbrains.kotlin.ir.builders.irIfThen
 import org.jetbrains.kotlin.ir.builders.irImplicitCast
+import org.jetbrains.kotlin.ir.builders.irIs
 import org.jetbrains.kotlin.ir.builders.irReturn
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
@@ -99,6 +103,7 @@ internal class DotNetCovariantReturnBridgeLowering(
     private val context: DotNetBackendContext,
 ) : ModuleLoweringPass {
     private val externalDeclarations = context.externalDeclarationsForLowering()
+    private val specialBridgeMethods = SpecialBridgeMethods(context)
 
     private fun IrClass.isErasedKotlinGenericOwner(): Boolean {
         if (!isDotNetGenericClassDeclaration) return false
@@ -747,6 +752,22 @@ internal class DotNetCovariantReturnBridgeLowering(
 
                 val targetReturnType = targetType(bodyForwardTarget.returnType)
                 val targetParameterTypes = forwardParameters.map { parameter -> targetType(parameter.type) }
+                specialBridgeMethods.findSpecialWithOverride(target, includeSelf = true)?.second?.let { info ->
+                    val bridgeParameters = this@bridge.parameters.drop(1)
+                    check(info.argumentsToCheck <= bridgeParameters.size) {
+                        "Internal .NET backend error: special covariant bridge argument count mismatch"
+                    }
+                    // A class-slot adapter can narrow inputs as well as widen a result. Keep
+                    // Common's wrong-input outcome before any cast into the selected body.
+                    // A semantic body with a broad parameter must retain that broad domain.
+                    bridgeParameters.take(info.argumentsToCheck).forEachIndexed { index, parameter ->
+                        +irIfThen(
+                            context.irBuiltIns.unitType,
+                            irNot(irIs(irGet(parameter), targetParameterTypes[index])),
+                            irReturn(info.defaultValueGenerator(this@bridge)),
+                        )
+                    }
+                }
                 val call = irCall(bodyForwardTarget.symbol, targetReturnType).apply {
                     arguments[0] = irGet(this@bridge.parameters[0])
                     bridgeTypeParameters.forEachIndexed { index, parameter ->
