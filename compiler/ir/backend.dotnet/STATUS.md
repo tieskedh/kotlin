@@ -113,12 +113,19 @@ immediate architecture boundary. Natural constructor bodies passed direct and
 local-delegation subcases, but external delegation and a later read of an
 object-stored interface still lost selection on an ordinary C# dual-interface
 object. The original constructor admission guard remains; neither experiment
-is promoted. A standalone CLR probe preserves checked selection in a compound
-storage value on net48-target/CLR4 and .NET 10, but this is not compiler
-integration or an accepted storage ABI. The candidate must first be reconciled
-with one-state/identity rules, `Any` conversions, mutable/volatile state and
-separate compilation. See the
-[constructor and storage evidence](docs/archive/selected-interface-view-storage-2026-09-12.md).
+is promoted. The
+[selected-view transport candidate](docs/decisions/draft-adr-selected-interface-view-transport.md)
+is authorized for bounded investigation, not general storage or compiler ABI.
+Its standalone CLR probe now covers a separately compiled generic container,
+raw-object selection loss, boxing identity and lock-protected whole-pair
+storage on net48-target/CLR4 and .NET 10. These are mechanism proofs, not Kotlin
+`Any`/identity lowering, general generic-state composition, volatile semantics
+or performance evidence. Resolve preservation versus new selection at `Any`
+and unchanged C# boundaries before compiler integration; keep admission guards
+and the erased production ABI unchanged. See the
+[boundary evidence](docs/archive/selected-interface-view-boundaries-2026-09-12.md)
+and earlier
+[constructor/storage investigation](docs/archive/selected-interface-view-storage-2026-09-12.md).
 
 Owner-admission evidence still identifies foreign semantic interface inputs,
 including `AbstractCollection.containsAll`, as unclosed. The unavailable base

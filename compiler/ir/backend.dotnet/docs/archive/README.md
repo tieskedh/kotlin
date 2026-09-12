@@ -14,6 +14,9 @@ Use:
 
 Archived snapshots:
 
+- [`selected-interface-view-boundaries-2026-09-12.md`](selected-interface-view-boundaries-2026-09-12.md)
+  records separate generic storage, raw-object information loss, boxing identity
+  and an explicit lock-based pair protocol without admitting a compiler ABI.
 - [`selected-interface-view-storage-2026-09-12.md`](selected-interface-view-storage-2026-09-12.md)
   records successful direct/local constructor subcases, view loss through state,
   and a standalone CLR storage proof with its unclosed architecture gates.

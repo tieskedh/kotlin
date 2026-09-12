@@ -116,6 +116,7 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [Profile-aware interface defaults](decisions/adr-profile-aware-interface-default-implementations.md)
 - [Erased ABI for Kotlin-owned generic interfaces](decisions/generic-interface-erased-identity.md)
 - [Draft physical authority and value provenance for generic owners](decisions/draft-adr-generic-owner-physical-authority.md)
+- [Draft bounded selected-interface-view transport candidate](decisions/draft-adr-selected-interface-view-transport.md)
 - [Draft one-natural-interface CLR-generic owner with semantic routing](decisions/draft-adr-reified-generic-interface-owner.md)
 - [Exact foreign CLR generic methods](decisions/foreign-clr-generic-methods.md)
 - [Native identity for foreign CLR generic interfaces](decisions/foreign-clr-generic-type-identities.md)

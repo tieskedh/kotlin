@@ -1886,10 +1886,18 @@ the retained or producer-recorded generic declaration and physical
 assignability rules. Kotlin variance alone cannot do so, and value arguments
 remain invariant at the CLR boundary.
 
-Per-value lineage is never serialized as hidden object state. If a public or
-storage boundary loses the only evidence selecting one of several foreign
-constructions, later code must use an admitted semantic/checked route or report
-the boundary unsupported. It may not guess by interface enumeration order.
+Static per-value lineage is never itself serialized as hidden object state.
+The [selected-view transport candidate](draft-adr-selected-interface-view-transport.md)
+separately investigates a runtime receiver/witness layout, with checked
+relational validity rather than lineage as an authority source. It is not part
+of the admitted layout grammar above and does not relax current state or
+constructor admission. Its `Any`, generic composition, memory and identity
+contracts must be closed before compiler integration.
+
+If a public or storage boundary loses the only evidence selecting one of several
+foreign constructions, later code must use an admitted semantic/checked route
+or report the boundary unsupported. It may not guess by interface enumeration
+order.
 
 ## Non-negotiable invariants
 
