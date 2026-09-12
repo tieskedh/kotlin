@@ -293,13 +293,20 @@ internal class DotNetValueClassAutoboxingLowering(
     private val context: DotNetBackendContext,
 ) : BodyLoweringPass {
     private val externalDeclarations = context.externalDeclarationsForLowering()
+    private val nominalBridgeInputs = context.covariantReturnBridges
+        .filter { it.nominalValueClassInputs.isNotEmpty() }
+        .associate { bridge -> bridge.implementation to bridge.nominalValueClassInputs }
 
     override fun lower(irBody: IrBody, container: IrDeclaration) {
         val builder = context.createIrBuilder(container.symbol)
         val boundaryFunction = container as? IrSimpleFunction
         val boundarySlot = boundaryFunction?.dotNetValueClassGenericBoundarySlotOrNull()
         val boundaryOwner = boundarySlot?.parent as? IrClass
+        val nominalBridgeParameters = nominalBridgeInputs[boundaryFunction].orEmpty().keys.mapTo(hashSetOf()) { index ->
+            checkNotNull(boundaryFunction).parameters[index + 1].symbol
+        }
         val nominalBoundaryParameters = buildSet<IrValueParameterSymbol> {
+            addAll(nominalBridgeParameters)
             if (boundaryFunction != null && boundarySlot != null && boundaryOwner != null) {
                 boundaryFunction.parameters.zip(boundarySlot.parameters).mapNotNullTo(this) { pair ->
                     val implementationParameter = pair.first
@@ -378,6 +385,9 @@ internal class DotNetValueClassAutoboxingLowering(
                     ?.dotNetValueClassGenericBoundarySlotOrNull()
                 val genericBoundaryOwner = genericBoundarySlot?.parent as? IrClass
                 val parameterIndex = function.parameters.indexOf(parameter)
+                if (parameterIndex - 1 in nominalBridgeInputs[function].orEmpty()) {
+                    return useAs(context.irBuiltIns.anyNType)
+                }
                 val genericBoundaryParameter = genericBoundarySlot?.parameters?.getOrNull(parameterIndex)
                 if (genericBoundaryOwner != null &&
                     genericBoundaryParameter?.type?.referencesTypeParameterOf(genericBoundaryOwner) == true &&
@@ -533,22 +543,49 @@ internal class DotNetValueClassAutoboxingLowering(
                     // slot, so this is still a nominal V -> carrier transition, not a direct
                     // object -> underlying smartcast. Source Kotlin cannot create this shape by
                     // passing V to an unrelated underlying-typed declaration.
-                    val helpers = context.getOrCreateDotNetValueClassBoxingHelpers(actualClass)
-                    return builder.at(this).irCall(helpers.unbox.symbol, type).apply {
-                        putValueClassTypeArguments(this@useAs.type)
-                        arguments[0] = this@useAs
-                    }
+                    return unboxValueClass(this.type, type)
                 }
 
                 if (expectedClass != null && expectedCarrier != null && actualCarrier == null) {
-                    val helpers = context.getOrCreateDotNetValueClassBoxingHelpers(expectedClass)
-                    return builder.at(this).irCall(helpers.unbox.symbol, type).apply {
-                        putValueClassTypeArguments(type)
-                        arguments[0] = this@useAs
-                    }
+                    return unboxValueClass(type, type)
                 }
 
                 return this
+            }
+
+            private fun IrExpression.unboxValueClass(logicalType: IrType, resultType: IrType): IrExpression {
+                val valueClass = checkNotNull(logicalType.dotNetValueClassOrNull())
+                val helpers = context.getOrCreateDotNetValueClassBoxingHelpers(valueClass)
+                if (logicalType.isMarkedNullable() &&
+                    logicalType.dotNetUnboxedValueClassTypeOrNull()?.isMarkedNullable() == true
+                ) {
+                    // A nullable reference-underlying value class reuses null for absence.
+                    // Its nominal unbox helper still requires an existing box. Preserve null
+                    // outside that helper, and evaluate the incoming expression exactly once.
+                    // The operand is proven nominal here. Make its object view explicit before
+                    // local placement; retaining logical V? would invite remapping it to the
+                    // underlying reference while selecting this temporary's physical carrier.
+                    val nominalInput = apply { type = context.irBuiltIns.anyNType }
+                    return builder.at(this).irBlock(resultType = resultType) {
+                        val nominal = irTemporary(
+                            nominalInput, nameHint = "<nullable-value-class-box>",
+                            irType = context.irBuiltIns.anyNType,
+                        )
+                        +irIfThenElse(
+                            resultType,
+                            irEqualsNull(irGet(nominal)),
+                            irNull(),
+                            irCall(helpers.unbox.symbol, resultType).apply {
+                                putValueClassTypeArguments(logicalType)
+                                arguments[0] = irGet(nominal)
+                            },
+                        )
+                    }
+                }
+                return builder.at(this).irCall(helpers.unbox.symbol, resultType).apply {
+                    putValueClassTypeArguments(logicalType)
+                    arguments[0] = this@unboxValueClass
+                }
             }
 
             override fun IrExpression.useInTypeOperator(
@@ -562,6 +599,12 @@ internal class DotNetValueClassAutoboxingLowering(
                 IrTypeOperator.NOT_INSTANCEOF,
                 -> if (physicalValueClassCarrierOrNull() != null) {
                     useAs(context.irBuiltIns.anyNType)
+                } else if (this is IrGetValue && symbol in nominalBridgeParameters) {
+                    // Runtime type operators consume the nominal object. Record that widened
+                    // occurrence explicitly, so emission does not remap logical V to its exact
+                    // underlying carrier while preparing the operand. The parameter and its
+                    // separately checked physical MethodDef remain unchanged.
+                    apply { type = context.irBuiltIns.anyNType }
                 } else {
                     this
                 }

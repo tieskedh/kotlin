@@ -773,6 +773,12 @@ private class BackendCliDotNetFacade(
             completedOutput.declarations, testServices.moduleStructure.originalTestDataFiles.single(),
             testServices.getOrCreateTempDirectory("generic-owner-nullable-callable-capture"),
         )
+        validateCovariantNominalCarriers(
+            genericOwnerRehearsal, loweredInput.configuration.dotNetProducesLibrary,
+            loweredInput.configuration.dotNetTarget, completedOutput.output, completedOutput.declarations,
+            testServices.moduleStructure.originalTestDataFiles.single(),
+            testServices.getOrCreateTempDirectory("covariant-nominal-carriers"),
+        )
         validateGenericOwnerForeignBarrierInput(
             genericOwnerRehearsal, loweredInput.configuration.dotNetProducesLibrary,
             loweredInput.configuration.dotNetTarget, completedOutput.output, completedOutput.declarations,
@@ -20504,6 +20510,120 @@ private fun validateGenericOwnerForeignNullableInput(
         DotNetTarget.NETSTANDARD_2_0 -> error("The nullable input consumer needs an executable profile")
     }
     check(compilation.exitCode == 0) { compilation.output }
+    listOf(runtime, stdlib).forEach { it.copyTo(directory.resolve(it.name), overwrite = true) }
+    executeSnapshotConsumer(target, consumer, directory)
+}
+
+private fun validateCovariantNominalCarriers(
+    rehearsal: Boolean,
+    producesLibrary: Boolean,
+    target: DotNetTarget,
+    producer: File,
+    declarations: Map<String, DotNetPhysicalDeclaration>,
+    testDataFile: File,
+    directory: File,
+) {
+    if ("DOTNET_COVARIANT_NOMINAL_CARRIER_PROBE" !in testDataFile.readText()) return
+    directory.mkdirs()
+    producer.copyTo(directory.resolve(producer.name), overwrite = true)
+    val metadata = DotNetClrMetadataReader.read(producer)
+    val namespace = "covariant.bridge.nominal.carriers"
+    if (!rehearsal) {
+        check(declarations.genericOwnerRehearsalEpochRecordIndexKeys().isEmpty())
+        check(metadata.typeDefinitions.none { it.namespaceName == namespace && '`' in it.metadataName })
+        return
+    }
+    if (producer.name.equals("lib.dll", true)) {
+        val base = metadata.typeDefinitions.single { it.namespaceName == namespace && it.metadataName == "Base`2" }
+        val first = DotNetClrTypeSignature.GenericParameter(DotNetClrGenericParameterKind.TYPE, 0)
+        val second = DotNetClrTypeSignature.GenericParameter(DotNetClrGenericParameterKind.TYPE, 1)
+        val intType = DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.INT32)
+        val slot = metadata.methodDefinitions.single { it.declaringType == base.handle && it.name == "choose" }
+        check(slot.isVirtual && slot.visibility == DotNetClrMethodVisibility.PUBLIC &&
+                slot.signature.returnType == second && slot.signature.parameterTypes == listOf(intType, first))
+        check(metadata.fieldDefinitions.filter { it.declaringType == base.handle }.single().signature.fieldType == second)
+        val factory = declarations.values.filterIsInstance<DotNetPhysicalDeclaration.Function>()
+            .single { it.methodName == "idObject" }
+        directory.resolve("factory-owner.txt").writeText(factory.ownerPath.joinToString("."))
+    }
+    if (producesLibrary) return
+    val platform = System.getProperty("kotlin.dotnet.test.platform.${target.description}.path")?.let(::File)
+        ?: error("Missing reusable platform for nominal class-slot inputs")
+    val runtime = platform.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platform.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    val factoryOwner = directory.resolve("factory-owner.txt").readText()
+    val source = directory.resolve("NominalSlotConsumer.cs").apply {
+        writeText("""
+            using System;
+            using System.Reflection;
+            using covariant.bridge.nominal.carriers;
+            public sealed class CsNative : Base<Id, string>
+            {
+                public int Calls;
+                public Id Last;
+                public CsNative() : base("base") { }
+                public override string choose(int prefix, Id key) { Calls++; Last = key; return "native:" + prefix; }
+            }
+            public sealed class CsRefined : IdMiddle
+            {
+                public int Calls;
+                public override string choose(int prefix, int key) { Calls++; return "refined:" + prefix + ":" + key; }
+            }
+            public static class NominalSlotConsumer
+            {
+                private static void Bridge(Type owner, params Type[] parameters)
+                {
+                    int count = 0;
+                    foreach (MethodInfo method in owner.GetMethods(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
+                    {
+                        if (!method.IsVirtual || !method.IsFinal) continue;
+                        ParameterInfo[] actual = method.GetParameters();
+                        if (actual.Length != parameters.Length) continue;
+                        bool matches = true;
+                        for (int i = 0; i < actual.Length; i++) matches &= actual[i].ParameterType == parameters[i];
+                        if (matches) count++;
+                    }
+                    if (count != 1) throw new Exception("Wrong nominal bridge on " + owner + ": " + count);
+                }
+                public static int Main()
+                {
+                    Bridge(typeof(IdMiddle), typeof(int), typeof(Id));
+                    Bridge(typeof(NameLeaf), typeof(int), typeof(Name));
+                    Bridge(typeof(NullableNameLeaf), typeof(int), typeof(Name));
+                    Bridge(typeof(MaybeLeaf), typeof(int), typeof(Maybe));
+                    Bridge(typeof(PacketLeaf), typeof(int), typeof(Packet));
+                    Bridge(typeof(PairLeaf), typeof(Id), typeof(int), typeof(Name));
+                    Id key = (Id)$factoryOwner.idObject(11);
+                    CsNative native = new CsNative();
+                    Base<Id, string> natural = native;
+                    if (natural.choose(3, key) != "native:3" || native.Calls != 1 || !Object.ReferenceEquals(key, native.Last))
+                        throw new Exception("Natural C# slot changed dispatch or input identity");
+                    CsRefined refined = new CsRefined();
+                    Base<Id, string> widened = refined;
+                    if (!Object.ReferenceEquals(refined, widened) || widened.choose(5, key) != "refined:5:11" || refined.Calls != 1)
+                        throw new Exception("Inherited Kotlin bridge bypassed the ordinary C# override");
+                    if ($factoryOwner.fromBase<Id>(refined, 6, key) != "refined:6:11" || refined.Calls != 2)
+                        throw new Exception("Separate Kotlin call bypassed the C# override");
+                    Console.WriteLine("OK");
+                    return 0;
+                }
+            }
+        """.trimIndent())
+    }
+    val consumer = directory.resolve(if (target == DotNetTarget.NET48) "NominalSlotConsumer.exe" else "NominalSlotConsumer.dll")
+    val references = listOf(directory.resolve("lib.dll"), directory.resolve("middle.dll"), runtime, stdlib)
+    val result = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()), source, consumer,
+            references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()), source, consumer,
+            references = references, executable = true, warningsAsErrors = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 -> error("The nominal slot consumer needs an executable profile")
+    }
+    check(result.exitCode == 0) { result.output }
     listOf(runtime, stdlib).forEach { it.copyTo(directory.resolve(it.name), overwrite = true) }
     executeSnapshotConsumer(target, consumer, directory)
 }

@@ -1274,6 +1274,30 @@ layout must all be present. A genuinely broad source still selects the semantic
 endpoint; the bounded immutable external alias is logically widened but retains
 independently proven exact provenance.
 
+#### Nominal value-class inputs of selected MethodImpl bodies
+
+A selected inherited owner-generic parameter denotes its constructed argument,
+not that argument's Kotlin underlying value-class carrier. Closing `!A` with a
+value class can therefore require a MethodImpl adapter even when substitution
+makes both logical signatures look identical. The precise source member still
+uses its ordinary underlying carrier; the inherited MethodDef is not rewritten.
+
+Bridge selection may record a per-input nominal-use obligation when an original
+bare owner parameter closes to a value class in the forwarding body. This is an
+EARLY body-adaptation obligation attached to the selected declaration/bridge
+relation, not new physical authority. Final emission must bind the inherited
+MethodDef through the actual receiver graph, prove its input is an owner binder,
+and prove that the bound input is exactly the expected nominal value-class
+carrier. Failure of any check rejects the bridge; it never remaps the slot.
+
+Value usage consumes that obligation per parameter. Runtime type tests observe
+the existing nominal object; precise body calls explicitly unpack it. Unrelated
+inputs remain typed, and a concrete value-class input already represented by its
+underlying carrier acquires no nominal obligation. Nullable reference-underlying
+value classes preserve absence outside the non-null unbox helper. Ordinary
+virtual calls through the bridge must still observe a later C# override of the
+precise source method, without exposing a hidden authoring contract.
+
 #### Common-authorized foreign input barriers
 
 A Common special-bridge policy may authorize a checked input conversion on the

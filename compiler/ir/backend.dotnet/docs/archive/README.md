@@ -14,6 +14,9 @@ Use:
 
 Archived snapshots:
 
+- [`nominal-class-slot-inputs-2026-09-12.md`](nominal-class-slot-inputs-2026-09-12.md)
+  records nominal generic-slot inputs, nullable value-class unboxing, separate
+  Kotlin/C# overrides, physical MethodDef checks and the fresh full gate.
 - [`generic-owner-foreign-input-barrier-2026-09-12.md`](generic-owner-foreign-input-barrier-2026-09-12.md)
   records Common-authorized foreign input checks, independent object/split
   result MethodDefs, JVM null-bound evidence, Kotlin/C# chains and the inverse.

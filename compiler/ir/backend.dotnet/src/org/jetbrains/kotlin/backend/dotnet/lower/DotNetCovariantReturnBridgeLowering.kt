@@ -17,6 +17,8 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeTypes
 import org.jetbrains.kotlin.backend.dotnet.dotNetBaseClassOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetExactFunctionArity
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerRehearsal
+import org.jetbrains.kotlin.backend.dotnet.dotNetUnboxedValueClassTypeOrNull
+import org.jetbrains.kotlin.backend.dotnet.dotNetValueClassOrNull
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericClassDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericInterfaceDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetStringType
@@ -332,7 +334,13 @@ internal class DotNetCovariantReturnBridgeLowering(
                             keepOwnerTypeParameters = keepsErasedSlotOwnerParameters,
                         )
                     }
-                    !slotType.hasSameClrCarrierAs(targetType)
+                    val slotParameterOwner = ((slotParameter.type as? IrSimpleType)?.classifier as? IrTypeParameterSymbol)
+                        ?.owner?.parent
+                    val closesNominalGenericInput = context.configuration.dotNetGenericOwnerRehearsal &&
+                            slotParameterOwner === slotOwner && !slotParameter.type.isMarkedNullable() &&
+                            slotType.dotNetValueClassOrNull() != null &&
+                            targetType.dotNetUnboxedValueClassTypeOrNull() != null
+                    closesNominalGenericInput || !slotType.hasSameClrCarrierAs(targetType)
                 }
         val hasDifferentReturnCarrier = !slotReturnType.hasSameClrCarrierAs(targetReturnType)
         if (!needsInheritedFinalInterfaceForwarder &&
@@ -378,6 +386,19 @@ internal class DotNetCovariantReturnBridgeLowering(
             target
         }
         val bridge = createBridge(owner, slot, target, bodyForwardTarget)
+        val nominalValueClassInputs = if (context.configuration.dotNetGenericOwnerRehearsal) {
+            slot.parameters.drop(1).zip(bridge.parameters.drop(1)).mapIndexedNotNull { index, pair ->
+                val sourceType = pair.first.type as? IrSimpleType ?: return@mapIndexedNotNull null
+                val parameter = (sourceType.classifier as? IrTypeParameterSymbol)?.owner
+                val bridgeType = pair.second.type
+                // A selected generic slot closes to the nominal value-class argument, not its
+                // underlying carrier. This is a body-usage obligation, not a new MethodDef:
+                // emission must check the actual open slot and its bound nominal input.
+                if (parameter?.parent === slotOwner && !sourceType.isMarkedNullable() &&
+                    bridgeType.dotNetValueClassOrNull() != null
+                ) index to bridgeType else null
+            }.toMap()
+        } else emptyMap()
         context.covariantReturnBridges += DotNetLoweredCovariantReturnBridge(
             owner = owner,
             inheritedMember = slot,
@@ -386,6 +407,7 @@ internal class DotNetCovariantReturnBridgeLowering(
             requiresNewSlotOnTarget = target.parent == owner &&
                     slot.symbol in target.overriddenSymbols &&
                     (slot.parent as? IrClass)?.isInterface != true,
+            nominalValueClassInputs = nominalValueClassInputs,
         )
     }
 

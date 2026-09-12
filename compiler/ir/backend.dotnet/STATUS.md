@@ -50,64 +50,60 @@ Current representation rules are linked from the navigation section below.
 ## Latest verification
 
 The full production-erased aggregate passed on 2026-09-12 after preserving
-Common input policies in class-slot bridges. Direct JUnit XML audit found no failures,
-errors, or skips:
+nominal generic-slot inputs and nullable value-class unboxing. Direct JUnit XML
+audit found no failures, errors, or skips:
 
 | Lane | Suites | Tests |
 | --- | ---: | ---: |
-| Backend | 23 | 409 |
+| Backend | 24 | 411 |
 | Physical CLI model | 1 | 6 |
-| Full FIR2IR, both parsers and runtimes | 187 | 2,371 |
+| Full FIR2IR, both parsers and runtimes | 187 | 2,379 |
 | CLI/library integration | 2 | 128 |
-| **Full production total** | **213** | **2,914** |
-| Focused class-slot candidate | 4 | 16 |
+| **Full production total** | **214** | **2,924** |
+| Focused nominal-input candidate | 4 | 36 |
 
-This supersedes the full checkpoint `cafb56a4e8`. The actual FIR2IR
+This supersedes the full checkpoint `b35b6f646c`. The actual FIR2IR
 Test task was explicitly rerun without filters and without the rehearsal
 property. The unchanged physical CLI dependency remained up to date; its full
 six-test XML was audited too. Candidate execution covers PSI and LightTree on
-Framework 4.8 and .NET 10. The full production corpus includes the same fixture.
+Framework 4.8 and .NET 10. The full production corpus includes all 36 focused
+fixture inverses, individually checked in the audited XML.
 
-The reproduced failure, unchanged MethodDefs, separate-assembly execution,
+The reproduced failures, unchanged MethodDefs, separate Kotlin/C# execution,
 source hashes and full gate are recorded in the
-[class-slot bridge archive](docs/archive/covariant-bridge-input-policy-2026-09-12.md).
+[nominal class-slot archive](docs/archive/nominal-class-slot-inputs-2026-09-12.md).
 Earlier bounded feature evidence remains indexed in the
 [archive](docs/archive/README.md); this full gate does not establish complete
 candidate Runtime/Stdlib closure or authorize a production generic-owner switch.
 
-The focused candidate matrix covers the repaired class-slot boundary and
-existing physical covariant slots, closed semantic inputs and C# split-result
-overrides. The nominal value-class input regression passes on all production
-lanes, but its generic class-slot parameter adaptation remains an independently
-reproduced candidate gap. It is not claimed by the 16-test candidate matrix.
-
-The current Common-authorized foreign-input feature inherits that full
-checkpoint (`b35b6f646c`). Its rehearsal-physical gate passes 48 candidate tests,
-411 backend tests and the same 48-test production inverse, with zero failures,
-errors or skips. The seven semantic source hashes match across both gates.
-Production-selected paths remain structurally unchanged. See the
-[foreign-input archive](docs/archive/generic-owner-foreign-input-barrier-2026-09-12.md)
-for the exact boundary, physical evidence and inherited checkpoint.
+The candidate matrix covers ordinary generic bases, specialized nominal
+inputs, multiple argument positions, nullable and generic value classes,
+ordinary C# overrides of natural and precise Kotlin slots, existing physical
+covariant slots, Common input barriers and split-result overrides. Nullable
+nominal-to-underlying conversion also reproduces and repairs a production bug;
+this feature therefore uses a fresh full gate, not an inherited checkpoint.
+Earlier foreign-input candidate evidence remains in the
+[foreign-input archive](docs/archive/generic-owner-foreign-input-barrier-2026-09-12.md).
 
 ## Active work
 
 Continue the source-built Runtime/Stdlib generic-owner rehearsal inside phase 1
-of the way forward. The census after `5ff1de08d0` contains 225 error lines versus
-228: the three projected-allocation failures are gone. These are diagnostics,
-not independent bugs or a completion percentage. The admitted constructor,
-array-state and fresh-allocation rules are recorded in the
+of the way forward. The latest census, on `9ada71a395`, contains 215 error
+lines versus 225 on `5ff1de08d0`; `AbstractMap` and its generated views no longer
+fail there. These are diagnostics, not independent bugs or a completion
+percentage. Rerun from the new nominal-input checkpoint before selecting the
+next complete structural boundary.
+
+Owner-admission evidence still identifies foreign semantic interface inputs,
+including `AbstractCollection.containsAll`, as unclosed. The unavailable base
+views of descendants such as `AbstractMutableMap` are downstream of admission,
+not permission to invent a base construction or bypass the MethodDef guard.
+Semantic constructor authority and typed writer provenance remain separate
+roots. The admitted constructor, array-state and fresh-allocation boundaries
+are recorded in the
 [allocation archive](docs/archive/generic-owner-projected-allocation-2026-09-11.md)
 and owning ADR. Raw public projected-array entries, broader nullable array
 state and unproved element constructions remain outside those proofs.
-
-Final owner-admission diagnostics identify `AbstractMap.get` and
-`AbstractCollection.containsAll` as unsupported foreign semantic overrides.
-Their children's unavailable generic base binders are downstream, not a reason
-to invent a base construction or another capture exception. The current slice
-closes one Common NULL-default bare-owner input on the ordinary foreign branch,
-independently of the actual object or split result layout. It does not close
-containsAll's semantic interface input. Rerun the census from this green
-checkpoint to identify the next complete structural boundary.
 
 The incoming DLL investigation isolates a missing Kotlin/foreign reference
 graph in both candidate and production: a C# MethodDef can reference a

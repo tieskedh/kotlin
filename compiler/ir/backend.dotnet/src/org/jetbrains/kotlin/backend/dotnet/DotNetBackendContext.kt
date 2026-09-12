@@ -138,6 +138,8 @@ internal data class DotNetLoweredCovariantReturnBridge(
     val target: IrSimpleFunction,
     val implementation: IrSimpleFunction,
     val requiresNewSlotOnTarget: Boolean,
+    /** Body-usage obligations; emission must bind each against the inherited physical slot. */
+    val nominalValueClassInputs: Map<Int, IrType> = emptyMap(),
 )
 
 internal data class DotNetLoweredInterfaceDefaultClassForwarder(

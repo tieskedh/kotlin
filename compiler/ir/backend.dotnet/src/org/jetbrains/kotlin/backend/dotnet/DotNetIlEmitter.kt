@@ -3900,6 +3900,17 @@ internal class DotNetIlEmitter(
             knownSlotInfo,
         )
         val slotShape = boundSlot.shape
+        for (input in bridge.nominalValueClassInputs) {
+            val index = input.key
+            val logicalValueClass = input.value
+            val openInput = boundSlot.declarationInfo.signature.parameterTypes.getOrNull(index + 1)
+            val nominalInput = typeMapper.toDotNetIlGenericArgumentType(logicalValueClass)
+            check(openInput is DotNetIlValueType.TypeParameter && !openInput.isMethodParameter &&
+                    nominalInput != null && slotShape.explicitPhysicalParameterTypes.getOrNull(index) == nominalInput
+            ) {
+                "Internal .NET backend error: nominal bridge input obligation disagrees with its bound MethodDef"
+            }
+        }
         val receiverCount = if (slotShape.hasThis) 1 else 0
         check(mappedSignature.hasThis == slotShape.hasThis &&
                 mappedSignature.methodGenericParameterCount == slotShape.methodGenericParameterCount &&

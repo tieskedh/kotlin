@@ -146,6 +146,14 @@ box. Both the produced-value classifier and return-destination adaptation use
 the signature mapper's existing generic-boundary facts. Exact source bodies
 still calculate with the underlying carrier and box only at the boundary.
 
+Nominal-to-underlying adaptation must also preserve nullable absence. If a
+nullable value class uses a nullable reference as its exact carrier, a null
+nominal input produces that same null carrier without invoking the non-null
+unbox helper. A present nominal input invokes the helper normally. The incoming
+expression is evaluated exactly once. This rule applies to ordinary calls and
+locals as well as forwarding bridges; it does not conflate a present value class
+whose underlying payload is nullable with absence of the value class itself.
+
 Masked default dispatchers are the deliberate inverse case. An omitted
 argument is accompanied by an authoritative mask bit and cannot be observed
 before the dispatcher replaces it. Its physical placeholder is the CLR zero
