@@ -60,15 +60,16 @@ audit found no failures, errors, or skips:
 | Full FIR2IR, both parsers and runtimes | 187 | 2,383 |
 | CLI/library integration | 2 | 129 |
 | **Full production total** | **214** | **2,932** |
-| Focused foreign/Kotlin result candidate | 4 | 4 |
-| Focused production-erased inverse | 4 | 4 |
+| Post-full exact override candidate proof | 4 | 4 |
+| Post-full exact override erased inverse | 4 | 4 |
 
-This supersedes the full checkpoint `2a13f45341`. The actual FIR2IR and
+Full checkpoint `3724aeab9c` supersedes `2a13f45341`. The actual FIR2IR and
 CLI integration Test tasks were explicitly rerun without filters and without
 the rehearsal property. The unchanged physical CLI dependency remained up to
 date; its full six-test XML was audited too. Candidate execution covers PSI
-and LightTree on Framework 4.8 and .NET 10. The full production corpus includes
-all four focused fixture inverses, individually checked in the audited XML.
+and LightTree on Framework 4.8 and .NET 10. The original incoming-reference
+fixture was individually checked in each full FIR suite. The later exact-
+override assertions ran separately in the focused matrix below.
 
 The reproduced reference and classifier-collision failures, unchanged foreign
 MethodDefs, separate Kotlin/C# execution, source hashes and full gate are in the
@@ -81,17 +82,25 @@ The new candidate covers consuming native and Kotlin-owned results from
 separate C# factories, ordinary C# and Kotlin implementations, same-object
 identity, owner-generic value/reference substitutions and nested results.
 CLI negatives cover use-site nullability, erased stars, stronger Kotlin bounds,
-missing dependencies and class/typealias lookalikes. Kotlin implementations of
-these foreign result slots remain a separately exposed override/state boundary.
+missing dependencies and class/typealias lookalikes.
+
+The subsequent test-only proof verifies fresh interface and nominal Kotlin
+results through the original foreign override slot, including public return
+surfaces and InterfaceMap signatures. Both four-lane candidate and erased
+inverse matrices pass. This changes no compiler, ABI, Runtime or Stdlib code
+and inherits the full checkpoint above; it does not claim that the older full
+run executed its new assertions. See the
+[exact override-result proof](docs/archive/foreign-kotlin-interface-override-results-2026-09-12.md).
+Broader object-domain state/result flows remain unclosed.
 
 ## Active work
 
 Continue the source-built Runtime/Stdlib generic-owner rehearsal inside phase 1
-of the way forward. The latest census, on `2a13f45341`, contains 215 error
-lines, unchanged from `9ada71a395` and down from 225 on `5ff1de08d0`;
+of the way forward. The latest census, on `3724aeab9c`, contains 215 error
+lines, unchanged from `2a13f45341`;
 `AbstractMap` and its generated views no longer fail there. These are
-diagnostics, not independent bugs or a completion percentage. Rerun from the
-new incoming-reference checkpoint before selecting the next complete boundary.
+diagnostics, not independent bugs or a completion percentage. The subsequent
+test-only override proof does not change that source-built compiler frontier.
 
 Owner-admission evidence still identifies foreign semantic interface inputs,
 including `AbstractCollection.containsAll`, as unclosed. The unavailable base
@@ -106,9 +115,10 @@ state and unproved element constructions remain outside those proofs.
 
 The incoming reference graph now binds the admitted public root-interface
 results of foreign MethodDefs to their existing KLIB classifiers. Physical
-Kotlin references do not become foreign declarations. Foreign inputs,
-properties, inheritance, stronger bounds and Kotlin overrides supplying these
-results remain outside this proof. See the
+Kotlin references do not become foreign declarations. Fresh exact Kotlin
+override results now have separate executable coverage, but foreign inputs,
+properties, inheritance, stronger bounds and broader override/state flows
+remain outside these proofs. See the
 [bounded result evidence](docs/archive/foreign-kotlin-interface-results-2026-09-12.md).
 Neither reference binding nor the outward contract proof justifies general
 `object -> !K` entry casts. Unclosed broad-input policies, nested inputs,

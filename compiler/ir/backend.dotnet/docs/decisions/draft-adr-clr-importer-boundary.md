@@ -466,10 +466,11 @@ TypeDef supplies stars for the logical parameters whose arguments it cannot enco
 invent a concrete Kotlin type argument. Nullable-reference annotations describe the foreign use
 site only; KLIB continues to own the referenced declaration's semantics.
 
-Admission initially applies to consuming foreign method results. It does not prove that a Kotlin
-implementation can supply that result through an override: the logical Kotlin result carrier may
-be broader than the retained foreign slot, and its existing physical-signature check must still
-reject an incompatible implementation without inventing a construction. Input positions, foreign
+Reference admission applies to consuming foreign method results. A Kotlin implementation must
+independently satisfy the retained override result contract: an already-admitted exact result
+route can fill that slot, but logical return-type compatibility alone is not physical proof.
+An object-domain result still requires a proved adapter or rejection; the existing physical-
+signature check must not invent a construction. Input positions, foreign
 inheritance and constraints containing Kotlin references remain unadmitted until their complete physical/Kotlin
 conversion and override contracts are proved. This is a complete-classifier restriction: a foreign
 interface containing such a required unsupported member is withheld, not partially imported.

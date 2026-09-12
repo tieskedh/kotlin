@@ -20347,6 +20347,23 @@ private fun validateForeignKotlinInterfaceResult(
                         mainKt.genericString(new CsGenericFactory<string>()) != null ||
                         (int)mainKt.nested(new CsNestedFactory()) != 97)
                         throw new Exception("Owner substitution, reference null, or nested result construction");
+                    if ((int)((ForeignReturn.KotlinFactory)new FreshFactory()).read().$sourceValueName() != 73 ||
+                        mainKt.freshFactoryValue() != 73)
+                        throw new Exception("Fresh Kotlin override result");
+                    if ((int)((ForeignReturn.KotlinFactory)new NominalFreshFactory()).read().$sourceValueName() != 73 ||
+                        mainKt.nominalFactoryValue() != 73)
+                        throw new Exception("Nominal Kotlin override result");
+                    var freshMethod = typeof(FreshFactory).GetMethod("read");
+                    var nominalMethod = typeof(NominalFreshFactory).GetMethod("read");
+                    if (freshMethod.ReturnType != typeof($sourceType) || nominalMethod.ReturnType != typeof(IntSource))
+                        throw new Exception("Source return surface: " + freshMethod.ReturnType + " / " + nominalMethod.ReturnType);
+                    foreach (var implementation in new[] { typeof(FreshFactory), typeof(NominalFreshFactory) })
+                    {
+                        var map = implementation.GetInterfaceMap(typeof(ForeignReturn.KotlinFactory));
+                        if (map.InterfaceMethods.Length != 1 || map.InterfaceMethods[0].Name != "read" ||
+                            map.TargetMethods[0].ReturnType != typeof($sourceType))
+                            throw new Exception("Kotlin override lost its retained foreign MethodImpl signature");
+                    }
                     return 0;
                 }
             }

@@ -14,6 +14,9 @@ Use:
 
 Archived snapshots:
 
+- [`foreign-kotlin-interface-override-results-2026-09-12.md`](foreign-kotlin-interface-override-results-2026-09-12.md)
+  distinguishes exact fresh and nominal Kotlin override results from broad
+  state, preserving public result surfaces and retained foreign interface slots.
 - [`foreign-kotlin-interface-results-2026-09-12.md`](foreign-kotlin-interface-results-2026-09-12.md)
   records authenticated Kotlin references in foreign method results, logical
   classifier ownership, executable mixed assemblies and hostile negatives.

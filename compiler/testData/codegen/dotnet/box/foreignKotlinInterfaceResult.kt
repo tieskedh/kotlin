@@ -24,4 +24,15 @@ fun genericInt(factory: ForeignReturn.GenericFactory<Int>): Any? = factory.read(
 fun genericString(factory: ForeignReturn.GenericFactory<String>): Any? = factory.read().value()
 fun nested(factory: ForeignReturn.NestedFactory): Any? = (factory.read().value() as Source<*>).value()
 
+class FreshFactory : ForeignReturn.KotlinFactory {
+    override fun read(): Source<Int> = IntSource()
+}
+
+class NominalFreshFactory : ForeignReturn.KotlinFactory {
+    override fun read(): IntSource = IntSource()
+}
+
+fun freshFactoryValue(): Int = FreshFactory().read().value()
+fun nominalFactoryValue(): Int = NominalFreshFactory().read().value()
+
 fun box(): String = "OK"
