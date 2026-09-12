@@ -20311,6 +20311,10 @@ private fun validateForeignKotlinInterfaceResult(
                 public CsFactory($sourceType source) { this.source = source; }
                 public $sourceType read() { return source; }
             }
+            public sealed class CsFieldFactory : OpenFieldFactory
+            {
+                public override $sourceType read() { return new CsSource(); }
+            }
             public sealed class CsGenericSource<T> : ${if (genericOwnerRehearsal) "Source<T>" else "Source"}
             {
                 private readonly T item;
@@ -20357,13 +20361,45 @@ private fun validateForeignKotlinInterfaceResult(
                     var nominalMethod = typeof(NominalFreshFactory).GetMethod("read");
                     if (freshMethod.ReturnType != typeof($sourceType) || nominalMethod.ReturnType != typeof(IntSource))
                         throw new Exception("Source return surface: " + freshMethod.ReturnType + " / " + nominalMethod.ReturnType);
-                    foreach (var implementation in new[] { typeof(FreshFactory), typeof(NominalFreshFactory) })
+                    foreach (var implementation in new[] {
+                        typeof(FreshFactory), typeof(NominalFreshFactory), typeof(ExactFieldFactory),
+                        typeof(FreshInterfaceFieldFactory), typeof(RelayFieldFactory), typeof(OpenFieldFactory)
+                    })
                     {
                         var map = implementation.GetInterfaceMap(typeof(ForeignReturn.KotlinFactory));
                         if (map.InterfaceMethods.Length != 1 || map.InterfaceMethods[0].Name != "read" ||
                             map.TargetMethods[0].ReturnType != typeof($sourceType))
                             throw new Exception("Kotlin override lost its retained foreign MethodImpl signature");
                     }
+                    var exactField = new ExactFieldFactory(kotlin);
+                    if (!Object.ReferenceEquals(((ForeignReturn.KotlinFactory)exactField).read(), kotlin) ||
+                        mainKt.exactFieldFactoryValue(kotlin) != 73)
+                        throw new Exception("Exact field result lost identity or physical view");
+                    var freshField = new FreshInterfaceFieldFactory();
+                    var first = ((ForeignReturn.KotlinFactory)freshField).read();
+                    if ((int)first.$sourceValueName() != 73 || !Object.ReferenceEquals(first, freshField.read()) ||
+                        mainKt.freshInterfaceFieldValue() != 73)
+                        throw new Exception("Private fresh interface field result");
+                    var relay = new RelayFieldFactory();
+                    var relayed = ((ForeignReturn.KotlinFactory)relay).read();
+                    if ((int)relayed.$sourceValueName() != 73 || relay.callCount() != 1 ||
+                        !Object.ReferenceEquals(relayed, relay.read()) || relay.callCount() != 2)
+                        throw new Exception("Broad helper input contaminated exact result or lost effects");
+                    foreach (var implementation in new[] { typeof(FreshInterfaceFieldFactory), typeof(RelayFieldFactory) })
+                    {
+                        var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+                        var field = implementation.GetField("source", flags);
+                        if (implementation.GetMethod("read").ReturnType != typeof($sourceType) ||
+                            field == null || field.FieldType != typeof($sourceType) || !field.IsPrivate)
+                            throw new Exception("Exact stored result lost its physical field or public surface");
+                    }
+                    if (mainKt.openFieldValue(new CsFieldFactory()) != 97 ||
+                        (int)((ForeignReturn.KotlinFactory)new CsFieldFactory()).read().$sourceValueName() != 97)
+                        throw new Exception("Exact result propagation bypassed an ordinary C# override");
+                    if (mainKt.checkBroadStoredResults() != "OK" ||
+                        typeof(BroadStoredResult).GetMethod("read").ReturnType != typeof(${if (genericOwnerRehearsal) "object" else "Source"}) ||
+                        typeof(MutableStoredResult).GetMethod("read").ReturnType != typeof(${if (genericOwnerRehearsal) "object" else "Source"}))
+                        throw new Exception("A broad or mutable result was narrowed to a fictitious construction");
                     return 0;
                 }
             }

@@ -1047,6 +1047,16 @@ internal class DotNetReifiedGenericInterfaceLowering(
             }
         }
 
+        fun IrType.isClosedInvariantArgument(): Boolean {
+            val type = this as? IrSimpleType ?: return false
+            if (type.classifier is IrTypeParameterSymbol) return false
+            return type.arguments.all { nested ->
+                val projection = nested as? IrTypeProjection ?: return@all false
+                projection.variance == Variance.INVARIANT &&
+                        projection.type.isClosedInvariantArgument()
+            }
+        }
+
         fun IrType.hasExactPhysicalInterfaceView(expected: IrType): Boolean {
             fun IrClass.hasNaturalPhysicalConstruction(): Boolean = when {
                 dotNetImportedClrTypeAuthorityOrNull() != null -> true
@@ -1267,6 +1277,19 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 }
                 is IrCall -> {
                     val source = resolvedGenericOwnerSource()
+                    val selected = context.genericOwnerCapabilityCallTargets[this] ?: source
+                    val exactResult = exactInterfaceDeclarationTypes[selected]
+                    if (exactResult != null && exactResult.isClosedInvariantArgument() &&
+                        exactResult.sameInvariantTypeAs(selected.returnType) &&
+                        exactResult.sameInvariantTypeAs(type) &&
+                        exactResult.hasExactPhysicalInterfaceView(expected)
+                    ) {
+                        // Transfer the selected declaration's already proven fixed result, not
+                        // the logical call type or the receiver/input's apparent construction.
+                        // Open results need binder-aware physical substitution; a semantic route
+                        // still revokes this provisional fact in the final routing closure.
+                        return true
+                    }
                     if (externalDeclarations.hasNaturalGenericOwnerFunctionReturn(source) &&
                         type.hasExactPhysicalInterfaceView(expected)
                     ) {
@@ -1595,15 +1618,6 @@ internal class DotNetReifiedGenericInterfaceLowering(
             // object entry; ordinary C# and exact Kotlin callers retain Collection<int>.
             // Keep the universal `Any?` view semantic because C# callers intentionally use it
             // as the one entry which can accept both reference and value constructions.
-            fun IrType.isClosedInvariantArgument(): Boolean {
-                val type = this as? IrSimpleType ?: return false
-                if (type.classifier is IrTypeParameterSymbol) return false
-                return type.arguments.all { nested ->
-                    val projection = nested as? IrTypeProjection ?: return@all false
-                    projection.variance == Variance.INVARIANT &&
-                            projection.type.isClosedInvariantArgument()
-                }
-            }
             return arguments.all { argument ->
                 val projection = argument as IrTypeProjection
                 projection.type.isClosedInvariantArgument() && !projection.type.isNullableAny()

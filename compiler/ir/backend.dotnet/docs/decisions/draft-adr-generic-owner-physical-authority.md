@@ -561,6 +561,17 @@ dimension and must not affect convergence.
 - A parameter read is produced from the parameter's producer-recorded storage
   carrier and entry environment.
 
+The early candidate routing scan may transfer a local declaration's already
+proven fixed interface result across an ordinary call. Its closed invariant
+construction must agree with the selected declaration and the call; the call's
+logical type alone supplies no proof. This applies equally to accessors and
+ordinary helpers, including helpers with unrelated broad inputs. An open result
+needs binder-aware physical substitution, not this fixed-result transfer.
+Selecting a semantic operation remains stronger and revokes contradicted
+provisional facts in the final routing closure. A natural result does not by
+itself prove that its object implements a Kotlin capability, nor does this
+transfer select or strengthen any field's storage.
+
 For an admitted Kotlin-owned interface, a semantic receiver does not guarantee
 a natural owner-argument vector. Its direct owner-parameter result therefore
 retains the canonical `object` carrier, even when the substituted Kotlin result

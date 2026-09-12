@@ -14,6 +14,9 @@ Use:
 
 Archived snapshots:
 
+- [`local-fixed-interface-call-results-2026-09-12.md`](local-fixed-interface-call-results-2026-09-12.md)
+  records proven fixed results through getters and ordinary calls, preserved
+  field/foreign metadata, broad-value negatives and the candidate/inverse gate.
 - [`foreign-kotlin-interface-override-results-2026-09-12.md`](foreign-kotlin-interface-override-results-2026-09-12.md)
   distinguishes exact fresh and nominal Kotlin override results from broad
   state, preserving public result surfaces and retained foreign interface slots.
