@@ -103,12 +103,20 @@ substitutions remain unclosed.
 ## Active work
 
 Continue the source-built Runtime/Stdlib generic-owner rehearsal inside phase 1
-of the way forward. The latest census, on `f132c354f5`, contains 215 error
-lines, exactly unchanged from `3724aeab9c` and `2a13f45341`;
+of the way forward. The latest census, on `bd0f943a24`, contains 215 error
+lines, exactly unchanged from `f132c354f5`, `3724aeab9c` and `2a13f45341`;
 `AbstractMap` and its generated views no longer fail there. These are
-diagnostics, not independent bugs or a completion percentage. That census
-predates the recursive-owner state repair and must be rerun before claiming
-a changed source-built frontier.
+diagnostics, not independent bugs or a completion percentage.
+
+The public natural/semantic constructor contract is the immediate architecture
+boundary. A parked experiment generated typed forwarding constructors, but a
+C# object implementing two constructions of the input interface lost its
+selected view when forwarded as object. The original admission guard is
+retained; no constructor expansion is promoted. Natural-body preservation and
+selected-view transport must be assessed, including calls, delegation and
+stored inputs, before reopening that guard. The actual failure and recoverable
+experiment are in the
+[constructor view-loss archive](docs/archive/constructor-natural-view-loss-2026-09-12.md).
 
 Owner-admission evidence still identifies foreign semantic interface inputs,
 including `AbstractCollection.containsAll`, as unclosed. The unavailable base

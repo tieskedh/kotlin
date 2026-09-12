@@ -14,6 +14,9 @@ Use:
 
 Archived snapshots:
 
+- [`constructor-natural-view-loss-2026-09-12.md`](constructor-natural-view-loss-2026-09-12.md)
+  records a rejected constructor-forwarding experiment which lost a valid
+  C# interface view, its hostile executable failure and recoverable source.
 - [`invariant-recursive-owner-state-2026-09-12.md`](invariant-recursive-owner-state-2026-09-12.md)
   records the self-admission cycle, conditional invariant binder coordinates,
   physical field/seal checks, hostile state and the candidate/inverse gates.
