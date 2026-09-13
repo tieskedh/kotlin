@@ -17,6 +17,7 @@ if (Test-Path -LiteralPath $outputPath) {
     throw 'Choose a new output directory; existing proof evidence is never overwritten.'
 }
 $source = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'fixtures\SelectedViewStorageProbe.cs'))
+$dispatchSource = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'fixtures\TargetDirectedDispatchProbe.cs'))
 $librarySource = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'fixtures\SelectedViewStorageLibrary.cs'))
 $dotnet = [IO.Path]::GetFullPath((Join-Path $DotNetDirectory 'dotnet.exe'))
 $roslyn = [IO.Path]::GetFullPath((Join-Path $DotNetDirectory 'sdk\10.0.100\Roslyn\bincore\csc.dll'))
@@ -30,7 +31,7 @@ $modernReferenceFiles = @('System.Runtime.dll', 'System.Console.dll', 'System.Re
     'System.Reflection.Extensions.dll', 'System.Threading.dll', 'System.Threading.Thread.dll', 'mscorlib.dll') | ForEach-Object {
     Join-Path $modernReferences $_
 }
-foreach ($required in @($source, $librarySource, $dotnet, $roslyn, $frameworkCompilerPath) +
+foreach ($required in @($source, $dispatchSource, $librarySource, $dotnet, $roslyn, $frameworkCompilerPath) +
     $frameworkReferenceFiles + $modernReferenceFiles) {
     if (!(Test-Path -LiteralPath $required -PathType Leaf)) {
         throw "Required proof input is unavailable: $required"
@@ -41,6 +42,9 @@ New-Item -ItemType Directory -Path $outputPath | Out-Null
 $frozenSource = Join-Path $outputPath 'SelectedViewStorageProbe.cs'
 Copy-Item -LiteralPath $source -Destination $frozenSource
 $sourceHash = (Get-FileHash -LiteralPath $frozenSource -Algorithm SHA256).Hash
+$frozenDispatchSource = Join-Path $outputPath 'TargetDirectedDispatchProbe.cs'
+Copy-Item -LiteralPath $dispatchSource -Destination $frozenDispatchSource
+$dispatchSourceHash = (Get-FileHash -LiteralPath $frozenDispatchSource -Algorithm SHA256).Hash
 $frozenLibrarySource = Join-Path $outputPath 'SelectedViewStorageLibrary.cs'
 Copy-Item -LiteralPath $librarySource -Destination $frozenLibrarySource
 $librarySourceHash = (Get-FileHash -LiteralPath $frozenLibrarySource -Algorithm SHA256).Hash
@@ -65,7 +69,7 @@ $frameworkLibraryHash = (Get-FileHash -LiteralPath $frameworkLibrary -Algorithm 
 $frameworkOutput = Join-Path $outputPath 'SelectedViewStorageProbe.net48.exe'
 Invoke-ProofTool -Executable $frameworkCompilerPath -Arguments (@(
     '/nologo', '/noconfig', '/nostdlib+', '/warnaserror+', '/target:exe',
-    "/out:$frameworkOutput", "/r:$frameworkLibrary", $frozenSource
+    "/out:$frameworkOutput", "/r:$frameworkLibrary", $frozenSource, $frozenDispatchSource
 ) + @($frameworkReferenceFiles | ForEach-Object { "/r:$_" })) -LogName 'net48-compile.log' | Out-Null
 @'
 <?xml version="1.0" encoding="utf-8"?>
@@ -82,7 +86,7 @@ $modernLibraryHash = (Get-FileHash -LiteralPath $modernLibrary -Algorithm SHA256
 $modernOutput = Join-Path $outputPath 'SelectedViewStorageProbe.net10.dll'
 Invoke-ProofTool -Executable $dotnet -Arguments (@(
     $roslyn, '/nologo', '/noconfig', '/nostdlib+', '/warnaserror+', '/target:exe',
-    "/out:$modernOutput", "/r:$modernLibrary", $frozenSource
+    "/out:$modernOutput", "/r:$modernLibrary", $frozenSource, $frozenDispatchSource
 ) + @($modernReferenceFiles | ForEach-Object { "/r:$_" })) -LogName 'net10-compile.log' | Out-Null
 @'
 {"runtimeOptions":{"tfm":"net10.0","framework":{"name":"Microsoft.NETCore.App","version":"10.0.0"},"rollForward":"LatestPatch"}}
@@ -91,7 +95,9 @@ $modernResult = Invoke-ProofTool -Executable $dotnet -Arguments @($modernOutput)
 
 foreach ($result in @($frameworkResult, $modernResult)) {
     foreach ($assertion in @('PASS: stored selections,*', 'PASS: separate generic DLL,*',
-        'PASS: object boundary preserves receiver*', 'PASS: locked whole-pair storage;*')) {
+        'PASS: object boundary preserves receiver*', 'PASS: locked whole-pair storage;*',
+        'PASS: native target without exact row;*', 'PASS: exact native target wins;*',
+        'PASS: child interface reimplementation;*', 'PASS: bounded producer-only hypothesis;*')) {
         if (@($result | Where-Object { $_ -like $assertion }).Count -ne 1) {
             throw "A zero-exit run did not report the complete proof assertions: $assertion"
         }
@@ -99,6 +105,7 @@ foreach ($result in @($frameworkResult, $modernResult)) {
 }
 foreach ($inputCheck in @(
     @{ Paths = @($source, $frozenSource); Hash = $sourceHash },
+    @{ Paths = @($dispatchSource, $frozenDispatchSource); Hash = $dispatchSourceHash },
     @{ Paths = @($librarySource, $frozenLibrarySource); Hash = $librarySourceHash },
     @{ Paths = @($frameworkLibrary); Hash = $frameworkLibraryHash },
     @{ Paths = @($modernLibrary); Hash = $modernLibraryHash }
@@ -113,6 +120,7 @@ $frameworkInstallation = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\NET Framewor
 [ordered]@{
     kind = 'standalone-clr-feasibility-only'
     sourceSha256 = $sourceHash
+    dispatchSourceSha256 = $dispatchSourceHash
     librarySourceSha256 = $librarySourceHash
     net48LibrarySha256 = $frameworkLibraryHash
     net10LibrarySha256 = $modernLibraryHash
@@ -123,6 +131,7 @@ $frameworkInstallation = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\NET Framewor
     net10 = [string[]]$modernResult
     installedModernRuntimes = [string[]](& $dotnet --list-runtimes)
     exclusions = @('Kotlin integration and identity lowering', 'Kotlin generic storage ABI', 'ABI freeze',
-        'volatile/lock-free storage', 'Any selection-preserving round trip', 'trimming/NativeAOT', 'performance')
+        'volatile/lock-free storage', 'Any selection-preserving round trip', 'Kotlin-owned conflicting-family policy',
+        'multi-member/input-dependent semantic dispatch', 'trimming/NativeAOT', 'performance')
 } | ConvertTo-Json -Depth 5 | Out-File -LiteralPath (Join-Path $outputPath 'verification.json') -Encoding utf8
 Write-Output "PASS: net48-target and net10 selected-view storage proof; evidence: $outputPath"

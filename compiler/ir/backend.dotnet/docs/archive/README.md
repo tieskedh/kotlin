@@ -14,6 +14,9 @@ Use:
 
 Archived snapshots:
 
+- [`target-directed-interface-dispatch-research-2026-09-13.md`](target-directed-interface-dispatch-research-2026-09-13.md)
+  distinguishes exact rows, supported native targets and Kotlin semantic routes,
+  with new cross-profile dispatch proofs and independent generic-storage limits.
 - [`selected-interface-selection-contract-2026-09-13.md`](selected-interface-selection-contract-2026-09-13.md)
   separates coherent Kotlin dispatch from native and conflicting foreign views,
   with a separate-library JVM baseline and unchanged cross-profile CLR evidence.

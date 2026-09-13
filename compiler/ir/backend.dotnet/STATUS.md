@@ -102,36 +102,36 @@ substitutions remain unclosed.
 
 ## Active work
 
-Continue the source-built Runtime/Stdlib generic-owner rehearsal inside phase 1
-of the way forward. The latest census, on `bd0f943a24`, contains 215 error
+The source-built Runtime/Stdlib generic-owner rehearsal remains inside phase 1
+of the way forward, but the census is paused at the architecture boundary below.
+The latest census, on `bd0f943a24`, contains 215 error
 lines, exactly unchanged from `f132c354f5`, `3724aeab9c` and `2a13f45341`;
 `AbstractMap` and its generated views no longer fail there. These are
 diagnostics, not independent bugs or a completion percentage.
 
-Preserving selected interface views through semantic calls and storage is the
-immediate architecture boundary. Natural constructor bodies passed direct and
-local-delegation subcases, but external delegation and a later read of an
-object-stored interface still lost selection on an ordinary C# dual-interface
-object. The original constructor admission guard remains; neither experiment
-is promoted. The
+Operation-directed interface dispatch and independent generic-state composition
+are the immediate architecture boundaries. The
 [selected-view transport candidate](docs/decisions/draft-adr-selected-interface-view-transport.md)
-is authorized for bounded investigation, not general storage or compiler ABI.
-Its standalone CLR probe now covers a separately compiled generic container,
-raw-object selection loss, boxing identity and lock-protected whole-pair
-storage on net48-target/CLR4 and .NET 10. These are mechanism proofs, not Kotlin
-`Any`/identity lowering, general generic-state composition, volatile semantics
-or performance evidence. The
-[selection-contract review](docs/archive/selected-interface-selection-contract-2026-09-13.md)
-now separates coherent Kotlin dispatch, target-directed native CLR views and
-the unresolved conflicting foreign implementation of a Kotlin-owned family.
-A separate-library JVM baseline verifies ordinary generic/`Any` forwarding and
-rejects the inconsistent Kotlin supertype graph. Do not add historical selection
-to every Kotlin value. Investigate target-directed foreign behavior before
-compound compiler storage, without changing admission or accepting a new interop
-restriction. Nested physical generic-state composition remains open. See the
-[boundary evidence](docs/archive/selected-interface-view-boundaries-2026-09-12.md)
-and earlier
-[constructor/storage investigation](docs/archive/selected-interface-view-storage-2026-09-12.md).
+remains experimental, not an admitted storage ABI. The broader
+[dispatch/storage research](docs/archive/target-directed-interface-dispatch-research-2026-09-13.md)
+supports a production-inert operation-contract model before compound storage.
+It distinguishes exact interface rows, valid native variant targets and
+Kotlin-only semantic views. Native dispatch can remain valid with multiple
+variant sources; conflicting foreign implementations of Kotlin-owned families
+still require an explicit interop policy. Neither target-priority policy is
+accepted by the research.
+
+The extended standalone CLR probe passes eight assertion groups on net48-target/
+serviced CLR4 and .NET 10, including no-exact-row native calls and C# interface
+reimplementation with original effects/exceptions. The separate-library JVM
+baseline now covers direct exact/wide/star operations and bottom producers in
+reference-looking nested state. These are mechanism and Common-precedent proofs,
+not new Kotlin/.NET compiler integration, performance or deployment gates; they
+do not increase the inherited full-test count. Current compiler admission,
+Runtime/Stdlib and schemas remain unchanged. Both
+[constructor experiments](docs/archive/selected-interface-view-storage-2026-09-12.md)
+remain parked with their original guard. Existing C# allocations, open generic
+factories and broad mutable writes remain hard storage/interop proof boundaries.
 
 Owner-admission evidence still identifies foreign semantic interface inputs,
 including `AbstractCollection.containsAll`, as unclosed. The unavailable base

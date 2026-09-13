@@ -271,6 +271,7 @@ public static class SelectedViewStorageProbe
         CheckSeparateStorage(dual, objectView, intView);
         CheckObjectBoundary(dual, objectView, intView);
         CheckCoherentStorage();
+        TargetDirectedDispatchProbe.Run();
         Console.WriteLine("PASS: stored selections, same receiver, typed independent fields, joins, rejected forged views; runtime=" + Environment.Version);
         return 0;
     }

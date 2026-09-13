@@ -7,6 +7,10 @@ package selection.contract
 
 interface Producer<out T> { fun read(): T }
 
+fun readExact(value: Producer<Int>): Int = value.read()
+fun readWide(value: Producer<Any>): Any = value.read()
+fun readStar(value: Producer<*>): Any? = value.read()
+
 class Box<T>(var value: T)
 
 class ObjectBox<T>(initial: T) {

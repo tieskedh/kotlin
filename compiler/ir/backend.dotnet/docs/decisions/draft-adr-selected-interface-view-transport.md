@@ -223,6 +223,50 @@ adding a foreign-route restriction needs a deliberate interop decision and
 Kotlin/C# hostile tests. Keep existing admission guards meanwhile. A whole
 foreign library/class rejection is not an acceptable shortcut to that decision.
 
+### Operation-directed investigation boundary
+
+Distinguish three facts: an exact implemented construction, a native target
+supported through valid CLR variance, and a Kotlin-compatible view which the
+CLR cannot represent. A supported native target need not have an identical
+interface row; several variant source constructions do not invalidate that
+native call. Bind its retained interface MethodDef and let CLR interface
+dispatch select the implementation. Do not apply a Kotlin-semantic uniqueness
+filter to an already valid native operation.
+
+For conflicting foreign implementations of a Kotlin-owned family, exact-row
+priority and native-supported-target priority are different proposed policies.
+A receiver implementing both `Producer<int>` and `Producer<string>` has no
+exact object row, yet supports the native object target through its string
+construction. Giving that native target priority can choose string instead
+of reporting multiple Kotlin-compatible candidates. Neither priority is
+accepted here, nor may it override a coherent Kotlin family's contract.
+
+Any operation-directed model must retain the authenticated logical family,
+target/projection intent, physical MethodDef, invocation kind, substitutions,
+independent input policies and result layout. The target intent never proves
+membership. Logical variance must come from producer/KLIB authority when the
+natural physical interface has weakened variance. Current selected lineage
+can reflect an established native conversion; it is not immutable history.
+
+Choose the receiver's implementation before applying runtime argument checks.
+Do not select whichever construction accepts the current broad candidate or
+try user methods to discover an answer. Preserve actual interface reimplementation
+in foreign subclasses; an inherited capability or one construction alone does
+not prove that a base implementation is the correct target.
+
+The independent storage test must include **already allocated** foreign
+`Box<Producer<object>>` objects as well as Kotlin allocations and separately
+compiled generic factories. A compatible logical value cannot be stored in
+an incompatible frozen field. Choosing a broader actual argument for a new
+construction is an unaccepted ABI option, not permission to reinterpret an
+existing object or erase unrelated `!T` fields. A broad state field also does
+not make every natural typed getter result representable.
+
+The [operation-directed research](../archive/target-directed-interface-dispatch-research-2026-09-13.md)
+records the counterexamples, bounded mechanisms, proposed minimal operation
+contract and independent storage limits. It does not admit a new compiler
+route, change `Any`, or settle conflicting-foreign dispatch.
+
 ### Identity and universal operations
 
 Generated `===` on reference-valued selected operands must compare receivers,
