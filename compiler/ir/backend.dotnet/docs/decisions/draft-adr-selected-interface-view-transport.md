@@ -267,6 +267,14 @@ records the counterexamples, bounded mechanisms, proposed minimal operation
 contract and independent storage limits. It does not admit a new compiler
 route, change `Any`, or settle conflicting-foreign dispatch.
 
+The subsequent production-inert
+[native operation-target model](draft-adr-generic-owner-physical-authority.md#7-late-operation-routing)
+distinguishes a conversion from the current source from independently proved
+target membership. It leaves value/storage facts, default routing and compiler
+admission unchanged. This is executable analysis of retained native interfaces,
+not acceptance of either conflicting-Kotlin-family priority policy or the pair
+candidate.
+
 ### Identity and universal operations
 
 Generated `===` on reference-valued selected operands must compare receivers,

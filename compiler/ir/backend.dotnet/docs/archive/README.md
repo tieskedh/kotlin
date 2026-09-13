@@ -14,6 +14,9 @@ Use:
 
 Archived snapshots:
 
+- [`native-interface-operation-target-2026-09-13.md`](native-interface-operation-target-2026-09-13.md)
+  records the production-inert native operation-target query, conversion versus
+  membership proofs, unchanged storage and focused model verification.
 - [`target-directed-interface-dispatch-research-2026-09-13.md`](target-directed-interface-dispatch-research-2026-09-13.md)
   distinguishes exact rows, supported native targets and Kotlin semantic routes,
   with new cross-profile dispatch proofs and independent generic-storage limits.

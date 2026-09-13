@@ -40,7 +40,10 @@ Production remains on erased owners while the rehearsal prefers natural CLR-
 generic declarations and uses semantic capabilities only where the CLR cannot
 truthfully name the Kotlin view.
 
-Resume the source-built Runtime/Stdlib census now, inside this phase. Each real
+Advance the source-built Runtime/Stdlib census inside this phase once the owning
+operation and storage contracts are established. At an unresolved representation
+boundary, first close bounded architecture proofs; a successful dispatch proof
+alone does not establish storage or public-interop composition. Each real census
 failure may add only a structural rule derived from:
 
 - Kotlin IR/KLIB logical authority;

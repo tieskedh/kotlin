@@ -63,6 +63,7 @@ audit found no failures, errors, or skips:
 | Post-full recursive-state candidate matrix | 4 | 48 |
 | Post-full recursive-state backend model gate | 24 | 414 |
 | Post-full recursive-state erased inverse | 4 | 48 |
+| Post-full native operation-target backend model gate | 24 | 420 |
 
 Full checkpoint `3724aeab9c` supersedes `2a13f45341`. The actual FIR2IR and
 CLI integration Test tasks were explicitly rerun without filters and without
@@ -100,6 +101,15 @@ and [exact override-result proof](docs/archive/foreign-kotlin-interface-override
 remain separately verified. Broader object-domain state and open result
 substitutions remain unclosed.
 
+The production-inert native operation-target query passed all 420 backend
+model tests on 2026-09-13, including six new retained-foreign tests, with no
+failures, errors or skips. It changes no selected IR, emission, storage or
+runtime route and inherits the full checkpoint above. This is not a fresh
+full-target run; the current FIR XML still contains the previously parked
+constructor experiment's focused failure. The exact delta scope, source
+hashes and test evidence are in the
+[operation-target archive](docs/archive/native-interface-operation-target-2026-09-13.md).
+
 ## Active work
 
 The source-built Runtime/Stdlib generic-owner rehearsal remains inside phase 1
@@ -114,12 +124,15 @@ are the immediate architecture boundaries. The
 [selected-view transport candidate](docs/decisions/draft-adr-selected-interface-view-transport.md)
 remains experimental, not an admitted storage ABI. The broader
 [dispatch/storage research](docs/archive/target-directed-interface-dispatch-research-2026-09-13.md)
-supports a production-inert operation-contract model before compound storage.
-It distinguishes exact interface rows, valid native variant targets and
-Kotlin-only semantic views. Native dispatch can remain valid with multiple
-variant sources; conflicting foreign implementations of Kotlin-owned families
-still require an explicit interop policy. Neither target-priority policy is
-accepted by the research.
+supports operation contracts before compound storage. The production-inert
+native query now distinguishes a reference conversion from the current source
+from independently proved target membership. It binds the requested retained
+interface MethodDef without changing receiver facts or storage; native targets
+can be valid with multiple variant sources and without an exact interface row.
+Emitter integration and coherent Kotlin semantic-family routing are still
+unclosed. Conflicting foreign implementations of Kotlin-owned families require
+an explicit interop policy; neither researched target-priority policy is
+accepted.
 
 The extended standalone CLR probe passes eight assertion groups on net48-target/
 serviced CLR4 and .NET 10, including no-exact-row native calls and C# interface

@@ -1221,8 +1221,8 @@ authorized natural call; no `Source<object>` construction is fabricated.
 
 For an imported CLR MethodDef, retained metadata selects the MethodDef and its
 physical owner family but does not by itself select a receiver construction.
-The bounded foreign route chooses that construction only from the receiver's
-existing value fact, in this order:
+Without an explicit operation target, the bounded foreign route chooses that
+construction only from the receiver's existing value fact, in this order:
 
 1. selected lineage for the retained owner family;
 2. the receiver's verifier-visible direct carrier when it constructs that
@@ -1232,11 +1232,36 @@ existing value fact, in this order:
    view of the family is the zero-edge case.
 
 Zero candidates, or multiple candidates without an existing selector, are
-`Unavailable`. The operation query does not accept a desired foreign
-construction from its caller, so a logical Kotlin type cannot manufacture one.
-Lineage remains only a selector over guaranteed views. Following an authenticated
-physical edge selects an operation receiver; it does not add that derived view to
-the value's provenance.
+`Unavailable`. Lineage remains only a selector over guaranteed views. Following
+an authenticated physical edge selects an operation receiver; it does not add
+that derived view to the value's provenance.
+
+The production-inert retained-native-interface query additionally accepts an
+explicit target as an operation-scoped **proof goal**, not receiver evidence:
+
+- `ReferenceConversion` authenticates the current selected/direct/unique source
+  above and requires identity or a retained CLR reference-variance conversion
+  from that source. Another implemented sibling cannot repair an invalid
+  conversion from the selected source. This is not yet a general class-to-
+  interface assignment query.
+- `CheckedMembership` asks whether existing physical facts independently prove
+  target membership. It neither inserts a runtime check nor assumes that an
+  unchecked object cast has succeeded. An exact guaranteed target or a valid
+  native variant source can prove membership; several supporting sources do
+  not make the already valid native target ambiguous.
+
+Both forms require the retained interface MethodDef's own physical family and
+use the common route's authenticated target, MethodSpec, constraint, argument
+and result validation. They select the target **interface MethodDef**, not an
+implementation body. CLR interface dispatch remains responsible for body
+selection and foreign reimplementation. The receiver's produced carrier,
+guaranteed views and lineage remain unchanged, as does every storage slot.
+Neither a caller-authored target nor logical Kotlin variance can manufacture
+physical membership. The default query is unchanged, and no emitter consumes
+the new target forms. They do not admit Kotlin-only value-type widening,
+conflicting foreign implementations of Kotlin-owned families, or a compound
+selected-value ABI. See the
+[bounded operation-target evidence](../archive/native-interface-operation-target-2026-09-13.md).
 
 Once provenance plus the recorded closure independently proves the selected
 view, the operation query mints a non-forgeable, operation-scoped physical-view
