@@ -14,6 +14,9 @@ Use:
 
 Archived snapshots:
 
+- [`selected-interface-selection-contract-2026-09-13.md`](selected-interface-selection-contract-2026-09-13.md)
+  separates coherent Kotlin dispatch from native and conflicting foreign views,
+  with a separate-library JVM baseline and unchanged cross-profile CLR evidence.
 - [`selected-interface-view-boundaries-2026-09-12.md`](selected-interface-view-boundaries-2026-09-12.md)
   records separate generic storage, raw-object information loss, boxing identity
   and an explicit lock-based pair protocol without admitting a compiler ABI.

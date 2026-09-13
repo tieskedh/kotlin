@@ -68,27 +68,79 @@ the chosen storage layout, not the layout of an earlier initializer. Aliases,
 joins, inlining and generated captures need ordinary dataflow evidence, not
 names, origins, packages or collection recognizers.
 
-## Preserve, establish, and discard are distinct operations
+## Observable selection contract
 
-The following is the candidate's investigation contract, not a new Kotlin
-language rule:
+First distinguish three domains. They must not acquire a common rule merely
+because the CLR probe uses the same `ISource<T>` spelling.
 
-| Transition | Required treatment |
+1. **Coherent Kotlin family.** One well-formed logical implementation and its
+   override/bridge family. Kotlin's [supertype consistency rule][kotlin-types]
+   excludes inheriting the same generic classifier with different arguments,
+   including covariant arguments. The shared FIR checker and existing
+   `GenericArgumentConsistency.kt` diagnostic corpus enforce this rule.
+   This does not mean there is only one implemented interface on an object,
+   or that compiler-generated physical bridges are extra logical supertypes.
+2. **Imported native CLR family.** Retained metadata and the selected native
+   interface contract own dispatch. Distinct constructed interfaces can have
+   distinct implementations under [CLR interface mapping][clr-interfaces].
+   [Native variance][clr-variance] is reference-only; the accepted importer
+   decision already rejects Kotlin-only value/open variance at this boundary.
+3. **Foreign implementation of a Kotlin-owned family with conflicting
+   constructions.** C# can express this physical graph, but Kotlin cannot
+   declare its direct equivalent. Common semantics alone therefore do not
+   specify which conflicting implementation a widened Kotlin view denotes.
+   This is an unresolved interop extension, not evidence that every Kotlin
+   value has a historical selector. It is also not permission to reject an
+   entire existing foreign library or every multi-interface class.
+
+“Preserve” below means preserving the receiver and the selected logical
+operation/override family, including effects and exception behavior. It does
+not require successive calls on mutable objects to return equal results, nor
+override ordinary overload resolution. A physical selector is necessary only
+if distinct permitted dispatch choices cannot otherwise be recovered.
+
+| Transition | Required contract and subsequent dispatch |
 | --- | --- |
-| Assignment, copy, forwarding, property storage or capture of an already selected value within a selection-carrying contract | Preserve receiver and witness together, including through mutable replacement and joins. |
-| Kotlin widening which is defined to retain the selected operation | Preserve that selection; never replace it with an arbitrary implemented construction. |
-| Entry through a genuine natural CLR signature | Establish the view selected by that physical signature, under its recorded Kotlin operation policy. Do not infer a previous view. |
-| Native CLR interface conversion | Respect the actual target CLR interface and dispatch rules; a reference-variance conversion is not automatically a promise to retain the source interface's dispatch choice. |
-| Explicit new selection from a raw object plus a target view | Check that target physically exists and is logically permitted. Success establishes a new selection, not recovery of lost history. |
-| Raw `Any`/`Any?` or unchanged foreign `object` transport | The accepted carrier contains only the original receiver. Identity can survive; extra selection does not. Whether a later operation may establish a new view must be decided independently. |
-| Boxing the compound carrier | Transports its bits but creates a different object identity. Not an implementation of reference upcast to Kotlin `Any`. |
+| Same-view assignment, pure forwarding, capture, or unchanged ordinary property storage | **Preserve.** Copying an interface value does not select a different member family. An exact native `ISource<int>` alias still calls its int slot. A custom accessor's declared behavior remains authoritative. |
+| Kotlin-owned `Producer<Int> -> Producer<Any>` | **Preserve the Kotlin family.** A coherent int producer still executes its int-producing implementation; widen the result if necessary. No `Producer<object>` construction is invented. The conflicting foreign case below is not settled by this rule. |
+| Native CLR `ISource<string> -> ISource<object>` | **Establish the target native view.** On a receiver with distinct exact implementations the target object slot may differ from the source string slot. Keeping historical string dispatch would change the native operation. |
+| Separate `Box<T>` storing and returning its value | **Preserve the logical stored value.** This obligation is independent of compilation units and of whether the library internally uses `T` or `Any?` plus a correct `as T`. An actual `Box<SelectedReference>` CLR experiment proves neither Kotlin's generic construction choice nor its natural C# API. |
+| Mutable local/container replacement and joins | **Preserve the chosen incoming value**, not a selector remembered from a previous write. Static facts join without fabricating a shared construction. No object-global selector mutation is permitted. |
+| Reference interface value converted to `Any` or `Any?` | **Preserve the receiver; historical interface selection is unavailable in the accepted carrier.** `Any` operations observe the original receiver. A later cast/type test follows its own target contract. The coherent Kotlin family remains recoverable without remembering the path taken to `Any`. |
+| Non-reified `genericErase<T>(x): Any?` | The same receiver requirement applies when `T` is instantiated with a reference interface value. Boxing a compiler pair is not a transparent implementation. Local knowledge at a concrete caller cannot redefine an independently compiled generic body. |
+| Concrete explicit `as` / `as?`, including after `Any` or a foreign object call | **Establish/check the requested target**, not reconstruct a previous path. Native targets use real CLR membership. Kotlin-owned targets use the accepted classifier/BK-1 rules and may remain semantic when ordinary Kotlin variance has no CLR construction. On mismatch, preserve the respective exception/null outcome. |
+| Non-reified `as T` inside generic forwarding | The operation has only its declared generic contract, not a newly invented concrete interface target. It cannot recover a lost per-value selection merely because the caller once knew one. Do not assume every cast is an explicit, fully determined reselection. |
+| `as Producer<*>`, `as? Producer<*>`, or `is Producer<*>` | Classifier/star behavior remains authoritative. A star does not mean `Producer<object>`. Coherent-family calls use that family; a conflicting foreign receiver can pass a classifier check without that check selecting one of its distinct implementations. |
+| Parameterized checks within BK-1 | Use the existing compatibility predicate, including Kotlin variance; BK-1 does not select an arbitrary implementation. Compatibility and invocation selection are separate questions. A predicate hit is not proof that a later broad invocation is unambiguous. |
+| Unchanged C# `object Echo(object)` | **Preserve the receiver; no historical selector is returned.** A later concrete native cast establishes its target view. A Kotlin star/widened return still needs the logical family or an explicit interop policy, not guessed history. |
 
-In particular, no optimization may silently substitute “establish” for
-“preserve” because the chosen storage loses the witness. If the operation
-requires preservation and the endpoint cannot carry it, the candidate is
-unavailable at that boundary. Keep the existing owner/route admission guard;
-do not turn an internal limitation into an undocumented restriction on Common
-code or ordinary C# libraries.
+These rules settle coherent Kotlin and admitted native CLR cases, but they do
+not silently settle conflicting foreign implementations of Kotlin-owned
+interfaces. No optimization may substitute “establish” for required
+“preserve”, or vice versa. Recomputing a coherent family's operation from the
+receiver is not loss of behavior; selecting a different conflicting foreign
+body can be.
+
+### The distinguishing dual receiver
+
+For `Dual : Producer<object>, Producer<int>` with different implementations:
+
+- In the native CLR domain, same-view aliases, exact containers and casts to
+  the exact int view invoke the int slot; the object counterparts invoke the
+  object slot. `object` roundtrips preserve identity but not previous selection.
+- If this is a **Kotlin-owned** `Producer`, requiring a Kotlin widening from
+  the selected int view to keep invoking int is one possible interop policy.
+  Selecting an existing exact target object view is another, observably
+  different policy. Neither is implied by the source-illegal Kotlin `Dual`
+  declaration, by `===`, or by the fact that one implementation is faster.
+- A star exposes no exact argument vector. If no producer-authoritative
+  canonical family or unique policy-valid route exists, its subsequent call
+  remains outside current admission. Do not convert that ambiguity into a
+  false classifier test or choose the first InterfaceImpl row.
+
+Retained native interfaces are not made semantic to accommodate the third
+domain. Conversely, their reference-only variance restriction is not applied
+to ordinary Kotlin-owned `Producer<Int> -> Producer<Any>`.
 
 ### The raw-object information limit
 
@@ -105,16 +157,71 @@ No deterministic reconstruction based on that reference alone can recover both
 original selections. A global per-object selector, interface enumeration order,
 or an assumption that there is only one simultaneous view cannot fix this.
 
-The accepted `System.Object` foundation is not amended here. Do not silently
-change Kotlin-only `Any` storage either: that would also affect generic calls,
-fields, reflection and separate compilation. Before compiler integration,
-classify actual Kotlin casts, tests, assignments and generic forwarding through
-`Any` from the logical/interop contract. A cast with a definite target may be a
-new-selection operation, but a star or widened target need not identify one
-physical construction. BK-1 is not permission to choose an arbitrary view or
-weaken valid Kotlin variance. If an unavoidable contract requires both raw-object
-interop and preserved historical selection, this candidate cannot satisfy it
-under the current invariants; record that result instead of adding hidden ABI.
+The [cast specification][kotlin-casts] describes checking against a requested
+target, not recovering a historical interface selection. Its generic safe-cast
+rules and the separately accepted BK-1 exception still govern success; they do
+not supply a conflicting foreign object's dispatch policy. The accepted
+`System.Object` foundation is not amended here. If an added interop guarantee
+requires both unchanged raw-object transport and preservation of two distinct
+historical selections, this candidate cannot satisfy it under the current
+invariants. Record that result instead of adding hidden ABI.
+
+### Why generic storage is not automatically a local repair
+
+These ordinary generic implementations also belong in the contract:
+
+```kotlin
+fun <T> genericErase(value: T): Any? = value
+
+@Suppress("UNCHECKED_CAST")
+fun <T> throughObject(value: T): T {
+    val stored: Any? = value
+    return stored as T
+}
+```
+
+For coherent Kotlin reference values they preserve identity and the logical
+implementation without extra view state. An `ObjectBox<T>` can use the same
+storage technique. If the target adds historical selection as part of an
+arbitrary `T` value's meaning, these helpers must handle it too: either the
+`Any?` transition intentionally ends that guarantee under an explicit contract,
+or it must transport more information. Ordinary struct boxing retains the pair
+but violates reference identity observable through `genericErase`.
+
+Therefore a promise to preserve selection through every generic container is
+not justified by showing only `Box<SelectedReference>`. Requiring it through
+every `Any`, generic body and unchanged object API is not a bounded local ABI.
+Solving ambiguous selection also does not solve the independent problem of
+fitting a coherent `Producer<int>` into a physical `Producer<object>` nested
+field. That generic-state construction question remains open.
+
+### Recommendation before storage design
+
+**GO for contract/model investigation; NOT YET for compound compiler storage.**
+Do not add historical view selection to the meaning of all Kotlin references.
+Prefer recoverable Kotlin-family authority for coherent implementations and
+ordinary target-directed native CLR contracts. This preserves the existing
+`Any` root and keeps witness transport from becoming an unjustified universal
+requirement.
+
+The next decision for conflicting foreign implementations of Kotlin-owned
+families is explicit, not an emitter optimization:
+
+- **Target-directed proposal:** a permitted conversion can select a real exact
+  target view; otherwise it requires producer-authoritative semantic dispatch
+  or a unique policy-valid route. This can avoid historical selection, but
+  would allow a widened call to use a different conflicting implementation.
+  Stars and multiple compatible constructions still need a specified outcome.
+- **History-preserving proposal:** a widened selected view keeps its source
+  implementation. This requires transport through every boundary that promises
+  preservation, with explicit limits at raw object and unconstrained generic
+  boundaries. A pair alone does not close that contract.
+
+Investigate the first proposal before broadening the value model. It is **not
+accepted or implemented here**: changing existing selected-view behavior or
+adding a foreign-route restriction needs a deliberate interop decision and
+Kotlin/C# hostile tests. Keep existing admission guards meanwhile. A whole
+foreign library/class rejection is not an acceptable shortcut to that decision.
 
 ### Identity and universal operations
 
@@ -201,3 +308,8 @@ reflection calls are not a speedup claim or the selected dispatch algorithm.
 
 Proceed with bounded experiments; **not yet** with general compiler storage,
 public ABI, a blanket interop restriction, or the next stdlib blocker.
+
+[kotlin-types]: https://kotlinlang.org/spec/type-system.html#parameterized-classifier-types
+[kotlin-casts]: https://kotlinlang.org/spec/expressions.html#cast-expressions
+[clr-interfaces]: https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/language-specification/interfaces#1965-interface-mapping
+[clr-variance]: https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/language-specification/interfaces#19233-variance-conversion

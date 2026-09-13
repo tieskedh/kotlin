@@ -120,9 +120,15 @@ Its standalone CLR probe now covers a separately compiled generic container,
 raw-object selection loss, boxing identity and lock-protected whole-pair
 storage on net48-target/CLR4 and .NET 10. These are mechanism proofs, not Kotlin
 `Any`/identity lowering, general generic-state composition, volatile semantics
-or performance evidence. Resolve preservation versus new selection at `Any`
-and unchanged C# boundaries before compiler integration; keep admission guards
-and the erased production ABI unchanged. See the
+or performance evidence. The
+[selection-contract review](docs/archive/selected-interface-selection-contract-2026-09-13.md)
+now separates coherent Kotlin dispatch, target-directed native CLR views and
+the unresolved conflicting foreign implementation of a Kotlin-owned family.
+A separate-library JVM baseline verifies ordinary generic/`Any` forwarding and
+rejects the inconsistent Kotlin supertype graph. Do not add historical selection
+to every Kotlin value. Investigate target-directed foreign behavior before
+compound compiler storage, without changing admission or accepting a new interop
+restriction. Nested physical generic-state composition remains open. See the
 [boundary evidence](docs/archive/selected-interface-view-boundaries-2026-09-12.md)
 and earlier
 [constructor/storage investigation](docs/archive/selected-interface-view-storage-2026-09-12.md).
