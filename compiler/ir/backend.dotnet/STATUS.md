@@ -115,14 +115,24 @@ not need the new model query to do so. Coherent Kotlin semantic-family dispatch
 now executes through bottom producers, separate forwarding, `Any`/star recovery
 and `ValueBox<Any>`, while independently proved fields and natural C# results
 remain typed. The subsequent
-[nested-storage counterexamples](docs/archive/nested-bottom-storage-2026-09-24.md)
-reproduce invalid CLR casts both in a separate box factory and on a later write
-to an already allocated exact box. Both unchanged probes pass the erased
-inverse on both parsers/runtimes; their source is archived, not left in the
-active corpus. A broader construction/public surface and the treatment of
-existing narrow C# containers require an explicit interop decision before
-integration. Neither global state erasure nor pair transport follows from
-this result. Conflicting foreign implementations of
+[storage-cycle evidence](docs/archive/generic-owner-storage-cycle-2026-09-24.md)
+now exercises separate generic factories, another Kotlin library and ordinary
+C# readers/allocations. All four parser/runtime pairs agree: scalar and broad
+allocation paths work, but narrow bottom stores fail before dispatch and an
+existing narrow C# box cannot enter the broad writer. An open nested writer
+also exposes a separate implementation gap. The earlier
+[constructor/write counterexamples](docs/archive/nested-bottom-storage-2026-09-24.md)
+remain reproduced. These are archived negative experiments, not a new green
+candidate checkpoint; compiler and production ABI are unchanged. Investigate
+CONSTRAIN/hybrid boundaries before a broader GO: no complete admission subset
+or replacement contract has yet been proved. Broader public surfaces and the
+treatment of existing narrow C# containers require an explicit interop decision.
+Neither global state erasure nor pair transport follows from these results.
+Exploratory measurements of actual emitted products show scalar gains and fewer
+allocations on the passing overlap, but roughly fivefold slower broad paths on
+Framework despite gains on .NET 10. These are not whole-application results;
+compiler time/memory and complete-contract costs remain unmeasured.
+Conflicting foreign implementations of
 Kotlin-owned families require an explicit interop policy; neither researched
 target-priority policy is accepted.
 

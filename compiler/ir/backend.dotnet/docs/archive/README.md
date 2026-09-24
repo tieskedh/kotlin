@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-storage-cycle-2026-09-24.md`](generic-owner-storage-cycle-2026-09-24.md)
+  records separately compiled factories/writers and ordinary C# observations,
+  passing broad/scalar paths, narrow-storage failures and public-contract
+  limits, without admitting a replacement representation.
 - [`nested-bottom-storage-2026-09-24.md`](nested-bottom-storage-2026-09-24.md)
   preserves separate constructor/later-write reproducers for coherent bottom
   values in typed nested state and distinguishes the remaining interop choice

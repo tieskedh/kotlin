@@ -1,0 +1,163 @@
+// Instantiated only from the frozen exported ordinary C# surface by the paired driver.
+using System;
+using System.Diagnostics;
+using System.Globalization;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using storage.cycle;
+using BroadBox = __BROAD_BOX__;
+using IntView = __INT_VIEW__;
+using StringView = __STRING_VIEW__;
+
+public static class StorageCycleMeasurement
+{
+    sealed class State
+    {
+        internal readonly IntProducer Integers = new IntProducer();
+        internal readonly StringProducer Strings = new StringProducer("mixed");
+        internal object LastBox;
+    }
+
+    static readonly Func<long> AllocatedBytes = AllocationCounter();
+
+    static Func<long> AllocationCounter()
+    {
+        var method = typeof(GC).GetMethod("GetAllocatedBytesForCurrentThread", BindingFlags.Public | BindingFlags.Static);
+        return method == null ? null : (Func<long>)Delegate.CreateDelegate(typeof(Func<long>), method);
+    }
+
+    static void Require(bool condition, string message)
+    {
+        if (!condition) throw new Exception(message);
+    }
+
+    // No reflection, assertions, timing or allocation instrumentation in these loops.
+    // Every iteration makes one new box; producers are shared only within one sample.
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    static long Scalar(int iterations, State state)
+    {
+        long checksum = 0;
+        for (int index = 0; index < iterations; index++)
+        {
+            var box = writersKt.makeInt();
+            var alias = box;
+            checksum += (int)alias.read();
+            writersKt.__WRITE_SCALAR__(box);
+            checksum += (int)alias.read();
+            state.LastBox = alias;
+        }
+        return checksum;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    static long Broad(int iterations, State state, bool nested)
+    {
+        long checksum = 0;
+        for (int index = 0; index < iterations; index++)
+        {
+            // The validation before timing proves the producer's actual construction.
+            BroadBox box = nested
+                ? (BroadBox)(object)writersKt.makeNestedBroad(state.Integers)
+                : (BroadBox)(object)writersKt.makeBroad(state.Integers);
+            var alias = box;
+            checksum += (int)((IntView)alias.read()).__PRODUCE__();
+            writersKt.__WRITE_STRING__(box, state.Strings);
+            checksum += ((string)((StringView)alias.read()).__PRODUCE__()).Length;
+            writersKt.__WRITE_INT__(box, state.Integers);
+            checksum += (int)((IntView)alias.read()).__PRODUCE__();
+            state.LastBox = alias;
+        }
+        return checksum;
+    }
+
+    static long Work(string scenario, int iterations, State state)
+    {
+        return scenario == "scalar" ? Scalar(iterations, state) : Broad(iterations, state, scenario == "nested");
+    }
+
+    static void Validate(string scenario)
+    {
+        if (scenario == "scalar")
+        {
+            var box = writersKt.makeInt();
+            var alias = box;
+            Require((int)alias.read() == 17, "scalar initializer");
+            writersKt.__WRITE_SCALAR__(box);
+            Require(Object.ReferenceEquals(box, alias) && (int)alias.read() == 29, "scalar alias/write");
+        }
+        else
+        {
+            var state = new State();
+            object allocated = scenario == "nested"
+                ? (object)writersKt.makeNestedBroad(state.Integers) : writersKt.makeBroad(state.Integers);
+            Require(allocated.GetType() == typeof(BroadBox), "factory returned a different physical construction");
+            var fields = allocated.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public |
+                BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+            Require(fields.Length == 1 && fields[0].IsPrivate && fields[0].Name == "value" &&
+                fields[0].FieldType == typeof(object), "broad box is not one object field");
+            var box = (BroadBox)allocated;
+            var alias = box;
+            Require(Object.ReferenceEquals(alias.read(), state.Integers), "initial receiver");
+            Require((int)((IntView)alias.read()).__PRODUCE__() == 73, "initial natural Int view");
+            writersKt.__WRITE_STRING__(box, state.Strings);
+            Require(Object.ReferenceEquals(alias.read(), state.Strings), "replacement String receiver");
+            Require((string)((StringView)alias.read()).__PRODUCE__() == "mixed", "natural String view");
+            writersKt.__WRITE_INT__(box, state.Integers);
+            Require(Object.ReferenceEquals(alias.read(), state.Integers), "replacement Int receiver");
+            Require((int)((IntView)alias.read()).__PRODUCE__() == 73, "replacement natural Int view");
+            Require(Object.ReferenceEquals(box, alias) && state.Integers.callCount() == 2 &&
+                state.Strings.callCount() == 1, "receiver/effects changed");
+        }
+        var proof = new State();
+        Require(Work(scenario, 3, proof) == (scenario == "scalar" ? 46L : 151L) * 3, "small-loop checksum");
+        CheckAfter(scenario, 3, proof);
+    }
+
+    static void CheckAfter(string scenario, int iterations, State state)
+    {
+        if (scenario == "scalar")
+        {
+            Require((int)((__SCALAR_BOX__)state.LastBox).read() == 29, "last scalar state");
+            Require(state.Integers.callCount() == 0 && state.Strings.callCount() == 0, "unexpected scalar effects");
+        }
+        else
+        {
+            Require(Object.ReferenceEquals(((BroadBox)state.LastBox).read(), state.Integers), "last box/element identity");
+            Require(state.Integers.callCount() == 2 * iterations && state.Strings.callCount() == iterations,
+                "timed-loop effect counts");
+        }
+    }
+
+    public static int Main(string[] args)
+    {
+        try
+        {
+            Require(args.Length == 3, "usage: scalar|broad|nested iterations warmup");
+            string scenario = args[0];
+            Require(scenario == "scalar" || scenario == "broad" || scenario == "nested", "unknown scenario");
+            int iterations = int.Parse(args[1], CultureInfo.InvariantCulture);
+            int warmup = int.Parse(args[2], CultureInfo.InvariantCulture);
+            Require(iterations > 0 && iterations <= 100000000 && warmup > 0 && warmup <= 100000000, "iteration bound");
+            Validate(scenario);
+            var warm = new State();
+            Require(Work(scenario, warmup, warm) == (scenario == "scalar" ? 46L : 151L) * warmup, "warmup checksum");
+            CheckAfter(scenario, warmup, warm);
+            var state = new State();
+            GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
+            long before = AllocatedBytes == null ? 0 : AllocatedBytes();
+            long started = Stopwatch.GetTimestamp();
+            long checksum = Work(scenario, iterations, state);
+            long ticks = Stopwatch.GetTimestamp() - started;
+            long allocated = AllocatedBytes == null ? -1 : AllocatedBytes() - before;
+            Require(checksum == (scenario == "scalar" ? 46L : 151L) * iterations, "timed checksum");
+            CheckAfter(scenario, iterations, state);
+            double milliseconds = ticks * 1000.0 / Stopwatch.Frequency;
+            Console.WriteLine("RESULT|__EPOCH__|" + scenario + "|" + iterations + "|" + checksum + "|" +
+                milliseconds.ToString("R", CultureInfo.InvariantCulture) + "|" +
+                (AllocatedBytes == null ? "unavailable" : allocated.ToString(CultureInfo.InvariantCulture)) + "|" +
+                state.Integers.callCount() + "|" + state.Strings.callCount() + "|" + Environment.Version + "|" + IntPtr.Size);
+            return 0;
+        }
+        catch (Exception failure) { Console.Error.WriteLine(failure); return 1; }
+    }
+}
