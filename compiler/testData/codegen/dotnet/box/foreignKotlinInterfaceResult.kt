@@ -25,6 +25,46 @@ package foreign.result.kotlin
 
 fun primitive(factory: ForeignReturn.PrimitiveFactory): Int = factory.read()
 fun native(factory: ForeignReturn.NativeFactory): Int = factory.read().value()
+fun nativeString(source: ForeignReturn.NativeProducer<String>): String = source.read()
+fun nativeObject(source: ForeignReturn.NativeProducer<Any>): Any = source.read()
+fun nativeInt(source: ForeignReturn.NativeProducer<Int>): Int = source.read()
+
+fun nativeWidened(source: ForeignReturn.NativeProducer<String>): Any {
+    val wide: ForeignReturn.NativeProducer<Any> = source
+    return wide.read()
+}
+
+fun nativeAfterObject(source: ForeignReturn.NativeProducer<String>): Any {
+    val opaque: Any = source
+    return (opaque as ForeignReturn.NativeProducer<Any>).read()
+}
+
+fun nativeCheckedObject(value: Any): Any = (value as ForeignReturn.NativeProducer<Any>).read()
+
+fun nativeSafeWidened(source: ForeignReturn.NativeProducer<String>?): ForeignReturn.NativeProducer<Any>? =
+    source as? ForeignReturn.NativeProducer<Any>
+
+fun nativeSafeExactInt(source: ForeignReturn.NativeProducer<Int>?): ForeignReturn.NativeProducer<Int>? =
+    source as? ForeignReturn.NativeProducer<Int>
+
+fun nativeSafeFromProvider(provider: ForeignReturn.NativeProducerProvider): ForeignReturn.NativeProducer<Any>? =
+    provider.get() as? ForeignReturn.NativeProducer<Any>
+
+fun nativeSameReceiver(source: ForeignReturn.NativeProducer<String>, expected: Any): Boolean {
+    val wide: ForeignReturn.NativeProducer<Any> = source
+    val opaque: Any = wide
+    return source === expected && wide === expected && opaque === expected
+}
+
+fun nativeSameFailure(source: ForeignReturn.NativeProducer<Int>, expected: Any): Boolean {
+    try {
+        source.read()
+    } catch (failure: Throwable) {
+        return failure === expected
+    }
+    return false
+}
+
 fun kotlinSource(source: Source<Int>): Int = source.value()
 fun owned(factory: ForeignReturn.KotlinFactory): Any? = factory.read().value()
 fun identity(factory: ForeignReturn.KotlinFactory, source: Any): Boolean = factory.read() === source

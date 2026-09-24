@@ -26408,6 +26408,65 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "${profile.target} foreign CLR interface calls",
             )
 
+            // Source-proved native safe upcasts do not admit arbitrary membership checks,
+            // unrelated constructed targets, or Kotlin-only value-type covariance.
+            val rejectedSafeCastCases = listOf(
+                Triple("Unknown", "Any?", "String"),
+                Triple("Unrelated", "Producer<String>?", "Int"),
+                Triple("ValueVariance", "Producer<Int>?", "Any"),
+            )
+            for ([caseName, inputType, targetArgument] in rejectedSafeCastCases) {
+                val source = applicationDirectory.resolve("rejectedNativeSafeCast$caseName.kt").apply {
+                    writeText(
+                        """
+                        package rejected
+
+                        import ForeignCallContracts.Producer
+
+                        public fun rejected(value: $inputType): Producer<$targetArgument>? =
+                            value as? Producer<$targetArgument>
+                        """.trimIndent(),
+                    )
+                }
+                for (useLightTree in listOf(false, true)) {
+                    val parserSuffix = if (useLightTree) "LightTree" else "Psi"
+                    val moduleName = "RejectedNativeSafeCast$caseName$parserSuffix"
+                    val output = applicationDirectory.resolve("rejected-native-safe-$caseName-$parserSuffix")
+                    val [diagnostics, exitCode] = AbstractCliTest.executeCompilerGrabOutput(
+                        K2DotNetCompiler(),
+                        listOf(
+                            source.path,
+                            K2DotNetCompilerArguments::noStdlib.cliArgument,
+                            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+                            K2DotNetCompilerArguments::classpath.cliArgument,
+                            listOf(fixtureAssembly, profile.systemReference)
+                                .joinToString(File.pathSeparator, transform = File::getPath),
+                            K2DotNetCompilerArguments::dotNetTarget.cliArgument, profile.target,
+                            K2DotNetCompilerArguments::moduleName.cliArgument, moduleName,
+                            K2DotNetCompilerArguments::destination.cliArgument, output.path,
+                            "-Xuse-fir-lt=$useLightTree",
+                        ),
+                    )
+                    assertEquals(
+                        ExitCode.COMPILATION_ERROR, exitCode,
+                        "An unproved native safe cast was accepted for ${profile.target}/$parserSuffix/$caseName:\n$diagnostics",
+                    )
+                    assertTrue("type operator SAFE_CAST" in diagnostics) {
+                        "The intended unsupported safe-cast boundary was not reached for " +
+                                "${profile.target}/$parserSuffix/$caseName:\n$diagnostics"
+                    }
+                    assertFalse(output.resolve("$moduleName.dll").exists()) {
+                        "An unproved native safe cast published a library: $output"
+                    }
+                    val rejectedIl = output.resolve("$moduleName.il")
+                    if (rejectedIl.isFile) {
+                        assertFalse("'rejected" in rejectedIl.readText()) {
+                            "An unproved native safe cast emitted an admitted method: $rejectedIl"
+                        }
+                    }
+                }
+            }
+
             val splitConsumer = applicationDirectory.resolve("splitProperty.kt").apply {
                 writeText(
                     """

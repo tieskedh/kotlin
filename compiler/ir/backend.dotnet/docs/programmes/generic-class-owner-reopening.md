@@ -65,8 +65,9 @@ this programme.
 
 The schema-22 declaration/value/operation/state consolidation is complete; its
 bounded grammar and evidence are indexed by the
-[archive](../archive/README.md). The source-built Runtime/Stdlib rehearsal
-census now resumes. Work proceeds in this order:
+[archive](../archive/README.md). Before resuming the source-built Runtime/Stdlib
+census, close the operation-dispatch and independent storage-contract boundaries
+identified in [current status](../../STATUS.md). Then proceed in this order:
 
 1. **Recompute the next complete source closure.** Compile it in candidate and
    erased-inverse modes and let the first real failure select the next general

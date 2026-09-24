@@ -49,66 +49,38 @@ Current representation rules are linked from the navigation section below.
 
 ## Latest verification
 
-The full production-erased aggregate passed on 2026-09-12 after binding
-Kotlin-owned interface results in foreign CLR signatures. Direct JUnit XML
-audit found no failures, errors, or skips:
+The full production-erased gate completed on 2026-09-24 after verifying real
+retained-native interface operations and repairing source-proved safe upcasts.
+Direct JUnit XML audit found no failures, errors, or skips:
 
 | Lane | Suites | Tests |
 | --- | ---: | ---: |
-| Backend | 24 | 414 |
+| Backend | 24 | 420 |
 | Physical CLI model | 1 | 6 |
 | Full FIR2IR, both parsers and runtimes | 187 | 2,383 |
 | CLI/library integration | 2 | 129 |
-| **Full production total** | **214** | **2,932** |
-| Post-full recursive-state candidate matrix | 4 | 48 |
-| Post-full recursive-state backend model gate | 24 | 414 |
-| Post-full recursive-state erased inverse | 4 | 48 |
-| Post-full native operation-target backend model gate | 24 | 420 |
+| **Full production total** | **214** | **2,938** |
+| Native-operation candidate matrix | 4 | 4 |
 
-Full checkpoint `3724aeab9c` supersedes `2a13f45341`. The actual FIR2IR and
-CLI integration Test tasks were explicitly rerun without filters and without
-the rehearsal property. The unchanged physical CLI dependency remained up to
-date; its full six-test XML was audited too. Candidate execution covers PSI
-and LightTree on Framework 4.8 and .NET 10. The original incoming-reference
-fixture was individually checked in each full FIR suite. The later exact-
-override assertions ran separately in the focused matrix below.
+The unfiltered FIR2IR run passed on 2026-09-13 before the requested OS-switch
+pause. Its semantic source hashes and all 187 XML files were verified unchanged
+on resumption; that completed run was not repeated. Backend and unfiltered
+CLI/library integration passed on 2026-09-24. The unchanged physical CLI model
+remained up to date and its six-test XML was audited. Both full invocations
+omit the rehearsal property. This replaces full checkpoint `3724aeab9c`;
+it is not a claim that every dependency freshly executed on the same day.
 
-The reproduced reference and classifier-collision failures, unchanged foreign
-MethodDefs, separate Kotlin/C# execution, source hashes and full gate are in the
-[foreign/Kotlin result archive](docs/archive/foreign-kotlin-interface-results-2026-09-12.md).
-Earlier bounded feature evidence remains indexed in the
-[archive](docs/archive/README.md); this full gate does not establish complete
+Candidate and erased execution cover PSI and LightTree on Framework 4.8 and
+.NET 10. The native operations use actual separate C# implementations, typed
+MethodDefs, same-object identity, call effects and original exceptions. CLI
+negatives retain the unknown/unrelated/value-variance safe-cast boundaries.
+The four fixture inverses and the affected CLI test were individually audited.
+See the [native call evidence](docs/archive/native-interface-operation-calls-2026-09-13.md)
+for commands, pinned inputs, the pause/resume boundary and exact coverage.
+
+Earlier bounded candidate evidence remains indexed in the
+[archive](docs/archive/README.md). This full gate does not establish complete
 candidate Runtime/Stdlib closure or authorize a production generic-owner switch.
-
-The new candidate covers consuming native and Kotlin-owned results from
-separate C# factories, ordinary C# and Kotlin implementations, same-object
-identity, owner-generic value/reference substitutions and nested results.
-CLI negatives cover use-site nullability, erased stars, stronger Kotlin bounds,
-missing dependencies and class/typealias lookalikes.
-
-The latest repair resolves a self-admission cycle in invariant recursive-owner
-state. Its matrix verifies typed recursive fields, reordered binders, nullable
-and value-class substitutions, separate Kotlin/C# consumers, broad-writer
-negatives and an unchanged covariant boundary. The new rule is explicitly
-rehearsal-only; production mapping, ABI, Runtime and Stdlib are unchanged.
-It inherits the full checkpoint above without claiming that the older full
-run executed the new assertions. Source hashes match all three delta gates.
-See the
-[recursive-state evidence](docs/archive/invariant-recursive-owner-state-2026-09-12.md).
-The preceding
-[fixed call-result repair](docs/archive/local-fixed-interface-call-results-2026-09-12.md)
-and [exact override-result proof](docs/archive/foreign-kotlin-interface-override-results-2026-09-12.md)
-remain separately verified. Broader object-domain state and open result
-substitutions remain unclosed.
-
-The production-inert native operation-target query passed all 420 backend
-model tests on 2026-09-13, including six new retained-foreign tests, with no
-failures, errors or skips. It changes no selected IR, emission, storage or
-runtime route and inherits the full checkpoint above. This is not a fresh
-full-target run; the current FIR XML still contains the previously parked
-constructor experiment's focused failure. The exact delta scope, source
-hashes and test evidence are in the
-[operation-target archive](docs/archive/native-interface-operation-target-2026-09-13.md).
 
 ## Active work
 
@@ -129,19 +101,23 @@ native query now distinguishes a reference conversion from the current source
 from independently proved target membership. It binds the requested retained
 interface MethodDef without changing receiver facts or storage; native targets
 can be valid with multiple variant sources and without an exact interface row.
-Emitter integration and coherent Kotlin semantic-family routing are still
-unclosed. Conflicting foreign implementations of Kotlin-owned families require
-an explicit interop policy; neither researched target-priority policy is
-accepted.
+The existing native emitter is now execution-tested against those operation
+targets; it already binds the requested retained interface MethodDef and does
+not need the new model query to do so. Coherent Kotlin semantic-family dispatch
+through bottom producers, forwarding and generic/object storage is the next
+bounded execution proof. Conflicting foreign implementations of Kotlin-owned
+families require an explicit interop policy; neither researched target-priority
+policy is accepted.
 
 The extended standalone CLR probe passes eight assertion groups on net48-target/
 serviced CLR4 and .NET 10, including no-exact-row native calls and C# interface
 reimplementation with original effects/exceptions. The separate-library JVM
 baseline now covers direct exact/wide/star operations and bottom producers in
 reference-looking nested state. These are mechanism and Common-precedent proofs,
-not new Kotlin/.NET compiler integration, performance or deployment gates; they
-do not increase the inherited full-test count. Current compiler admission,
-Runtime/Stdlib and schemas remain unchanged. Both
+not themselves Kotlin/.NET compiler integration, performance or deployment
+gates; they do not increase the full-test count. The subsequent native-call
+feature admits only source-proved safe upcasts; broader native casts remain
+unclosed. Runtime/Stdlib and schemas remain unchanged. Both
 [constructor experiments](docs/archive/selected-interface-view-storage-2026-09-12.md)
 remain parked with their original guard. Existing C# allocations, open generic
 factories and broad mutable writes remain hard storage/interop proof boundaries.

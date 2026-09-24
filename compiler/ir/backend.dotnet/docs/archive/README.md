@@ -14,6 +14,9 @@ Use:
 
 Archived snapshots:
 
+- [`native-interface-operation-calls-2026-09-13.md`](native-interface-operation-calls-2026-09-13.md)
+  records actual retained native Kotlin/C# calls, source-proved safe upcasts,
+  hostile implementation dispatch and the corresponding verification scope.
 - [`native-interface-operation-target-2026-09-13.md`](native-interface-operation-target-2026-09-13.md)
   records the production-inert native operation-target query, conversion versus
   membership proofs, unchanged storage and focused model verification.

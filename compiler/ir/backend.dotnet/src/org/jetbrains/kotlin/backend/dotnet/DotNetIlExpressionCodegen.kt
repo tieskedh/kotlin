@@ -1456,6 +1456,9 @@ internal class DotNetIlExpressionCodegen(
      *   `castclass`/`isinst` shape. This is kept
      *   deliberately narrower than [isDotNetReferenceShaped]: imported CLR generic instances
      *   remain reified, while mapped exception relationships require their classifier.
+     * - SAFE_CAST to a retained native generic reference carrier whose conversion is already
+     *   physically proved: evaluate once at that target, preserving null and identity. No runtime
+     *   generic-argument check is introduced; an unknown or incompatible source stays unsupported.
      * - CAST/SAFE_CAST to one of the eight Common primitive scalars: test/unbox only the exact
      *   CLR box selected by the scalar ABI. A checked nullable cast uses `unbox.any Nullable<T>`;
      *   a safe cast first changes a wrong object to null with `isinst System.<T>`, then uses the
@@ -1895,6 +1898,10 @@ internal class DotNetIlExpressionCodegen(
             val isErasedGenericInterfaceCast =
                 typeMapper.isErasedGenericInterfaceType(expression.typeOperand) &&
                         castType is DotNetIlValueType.UserClass
+            val isProvenNativeSafeUpcast = expression.operator == IrTypeOperator.SAFE_CAST &&
+                    castType is DotNetIlValueType.GenericInstance &&
+                    typeMapper.isRetainedForeignClrClassInfo(castType.classInfo) &&
+                    operandType.isDotNetReferenceShaped() && operandType.isDotNetAssignableTo(castType)
             val isPhysicallyExactReferenceCast = when (castType) {
                 DotNetIlValueType.Object,
                 DotNetIlValueType.String,
@@ -1905,7 +1912,8 @@ internal class DotNetIlExpressionCodegen(
                 // Kotlin generic-owner casts were handled above through their Kotlin-aware
                 // construction predicate and object carrier. A remaining imported CLR generic
                 // retains its ordinary constructed throwing-cast behavior.
-                is DotNetIlValueType.GenericInstance -> expression.operator == IrTypeOperator.CAST
+                is DotNetIlValueType.GenericInstance ->
+                    expression.operator == IrTypeOperator.CAST || isProvenNativeSafeUpcast
                 else -> false
             }
             if (!isErasedGenericInterfaceCast && !isPhysicallyExactReferenceCast) {
@@ -1916,6 +1924,12 @@ internal class DotNetIlExpressionCodegen(
                     "type operator ${expression.operator} produces ${castType.nameInSignature} " +
                             "where ${expectedType.nameInSignature} is expected"
                 )
+            }
+            if (isProvenNativeSafeUpcast) {
+                // Retain source recovery/effects before the ordinary native upcast. Physical
+                // incompatibility is not permission to return null for an unchecked generic cast.
+                emitExpression(expression.argument, castType)
+                return
             }
             emitExpression(expression.argument, DotNetIlValueType.Object)
             if (methodContext.isTerminated) return

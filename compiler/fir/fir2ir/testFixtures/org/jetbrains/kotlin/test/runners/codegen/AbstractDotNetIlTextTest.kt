@@ -20278,6 +20278,38 @@ private fun validateForeignKotlinInterfaceResult(
     directory.mkdirs()
     producer.copyTo(directory.resolve(producer.name), overwrite = true)
     if (producesLibrary) return
+    val nativeIl = producer.resolveSibling("${producer.nameWithoutExtension}.il").readText()
+    val nativeMethodStarts = Regex("(?m)^\\s*\\.method\\b").findAll(nativeIl).map { it.range.first }.toList()
+    val nativeMethodWindows = nativeMethodStarts.mapIndexed { index, start ->
+        nativeIl.substring(start, nativeMethodStarts.getOrElse(index + 1) { nativeIl.length })
+    }
+    fun nativeMethod(name: String): String = checkNotNull(nativeMethodWindows.singleOrNull { window ->
+        "'$name'(" in window.substringBefore('{')
+    }) { "Missing native operation MethodDef '$name'" }
+    for ([name, argument] in listOf(
+        "nativeString" to "string", "nativeObject" to "object", "nativeInt" to "int32",
+        "nativeWidened" to "object", "nativeAfterObject" to "object", "nativeCheckedObject" to "object",
+    )) {
+        val method = nativeMethod(name)
+        val calls = method.lineSequence().filter { "callvirt" in it && "::'read'(" in it }.toList()
+        // A platform result asserted non-null may still construct its failure exception.
+        val allocations = method.lineSequence().filter { "newobj" in it }.toList()
+        check(calls.size == 1 && "NativeProducer`1'<$argument>" in calls.single() &&
+                "instance !0" in calls.single() && "InvokeRecordedMember" !in method &&
+                allocations.all { "System.NullReferenceException::.ctor()" in it }) {
+            "Native operation '$name' lost its typed retained interface call:\n$method"
+        }
+        if (name == "nativeInt") check("box int32" !in method) { "Exact native result was boxed:\n$method" }
+    }
+    for (name in listOf("nativeSafeWidened", "nativeSafeExactInt", "nativeSafeFromProvider")) {
+        val method = nativeMethod(name)
+        check("isinst" !in method && "castclass" !in method && "newobj" !in method) {
+            "A source-proved native safe cast introduced a runtime check or allocation:\n$method"
+        }
+    }
+    check(nativeMethod("nativeSafeFromProvider").lineSequence().count { "::'get'(" in it } == 1) {
+        "Native safe upcast must evaluate its provider once"
+    }
     val producerIdentity = DotNetClrMetadataReader.read(producer).identity.name
     producer.copyTo(directory.resolve("$producerIdentity.dll"), overwrite = true)
     producer.parentFile.resolve("ForeignReturn.dll").copyTo(directory.resolve("ForeignReturn.dll"), overwrite = true)
@@ -20333,10 +20365,157 @@ private fun validateForeignKotlinInterfaceResult(
                     return new CsGenericSource<$sourceType>(new CsSource());
                 }
             }
+            public sealed class NativeDual : ForeignReturn.NativeProducer<string>, ForeignReturn.NativeProducer<object>
+            {
+                public int StringCalls;
+                public int ObjectCalls;
+                string ForeignReturn.NativeProducer<string>.read() { StringCalls++; return "native string"; }
+                object ForeignReturn.NativeProducer<object>.read() { ObjectCalls++; return "native object"; }
+            }
+            public sealed class NativeIntOnly : ForeignReturn.NativeProducer<int>
+            {
+                public int Calls;
+                public int read() { Calls++; return 41; }
+            }
+            public sealed class NativeProvider : ForeignReturn.NativeProducerProvider
+            {
+                public ForeignReturn.NativeProducer<string> Source;
+                public int Calls;
+                public ForeignReturn.NativeProducer<string> get() { Calls++; return Source; }
+            }
+            public abstract class NativeVariantState
+            {
+                public int Calls;
+                public readonly string Text = "variant string";
+                public readonly string[] Items = new[] { "variant array" };
+            }
+            public sealed class NativeStringFirst : NativeVariantState,
+                ForeignReturn.NativeProducer<string>, ForeignReturn.NativeProducer<string[]>
+            {
+                string ForeignReturn.NativeProducer<string>.read() { Calls++; return Text; }
+                string[] ForeignReturn.NativeProducer<string[]>.read() { Calls++; return Items; }
+            }
+            public sealed class NativeArrayFirst : NativeVariantState,
+                ForeignReturn.NativeProducer<string[]>, ForeignReturn.NativeProducer<string>
+            {
+                string[] ForeignReturn.NativeProducer<string[]>.read() { Calls++; return Items; }
+                string ForeignReturn.NativeProducer<string>.read() { Calls++; return Text; }
+            }
+            public class NativeBase : ForeignReturn.NativeProducer<int>
+            {
+                public int BaseCalls;
+                public virtual int read() { BaseCalls++; return 31; }
+            }
+            public sealed class NativeChild : NativeBase, ForeignReturn.NativeProducer<int>
+            {
+                public int InterfaceCalls;
+                public bool Fail;
+                public readonly Exception Failure = new InvalidOperationException("native interface failure");
+                int ForeignReturn.NativeProducer<int>.read()
+                {
+                    InterfaceCalls++;
+                    if (Fail) throw Failure;
+                    return 47;
+                }
+            }
             public static class MixedConsumer
             {
+                private static void CheckNativeVariant(NativeVariantState receiver)
+                {
+                    int constructions = 0;
+                    foreach (Type view in receiver.GetType().GetInterfaces())
+                    {
+                        if (view == typeof(ForeignReturn.NativeProducer<object>))
+                            throw new Exception("No-row native probe accidentally declares the target");
+                        if (view.IsGenericType && view.GetGenericTypeDefinition() == typeof(ForeignReturn.NativeProducer<>))
+                            constructions++;
+                    }
+                    if (constructions != 2) throw new Exception("Native variant graph changed");
+                    var source = (ForeignReturn.NativeProducer<string>)receiver;
+                    ForeignReturn.NativeProducer<object> target = source;
+                    object expected = target.read();
+                    if (receiver.Calls != 1 || !Object.ReferenceEquals(source, target))
+                        throw new Exception("Direct CLR target changed receiver or effects");
+                    // The CLR owns the winner when several reference constructions support
+                    // this target. Kotlin must issue that operation, not remember source history.
+                    if (!Object.ReferenceEquals(mainKt.nativeWidened(source), expected) || receiver.Calls != 2 ||
+                        !Object.ReferenceEquals(mainKt.nativeAfterObject(source), expected) || receiver.Calls != 3 ||
+                        !Object.ReferenceEquals(mainKt.nativeCheckedObject(receiver), expected) || receiver.Calls != 4 ||
+                        !mainKt.nativeSameReceiver(source, receiver) || receiver.Calls != 4)
+                        throw new Exception("Kotlin native target differs from CLR target without an exact interface row");
+                }
+
+                private static void CheckNativeOperations()
+                {
+                    var dual = new NativeDual();
+                    if (mainKt.nativeString(dual) != "native string" || dual.StringCalls != 1 ||
+                        !mainKt.nativeObject(dual).Equals("native object") || dual.ObjectCalls != 1 ||
+                        !mainKt.nativeWidened(dual).Equals("native object") || dual.ObjectCalls != 2 ||
+                        !mainKt.nativeAfterObject(dual).Equals("native object") || dual.ObjectCalls != 3 ||
+                        !mainKt.nativeCheckedObject(dual).Equals("native object") || dual.ObjectCalls != 4 ||
+                        !mainKt.nativeSameReceiver(dual, dual) || dual.StringCalls != 1 || dual.ObjectCalls != 4)
+                        throw new Exception("Kotlin native operation retained the historical interface instead of its target");
+                    var safe = mainKt.nativeSafeWidened(dual);
+                    if (!Object.ReferenceEquals(safe, dual) || !safe.read().Equals("native object") ||
+                        dual.ObjectCalls != 5 || dual.StringCalls != 1 || mainKt.nativeSafeWidened(null) != null)
+                        throw new Exception("Source-proved nullable native covariance changed identity or target dispatch");
+                    var only = new NativeIntOnly();
+                    var provider = new NativeProvider { Source = dual };
+                    if (!Object.ReferenceEquals(mainKt.nativeSafeFromProvider(provider), dual) || provider.Calls != 1)
+                        throw new Exception("Native safe upcast changed producer evaluation or identity");
+                    provider.Source = null;
+                    if (mainKt.nativeSafeFromProvider(provider) != null || provider.Calls != 2)
+                        throw new Exception("Native safe upcast changed producer null or evaluation count");
+                    if (mainKt.nativeInt(only) != 41 || only.Calls != 1 ||
+                        typeof(ForeignReturn.NativeProducer<object>).IsInstanceOfType(only))
+                        throw new Exception("Exact native value construction changed");
+                    bool rejected = false;
+                    try { mainKt.nativeCheckedObject(only); }
+                    catch (InvalidCastException) { rejected = true; }
+                    if (!rejected || only.Calls != 1)
+                        throw new Exception("A throwing native cast fabricated value-type covariance or invoked the source");
+                    var exact = mainKt.nativeSafeExactInt(only);
+                    if (!Object.ReferenceEquals(exact, only) || exact.read() != 41 || only.Calls != 2 ||
+                        mainKt.nativeSafeExactInt(null) != null)
+                        throw new Exception("Source-proved nullable exact native value view changed identity");
+                    CheckNativeVariant(new NativeStringFirst());
+                    CheckNativeVariant(new NativeArrayFirst());
+
+                    var child = new NativeChild();
+                    if (((NativeBase)child).read() != 31 || mainKt.nativeInt(child) != 47 ||
+                        child.BaseCalls != 1 || child.InterfaceCalls != 1)
+                        throw new Exception("Kotlin bypassed the child interface reimplementation");
+                    child.Fail = true;
+                    Exception failure = null;
+                    try { mainKt.nativeInt(child); }
+                    catch (Exception caught) { failure = caught; }
+                    if (!Object.ReferenceEquals(failure, child.Failure) ||
+                        !mainKt.nativeSameFailure(child, child.Failure) ||
+                        child.InterfaceCalls != 3 || child.BaseCalls != 1)
+                        throw new Exception("Kotlin native dispatch changed effects, exception identity or catch behavior");
+
+                    var declaration = typeof(ForeignReturn.NativeProducer<>).GetMethod("read");
+                    if (declaration == null || !declaration.IsAbstract ||
+                        !declaration.ReturnType.IsGenericParameter || declaration.ReturnType.GenericParameterPosition != 0 ||
+                        declaration.GetParameters().Length != 0)
+                        throw new Exception("Native interface MethodDef lost its typed declaration");
+                    foreach (var entry in new[] {
+                        new { Name = "nativeString", Argument = typeof(ForeignReturn.NativeProducer<string>), Result = typeof(string) },
+                        new { Name = "nativeObject", Argument = typeof(ForeignReturn.NativeProducer<object>), Result = typeof(object) },
+                        new { Name = "nativeInt", Argument = typeof(ForeignReturn.NativeProducer<int>), Result = typeof(int) },
+                        new { Name = "nativeWidened", Argument = typeof(ForeignReturn.NativeProducer<string>), Result = typeof(object) }
+                    })
+                    {
+                        var method = typeof(mainKt).GetMethod(entry.Name);
+                        if (method == null || method.ReturnType != entry.Result ||
+                            method.GetParameters().Length != 1 || method.GetParameters()[0].ParameterType != entry.Argument)
+                            throw new Exception("Native Kotlin entry changed its declared physical surface: " + entry.Name);
+                    }
+                }
+
                 public static int Main()
                 {
+                    CheckNativeOperations();
                     var kotlin = new IntSource();
                     var cs = new CsSource();
                     var factory = new CsFactory(cs);
@@ -20438,6 +20617,8 @@ private fun compileForeignKotlinInterfaceResultFixture(
             namespace ForeignReturn
             {
                 public interface NativeSource { int value(); }
+                public interface NativeProducer<out T> { T read(); }
+                public interface NativeProducerProvider { NativeProducer<string> get(); }
                 public interface PrimitiveFactory { int read(); }
                 public interface NativeFactory { NativeSource read(); }
                 public interface KotlinFactory

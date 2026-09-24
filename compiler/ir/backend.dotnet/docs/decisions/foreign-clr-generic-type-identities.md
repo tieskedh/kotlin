@@ -136,6 +136,33 @@ than this implicit-conversion rule. They test the requested constructed CLR
 view where available; they do not repair an invalid implicit variance edge with
 an erased or semantic adapter.
 
+### Native operations select a contract, not historical dispatch
+
+A call on an admitted imported interface selects the retained interface
+MethodDef at the operation's constructed target. The CLR owns the implementing
+body, including explicit implementations, interface reimplementation and native
+variant dispatch. An earlier narrower reference does not replace that target
+with its own construction. Nor does choosing an operation target alter receiver
+facts or prove a conversion into a different storage carrier.
+
+A native variant target can be supported without a literal InterfaceImpl row
+for that construction. If several reference constructions support the target,
+the backend emits the requested native interface call; it must not invent a
+unique source or select an implementing body by enumeration order. This is not
+a policy for conflicting foreign implementations of a Kotlin-owned interface.
+
+There is one cast case which requires no new membership policy: a safe cast
+whose produced reference carrier is already physically assignable to the
+retained native generic target. Evaluate the source once using the existing
+source-recovery and reference-conversion path, preserve its receiver and null,
+and introduce no additional generic-argument test. Identical value-argument
+constructions qualify; changing a value argument through logical covariance
+does not. Unknown, unrelated or physically incompatible sources remain outside
+this proof. In particular, physical incompatibility is not authority to return
+null from an unchecked generic safe cast. BK-1 does not grant arbitrary native
+generic `as?` checks; its Kotlin-owned boundary remains in the
+[breaking-change ledger](breaking-kotlin-changes.md).
+
 ### Platform flexibility survives FIR2IR
 
 Oblivious foreign uses remain platform types. The .NET FIR2IR pipeline preserves
@@ -331,6 +358,11 @@ Coverage must retain both Framework CLR and current CoreCLR profiles and prove:
   joins, inferred generic calls, delegation, captures, and override bridges;
 - multi-construction objects with and without an unambiguous selected physical
   view, proving that one legal branch cannot launder an illegal branch;
+- native calls with competing explicit bodies, both interface-edge orders and
+  no exact target row, compared with the same native CLR operation; preserved
+  effects, exception identity, receiver identity and exact unboxed results;
+- source-proved nullable native safe upcasts, null and once-only evaluation,
+  with unknown, unrelated and value-variance safe-cast negatives;
 - all eight exact foreign `System.Nullable<V>` scalar method carriers, nullable
   values, mutable properties, nested `Box<V?>` constructions, and rejection of
   unsupported nullable user structs;
