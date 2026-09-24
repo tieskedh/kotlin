@@ -14,6 +14,9 @@ Use:
 
 Archived snapshots:
 
+- [`coherent-interface-bottom-dispatch-2026-09-24.md`](coherent-interface-bottom-dispatch-2026-09-24.md)
+  records real bottom-view operations, preserved natural forwarding, complete
+  paired-entry MethodDef validation, hostile overloads and verification scope.
 - [`native-interface-operation-calls-2026-09-13.md`](native-interface-operation-calls-2026-09-13.md)
   records actual retained native Kotlin/C# calls, source-proved safe upcasts,
   hostile implementation dispatch and the corresponding verification scope.

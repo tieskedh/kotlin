@@ -14,7 +14,12 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetDefaultArgumentDispatcher
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerAbi
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCapabilitySuperInterfaceAbi
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerFunctionCarrierKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalCallableResultLayoutRecord
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMethodSignatureRecord
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalSlotDomain
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeExpressionRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeParameterVariance
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueSlotRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetStaticInitialization
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpDefaultKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpErasedOwnerRelativeConstraint
@@ -10470,6 +10475,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         isInstance = false,
                         methodGenericParameterCount = 5,
                         objectParameterIndices = setOf(0, 2),
+                        sourceSignature = DotNetGenericOwnerPhysicalMethodSignatureRecord(
+                            isInstance = false,
+                            genericArity = 5,
+                            resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Void,
+                            parameterSlots = List(3) {
+                                DotNetGenericOwnerPhysicalValueSlotRecord(
+                                    DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                                    DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType(),
+                                )
+                            },
+                        ),
                     ),
             "F:sample/abstractWithDefaults" to DotNetPhysicalDeclaration.Function(
                 ownerPath = listOf("sample.Contract"),
@@ -43921,6 +43937,62 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
         val diagnostics = compileAgainstRejectedDll(library)
         assertTrue("uses unsupported CLR ABI index version '$staleVersion'" in diagnostics) { diagnostics }
+    }
+
+    @Test
+    fun testRejectsEmbeddedGenericOwnerInputEntryWithoutPhysicalEndpoint() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        for (missingSource in listOf(false, true)) {
+            val assemblyName = if (missingSource) "Invalid.Input.Entry.Source" else "Invalid.Input.Entry.Method"
+            val library = produceLibraryWithTransformedMetadataCarrier(assemblyName) { carrier ->
+                val original = File(File(tmpdir, assemblyName), "$assemblyName.dll")
+                val declarations = DotNetLibraryAbiCodec.decode(original.readKlibManifest())
+                // Start with an ordinary erased producer: Q alone must trigger actual PE validation,
+                // without relying on an N, M, L, J, or K record to enter that frontend branch.
+                assertTrue(declarations.values.all { declaration ->
+                    declaration is DotNetPhysicalDeclaration.Class || declaration is DotNetPhysicalDeclaration.Function
+                }) { declarations.toString() }
+                val sourceEntry = declarations.entries.single { entry ->
+                    (entry.value as? DotNetPhysicalDeclaration.Function)?.methodName == "published"
+                }
+                val source = sourceEntry.value as DotNetPhysicalDeclaration.Function
+                val logicalFunctionKey = if (missingSource) "${sourceEntry.key}#missing" else sourceEntry.key
+                val inputEntry = DotNetPhysicalDeclaration.GenericOwnerFunctionInputEntry(
+                    ownerPath = source.ownerPath,
+                    logicalFunctionKey = logicalFunctionKey,
+                    methodName = "published__MissingClassifierInput",
+                    isInstance = source.isInstance,
+                    methodGenericParameterCount = source.methodGenericParameterCount,
+                    objectParameterIndices = setOf(0),
+                    returnCarrier = DotNetGenericOwnerFunctionCarrierKind.OBJECT,
+                    sourceSignature = DotNetGenericOwnerPhysicalMethodSignatureRecord(
+                        isInstance = source.isInstance,
+                        genericArity = source.methodGenericParameterCount,
+                        resultLayout = DotNetGenericOwnerPhysicalCallableResultLayoutRecord.Direct(
+                            DotNetGenericOwnerPhysicalValueSlotRecord(
+                                DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+                                DotNetGenericOwnerPhysicalTypeExpressionRecord.int32Type(),
+                            ),
+                        ),
+                        parameterSlots = emptyList(),
+                    ),
+                )
+                carrier.rewriteKlibManifest(
+                    DotNetLibraryAbiCodec.encode(mapOf("Q:$logicalFunctionKey" to inputEntry)),
+                )
+            }
+            val diagnostics = compileAgainstRejectedDll(library)
+            assertTrue("recorded generic-owner descriptor which disagrees with its producer DLL" in diagnostics) {
+                diagnostics
+            }
+            val expectedFailure = if (missingSource) {
+                "lacks its source F"
+            } else {
+                "does not contain exactly one normal input MethodDef"
+            }
+            assertTrue(expectedFailure in diagnostics) { diagnostics }
+            assertFalse("production-erased .NET epoch cannot consume" in diagnostics) { diagnostics }
+        }
     }
 
     @Test

@@ -24,12 +24,14 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteSurface
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteSurfaceVarianceSnapshotPolarity
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceCompleteSurfaceVarianceSnapshotVariance
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalTypeParameterVariance
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerFunctionCarrierKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetIlAssembler
 import org.jetbrains.kotlin.backend.dotnet.DotNetExternalLibrary
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
 import org.jetbrains.kotlin.backend.dotnet.DotNetPhysicalDeclaration
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPeValidationStamp
 import org.jetbrains.kotlin.backend.dotnet.readAndValidateDotNetGenericOwnerPeMetadata
+import org.jetbrains.kotlin.backend.dotnet.validateDotNetGenericOwnerFunctionInputEntryAgainstClrMetadata
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceCapabilityBindingKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceFamilyKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetPublishedGenericInterfaceMemberResultLayout
@@ -20277,6 +20279,36 @@ private fun validateForeignKotlinInterfaceResult(
     if (!genericOwnerRehearsal) check(declarations.genericOwnerRehearsalEpochRecordIndexKeys().isEmpty())
     directory.mkdirs()
     producer.copyTo(directory.resolve(producer.name), overwrite = true)
+    if (genericOwnerRehearsal && producer.name.equals("lib.dll", true)) {
+        val metadata = DotNetClrMetadataReader.read(producer)
+        val entries = declarations.values.filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerFunctionInputEntry>()
+        entries.forEach { alternate ->
+            validateDotNetGenericOwnerFunctionInputEntryAgainstClrMetadata(
+                alternate,
+                declarations.getValue(alternate.logicalFunctionKey) as DotNetPhysicalDeclaration.Function,
+                metadata,
+                target,
+            )
+        }
+        for (name in listOf("keepStringSource", "keepSource")) {
+            val sourceKey = declarations.entries.single { entry ->
+                (entry.value as? DotNetPhysicalDeclaration.Function)?.methodName == name
+            }.key
+            val alternate = entries.single { it.logicalFunctionKey == sourceKey }
+            check(alternate.returnCarrier == DotNetGenericOwnerFunctionCarrierKind.OBJECT) {
+                "Forwarded interface result lost its independent alternate carrier: $alternate"
+            }
+            val method = metadata.methodDefinitions.single { it.name == alternate.methodName }
+            val objectType = DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.OBJECT)
+            check(method.signature.returnType == objectType && method.signature.parameterTypes == listOf(objectType))
+        }
+        val mixedKey = declarations.entries.single { entry ->
+            (entry.value as? DotNetPhysicalDeclaration.Function)?.methodName == "chooseStringSource"
+        }.key
+        check(entries.none { it.logicalFunctionKey == mixedKey }) {
+            "One matching return incorrectly authorized a mixed-return natural entry"
+        }
+    }
     if (producesLibrary) return
     val nativeIl = producer.resolveSibling("${producer.nameWithoutExtension}.il").readText()
     val nativeMethodStarts = Regex("(?m)^\\s*\\.method\\b").findAll(nativeIl).map { it.range.first }.toList()
@@ -20576,6 +20608,25 @@ private fun validateForeignKotlinInterfaceResult(
                     if (mainKt.openFieldValue(new CsFieldFactory()) != 97 ||
                         (int)((ForeignReturn.KotlinFactory)new CsFieldFactory()).read().$sourceValueName() != 97)
                         throw new Exception("Exact result propagation bypassed an ordinary C# override");
+                    var exactStrings = new ExactStringField();
+                    var exactString = exactStrings.read();
+                    var stringField = typeof(ExactStringField).GetField("source",
+                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    if (typeof(ExactStringField).GetMethod("read").ReturnType != typeof(${if (genericOwnerRehearsal) "Source<string>" else "Source"}) ||
+                        stringField == null || stringField.FieldType != typeof(${if (genericOwnerRehearsal) "Source<string>" else "Source"}) ||
+                        !stringField.IsPrivate || !Object.ReferenceEquals(stringField.GetValue(exactStrings), exactString) ||
+                        !Object.ReferenceEquals(exactStrings.read(), exactString) ||
+                        (string)exactString.$sourceValueName() != "different construction")
+                        throw new Exception("Broad reference-view policy contaminated proven exact string state");
+                    var forwardedString = sourceKt.keepStringSource(exactString);
+                    if (!Object.ReferenceEquals(forwardedString, exactString) ||
+                        typeof(sourceKt).GetMethod("keepStringSource").ReturnType != typeof(${if (genericOwnerRehearsal) "Source<string>" else "Source"}) ||
+                        typeof(sourceKt).GetMethod("keepStringSource").GetParameters()[0].ParameterType != typeof(${if (genericOwnerRehearsal) "Source<string>" else "Source"}) ||
+                        (string)forwardedString.$sourceValueName() != "different construction")
+                        throw new Exception("Natural interface forwarding lost its typed input/result or identity");
+                    $sourceType forwardedInt = sourceKt.keepSource<int>(kotlin);
+                    if (!Object.ReferenceEquals(forwardedInt, kotlin) || (int)forwardedInt.$sourceValueName() != 73)
+                        throw new Exception("Natural method-generic interface forwarding changed identity");
                     if (mainKt.checkBroadStoredResults() != "OK" ||
                         typeof(BroadStoredResult).GetMethod("read").ReturnType != typeof(${if (genericOwnerRehearsal) "object" else "Source"}) ||
                         typeof(MutableStoredResult).GetMethod("read").ReturnType != typeof(${if (genericOwnerRehearsal) "object" else "Source"}))
@@ -22136,10 +22187,27 @@ private fun validateGenericOwnerSemanticOverloads(
         check(selectedNames.drop(3).distinct().size == 3) { "Different interface signatures collapsed" }
         val exact = metadata.typeDefinitions.single { it.metadataName == "ExactRenderer" }
         val exactMethods = metadata.methodDefinitions.filter { it.declaringType == exact.handle }
-        check(exactMethods.none { "__KotlinSemantic__" in it.name })
-        check(exactMethods.count { it.name == "render" } == 2)
-        check(exactMethods.single { it.name == "render" && it.signature.parameterTypes.single() is DotNetClrTypeSignature.GenericInstance }
-            .visibility == DotNetClrMethodVisibility.PRIVATE)
+        // A closed reference argument is not proof that every Kotlin value has
+        // that natural CLR view: Source<Nothing> is also a Source<String>.
+        val closedSemantic = exactMethods.single { it.name.startsWith(prefix) }
+        check(closedSemantic.visibility == DotNetClrMethodVisibility.PRIVATE && !closedSemantic.isVirtual)
+        check(closedSemantic.signature.parameterTypes == listOf(objectType))
+        check(closedSemantic.name !in selectedNames) { "Closed, open and star Kotlin signatures collapsed" }
+        check(exactMethods.single { it.name == "render" }.signature.parameterTypes == listOf(objectType))
+        check(exactMethods.single { it.name == "result" && it.signature.parameterTypes.single() is DotNetClrTypeSignature.GenericInstance }
+            .visibility == DotNetClrMethodVisibility.PUBLIC)
+        val publicOwner = metadata.typeDefinitions.single { it.metadataName == "PublicRenderer" }
+        val publicOverloads = metadata.methodDefinitions.filter {
+            it.declaringType == publicOwner.handle && it.name == "render"
+        }
+        check(publicOverloads.size == 2 && publicOverloads.all {
+            it.visibility == DotNetClrMethodVisibility.PUBLIC && !it.isVirtual &&
+                    it.signature.returnType == DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.STRING)
+        }) { "Distinct natural public overloads changed: $publicOverloads" }
+        check(publicOverloads.count { it.signature.parameterTypes == listOf(objectType) } == 1)
+        check(publicOverloads.count {
+            it.signature.parameterTypes.singleOrNull() is DotNetClrTypeSignature.GenericInstance
+        } == 1)
     }
     if (producesLibrary) return
     val lib = directory.resolve("lib.dll")
@@ -22177,6 +22245,29 @@ private fun validateGenericOwnerSemanticOverloads(
                         new StarRenderer(value).result() != "star:other" ||
                         new ExactRenderer().result(new StringSource()) != "text:other")
                         throw new InvalidOperationException("Private overload dispatch changed");
+                    var publicRenderer = new PublicRenderer();
+                    var text = new StringSource();
+                    if (publicRenderer.render(text) != "text" ||
+                        publicRenderer.render((object)null) != "other" ||
+                        publicRenderer.render((object)text) != "other")
+                        throw new InvalidOperationException("Natural public overload dispatch changed");
+                    var naturalOverload = typeof(PublicRenderer).GetMethod("render", new[] { typeof(Source<string>) });
+                    var objectOverload = typeof(PublicRenderer).GetMethod("render", new[] { typeof(object) });
+                    if (naturalOverload == null || objectOverload == null ||
+                        naturalOverload.ReturnType != typeof(string) || objectOverload.ReturnType != typeof(string) ||
+                        !naturalOverload.IsPublic || !objectOverload.IsPublic ||
+                        naturalOverload.IsVirtual || objectOverload.IsVirtual)
+                        throw new InvalidOperationException("Natural public overload MethodDefs changed");
+                    if (publicRenderer.measure(text, 40L, 2L) != 42L ||
+                        publicRenderer.measure(text, 43L, null) != 43L)
+                        throw new InvalidOperationException("Natural scalar/nullable input composition changed");
+                    var measure = typeof(PublicRenderer).GetMethod("measure");
+                    var measureParameters = measure.GetParameters();
+                    if (measure.ReturnType != typeof(long) || measureParameters.Length != 3 ||
+                        measureParameters[0].ParameterType != typeof(Source<string>) ||
+                        measureParameters[1].ParameterType != typeof(long) ||
+                        measureParameters[2].ParameterType != typeof(long?))
+                        throw new InvalidOperationException("Natural scalar/nullable MethodDef changed");
                     const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
                     if (!Object.ReferenceEquals(typeof(Renderer).GetField("source", Private).GetValue(renderer), value))
                         throw new InvalidOperationException("Overload routing changed receiver state/identity");

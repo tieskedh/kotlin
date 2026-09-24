@@ -785,8 +785,17 @@ private fun DotNetGenericOwnerPhysicalMethodSignatureRecord.requireSupportedForE
                 DotNetGenericOwnerPhysicalTypeScope.PRODUCER -> Unit
                 DotNetGenericOwnerPhysicalTypeScope.CORE_LIBRARY,
                 DotNetGenericOwnerPhysicalTypeScope.ASSEMBLY,
-                -> require(type.typePath.last().none { character -> character == '`' }) {
-                    "an external named carrier records generic arity separately from its metadata name"
+                -> {
+                    val leaf = type.typePath.last()
+                    require(if ('/' in leaf) {
+                        // An explicit nested chain retains each metadata name and its own
+                        // arity suffix. genericArity still counts the complete argument vector.
+                        leaf.split('/').all(String::isNotEmpty)
+                    } else {
+                        leaf.none { character -> character == '`' }
+                    }) {
+                        "an external carrier requires an arityless top-level name or an exact nested metadata chain"
+                    }
                 }
 
                 DotNetGenericOwnerPhysicalTypeScope.CURRENT_COMPILATION ->
@@ -866,6 +875,34 @@ private fun DotNetClrAssemblyMetadata.matchesNamedPhysicalType(
     methodGenericArity: Int,
     producerTarget: DotNetTarget,
 ): Boolean {
+    // ECMA-335 primitive signatures name these core value types implicitly. The portable
+    // grammar can retain them as exact core-scoped names without adding policy-specific leaf
+    // kinds. Never apply this equivalence to a producer or an explicitly assembly-scoped type.
+    if (actual is DotNetClrTypeSignature.Primitive) {
+        val coreName = when (actual.type) {
+            DotNetClrPrimitiveType.BOOLEAN -> "Boolean"
+            DotNetClrPrimitiveType.CHAR -> "Char"
+            DotNetClrPrimitiveType.INT8 -> "SByte"
+            DotNetClrPrimitiveType.UINT8 -> "Byte"
+            DotNetClrPrimitiveType.INT16 -> "Int16"
+            DotNetClrPrimitiveType.UINT16 -> "UInt16"
+            DotNetClrPrimitiveType.INT32 -> "Int32"
+            DotNetClrPrimitiveType.UINT32 -> "UInt32"
+            DotNetClrPrimitiveType.INT64 -> "Int64"
+            DotNetClrPrimitiveType.UINT64 -> "UInt64"
+            DotNetClrPrimitiveType.FLOAT32 -> "Single"
+            DotNetClrPrimitiveType.FLOAT64 -> "Double"
+            DotNetClrPrimitiveType.NATIVE_INT -> "IntPtr"
+            DotNetClrPrimitiveType.NATIVE_UINT -> "UIntPtr"
+            DotNetClrPrimitiveType.STRING,
+            DotNetClrPrimitiveType.OBJECT,
+            -> return false
+        }
+        return expected.scope == DotNetGenericOwnerPhysicalTypeScope.CORE_LIBRARY &&
+                expected.namedTypeCategory == DotNetGenericOwnerPhysicalNamedTypeCategory.VALUE_TYPE &&
+                expected.genericArity == 0 && expected.arguments.isEmpty() &&
+                expected.typePath == listOf("System", coreName)
+    }
     val expectedValueType = expected.namedTypeCategory == DotNetGenericOwnerPhysicalNamedTypeCategory.VALUE_TYPE
     val actualNamed: DotNetClrTypeSignature.Named
     val actualArguments: List<DotNetClrTypeSignature>
@@ -899,19 +936,31 @@ private fun DotNetClrAssemblyMetadata.matchesNamedPhysicalType(
             }
         }
 
-        DotNetGenericOwnerPhysicalTypeScope.CORE_LIBRARY -> matchesCoreLibraryTopLevelTypeReference(
-            handle = actualNamed.type,
-            expectedTypePath = expected.typePath,
-            expectedGenericArity = expected.genericArity,
-            producerTarget = producerTarget,
-        )
+        DotNetGenericOwnerPhysicalTypeScope.CORE_LIBRARY -> if ('/' in expected.typePath.last()) {
+            matchesNestedTypeReference(actualNamed.type, expected.typePath) { assemblyName ->
+                producerTarget.acceptsCoreLibraryPeAssemblyName(assemblyName)
+            }
+        } else {
+            matchesCoreLibraryTopLevelTypeReference(
+                handle = actualNamed.type,
+                expectedTypePath = expected.typePath,
+                expectedGenericArity = expected.genericArity,
+                producerTarget = producerTarget,
+            )
+        }
 
-        DotNetGenericOwnerPhysicalTypeScope.ASSEMBLY -> matchesExternalTopLevelTypeReference(
-            handle = actualNamed.type,
-            expectedTypePath = expected.typePath,
-            expectedGenericArity = expected.genericArity,
-            expectedAssemblyName = checkNotNull(expected.assemblyName),
-        )
+        DotNetGenericOwnerPhysicalTypeScope.ASSEMBLY -> if ('/' in expected.typePath.last()) {
+            matchesNestedTypeReference(actualNamed.type, expected.typePath) { assemblyName ->
+                assemblyName.equals(expected.assemblyName, ignoreCase = true)
+            }
+        } else {
+            matchesExternalTopLevelTypeReference(
+                handle = actualNamed.type,
+                expectedTypePath = expected.typePath,
+                expectedGenericArity = expected.genericArity,
+                expectedAssemblyName = checkNotNull(expected.assemblyName),
+            )
+        }
 
         DotNetGenericOwnerPhysicalTypeScope.CURRENT_COMPILATION,
         null,
@@ -926,6 +975,43 @@ private fun DotNetClrAssemblyMetadata.matchesNamedPhysicalType(
             producerTarget = producerTarget,
         )
     }
+}
+
+/**
+ * External nested records use namespace segments followed by one explicit slash-separated
+ * metadata-name chain, for example namespace N and chain Outer`1/Inner`1. Unlike a top-level leaf, each nested
+ * component retains its own arity suffix; the record's genericArity is the total construction
+ * arity. Slash is the nesting boundary, never a guessed namespace or Kotlin source-name split.
+ */
+private fun DotNetClrAssemblyMetadata.matchesNestedTypeReference(
+    handle: DotNetClrMetadataHandle,
+    expectedTypePath: List<String>,
+    acceptsAssemblyName: (String) -> Boolean,
+): Boolean {
+    val metadataNames = expectedTypePath.last().split('/')
+    require(metadataNames.size <= MAX_EXACT_LOCAL_TYPE_REFERENCE_DEPTH) {
+        "external CLR TypeRef scope nesting is too deep"
+    }
+    if (metadataNames.size < 2 || metadataNames.any(String::isEmpty)) return false
+    val namespaceName = expectedTypePath.dropLast(1).joinToString(".")
+    val visited = hashSetOf<DotNetClrMetadataHandle>()
+    var current = handle
+    for (index in metadataNames.indices.reversed()) {
+        if (current.table != TYPE_REF_TABLE) return false
+        require(visited.add(current)) { "external CLR TypeRef scope chain is cyclic" }
+        val reference = typeReferences.singleOrNull { candidate -> candidate.handle == current } ?: return false
+        if (reference.metadataName != metadataNames[index] ||
+            reference.namespaceName != (if (index == 0) namespaceName else "")
+        ) return false
+        val scope = reference.resolutionScope ?: return false
+        if (index == 0) {
+            if (scope.table != ASSEMBLY_REF_TABLE) return false
+            val assemblyReference = assemblyReferences.singleOrNull { candidate -> candidate.handle == scope } ?: return false
+            return acceptsAssemblyName(assemblyReference.name)
+        }
+        current = scope
+    }
+    return false
 }
 
 /**

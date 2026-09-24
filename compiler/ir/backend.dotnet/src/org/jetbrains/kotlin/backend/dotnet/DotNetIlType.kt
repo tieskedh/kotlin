@@ -685,6 +685,10 @@ internal class DotNetIlClassInfo(
     val isNested: Boolean
         get() = enclosingClass != null
 
+    /** A nested TypeRef retains the AssemblyRef of its enclosing physical owner. */
+    val containingAssemblyName: String?
+        get() = assemblyName ?: enclosingClass?.containingAssemblyName
+
     /**
      * The base TYPE of this class as a full type token — a [DotNetIlValueType.UserClass] for a
      * plain or Kotlin-erased base, and a [DotNetIlValueType.GenericInstance] only for a genuinely

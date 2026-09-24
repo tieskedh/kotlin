@@ -25,6 +25,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetStdlibArtifact
 import org.jetbrains.kotlin.backend.dotnet.validateDotNetGenericOwnerNaturalMethodDefAgainstClrMetadata
 import org.jetbrains.kotlin.backend.dotnet.validateDotNetGenericOwnerImplementationMethodDefAgainstClrMetadata
 import org.jetbrains.kotlin.backend.dotnet.validateDotNetGenericOwnerConstructorMethodDefAgainstClrMetadata
+import org.jetbrains.kotlin.backend.dotnet.validateDotNetGenericOwnerFunctionInputEntryAgainstClrMetadata
 import org.jetbrains.kotlin.backend.dotnet.readAndValidateDotNetGenericOwnerPeMetadata
 import org.jetbrains.kotlin.load.dotnet.DotNetManagedResourceReader
 import org.jetbrains.kotlin.load.dotnet.decodeDotNetClrAssemblyMetadata
@@ -739,6 +740,8 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
             .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerImplementationMethodDef>()
         val constructorMethodDefs = declarations.values
             .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerConstructorMethodDef>()
+        val functionInputEntries = declarations.values
+            .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerFunctionInputEntry>()
         val sealedFamilies = declarations.values
             .filterIsInstance<DotNetPhysicalDeclaration.GenericOwnerSealedFamily>()
         val semanticEquivalenceCertificates = declarations.values
@@ -746,7 +749,7 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
                     DotNetPhysicalDeclaration.GenericOwnerSemanticEquivalenceCertificate>()
         var genericOwnerPeValidationStamp = DotNetGenericOwnerPeValidationStamp.EMPTY
         if (naturalMethodDefs.isNotEmpty() || implementationMethodDefs.isNotEmpty() ||
-            constructorMethodDefs.isNotEmpty() ||
+            constructorMethodDefs.isNotEmpty() || functionInputEntries.isNotEmpty() ||
             sealedFamilies.isNotEmpty() || semanticEquivalenceCertificates.isNotEmpty()
         ) {
             val producerTarget = checkNotNull(DotNetTarget.fromString(targetFramework))
@@ -758,6 +761,19 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
                     producerTarget = producerTarget,
                 )
                 val assemblyMetadata = genericOwnerPeValidation.assemblyMetadata
+                functionInputEntries.forEach { declaration ->
+                    val source = declarations[declaration.logicalFunctionKey]
+                            as? DotNetPhysicalDeclaration.Function
+                        ?: throw IllegalArgumentException(
+                            "input entry '${declaration.logicalFunctionKey}' lacks its source F",
+                        )
+                    validateDotNetGenericOwnerFunctionInputEntryAgainstClrMetadata(
+                        declaration = declaration,
+                        sourceDeclaration = source,
+                        assembly = assemblyMetadata,
+                        producerTarget = producerTarget,
+                    )
+                }
                 naturalMethodDefs.forEach { declaration ->
                     validateDotNetGenericOwnerNaturalMethodDefAgainstClrMetadata(
                         declaration = declaration,

@@ -44,7 +44,6 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeTypes
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_ERASED_OWNER_RELATIONAL_CONSTRAINT_TYPE_PARAMETER
 import org.jetbrains.kotlin.backend.dotnet.dotNetDirectOwnerRelativeMethodBoundsOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetDirectInterfaceTypes
-import org.jetbrains.kotlin.backend.dotnet.dotNetGenericArgumentHasProperClrValueSubtype
 import org.jetbrains.kotlin.backend.dotnet.requiresDotNetSemanticInterfaceCarrier
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericInterfaceCanonicalSlotId
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerPhysicalMemberName
@@ -816,9 +815,6 @@ internal class DotNetReifiedGenericInterfaceLowering(
             closeGenericClassCapabilityInterfaceSupertypes()
         }
 
-        val hasProperClrValueSubtype =
-            dotNetGenericArgumentHasProperClrValueSubtype(context.irBuiltIns)
-
         fun IrType.reifiedInterfaceOwnerOrNull(): IrClass? =
             ((this as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
                 ?.takeIf { candidate -> candidate.isReifiedInterfaceForCurrentEpoch() }
@@ -837,7 +833,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 }
             return owner.takeIf {
                 simpleType.requiresDotNetSemanticInterfaceCarrier(
-                    owner.typeParameters.map(IrTypeParameter::variance), physicalVariances, hasProperClrValueSubtype,
+                    owner.typeParameters.map(IrTypeParameter::variance), physicalVariances,
                 )
             }
         }
@@ -1571,9 +1567,20 @@ internal class DotNetReifiedGenericInterfaceLowering(
         // remains fail-closed until its complete result graph is proven.
         fun IrSimpleFunction.singlePhysicalReturnProducerOrNull(): IrExpression? = when (val functionBody = body) {
             is IrExpressionBody -> functionBody.expression
-            is IrBlockBody -> functionBody.statements.filterIsInstance<IrReturn>()
-                .singleOrNull { expression -> expression.returnTargetSymbol == symbol }
-                ?.value
+            is IrBlockBody -> {
+                val results = mutableListOf<IrExpression>()
+                functionBody.acceptVoid(object : IrVisitorVoid() {
+                    override fun visitElement(element: IrElement) {
+                        element.acceptChildrenVoid(this)
+                    }
+
+                    override fun visitReturn(expression: IrReturn) {
+                        if (expression.returnTargetSymbol == symbol) results += expression.value
+                        expression.acceptChildrenVoid(this)
+                    }
+                })
+                results.singleOrNull()
+            }
             else -> null
         }
 
@@ -1629,7 +1636,7 @@ internal class DotNetReifiedGenericInterfaceLowering(
                 isFakeOverride || isSuspend ||
                 isDotNetInlineOnly() ||
                 !dotNetDefaultParameterIndices.isNullOrEmpty() ||
-                correspondingPropertySymbol != null || returnType.reifiedInterfaceOwnerOrNull() != null ||
+                correspondingPropertySymbol != null ||
                 parameters.any { parameter ->
                     parameter.kind != IrParameterKind.DispatchReceiver &&
                             parameter.kind != IrParameterKind.Regular ||
@@ -1640,12 +1647,26 @@ internal class DotNetReifiedGenericInterfaceLowering(
             }
             val owner = parent as? IrClass
             if (owner != null && (owner.isInterface || owner.typeParameters.isNotEmpty())) return emptyList()
-            return parameters.mapIndexedNotNull { index, parameter ->
+            val indices = parameters.mapIndexedNotNull { index, parameter ->
                 index.takeIf {
                     parameter.kind == IrParameterKind.Regular &&
                             parameter.type.isNaturalClassifierInput(this)
                 }
             }.takeIf { indices -> indices.size == 1 }.orEmpty()
+            if (returnType.reifiedInterfaceOwnerOrNull() != null) {
+                // An interface result may differ between the two physical entries. Admit the
+                // direct forwarding proof: the natural entry returns its exact input carrier,
+                // whereas the object-input twin returns the same receiver through object.
+                // Inspect every return targeting this function; an earlier branch must not
+                // hide a different construction behind a matching final return.
+                val producer = singlePhysicalReturnProducerOrNull() as? IrGetValue ?: return emptyList()
+                val parameter = parameters.getOrNull(indices.singleOrNull() ?: return emptyList())
+                    ?: return emptyList()
+                if (producer.symbol != parameter.symbol || !parameter.type.sameInvariantTypeAs(returnType)) {
+                    return emptyList()
+                }
+            }
+            return indices
         }
 
         // Keep the natural MethodDef and its direct typed body. The alternate compiler ABI owns
@@ -3902,6 +3923,17 @@ private fun materializeExternalGenericOwnerFunctionInputEntry(
             context.genericOwnerForeignDispatchDeclarations += parameter
             context.genericOwnerCapabilityDeclarations += source.parameters[index]
             context.genericOwnerForeignDispatchDeclarations += source.parameters[index]
+        }
+        val returnCarrier = physicalEntry.returnCarrier
+            ?: context.externalDeclarationsForLowering().genericOwnerFunctionCarrierOrNull(source)?.carrier?.returnCarrier
+        when (returnCarrier) {
+            null -> Unit
+            DotNetGenericOwnerFunctionCarrierKind.SEMANTIC_CAPABILITY ->
+                context.genericOwnerCapabilityDeclarations += this
+            DotNetGenericOwnerFunctionCarrierKind.OBJECT -> {
+                context.genericOwnerCapabilityDeclarations += this
+                context.genericOwnerForeignDispatchDeclarations += this
+            }
         }
         context.externalGenericOwnerFunctionInputEntries[this] = binding
     }

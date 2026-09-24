@@ -62,7 +62,6 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerWriteValueProvenanc
 import org.jetbrains.kotlin.backend.dotnet.DotNetBoundGenericOwnerMemberFamily
 import org.jetbrains.kotlin.backend.dotnet.DotNetBoundGenericOwnerPhysicalSlot
 import org.jetbrains.kotlin.backend.dotnet.dotNetLibraryAbiKeyOrNull
-import org.jetbrains.kotlin.backend.dotnet.dotNetGenericArgumentHasProperClrValueSubtype
 import org.jetbrains.kotlin.backend.dotnet.requiresDotNetSemanticInterfaceCarrier
 import org.jetbrains.kotlin.backend.dotnet.dotNetImportedClrTypeAuthorityOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerCallRouteTraceHooks
@@ -230,9 +229,6 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
 ) : ModuleLoweringPass {
     private val specialBridgeMethods = SpecialBridgeMethods(context)
     private val externalDeclarations = context.externalDeclarationsForLowering()
-    private val constructorArgumentHasProperClrValueSubtype by lazy {
-        dotNetGenericArgumentHasProperClrValueSubtype(context.irBuiltIns)
-    }
     private val externalSemanticPrototypesBySource = linkedMapOf<IrSimpleFunction, IrSimpleFunction>()
     private val externalForeignOverrideProbesBySource = linkedMapOf<IrSimpleFunction, IrSimpleFunction>()
 
@@ -4007,7 +4003,7 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             // TypeDef authority. Retain the previous conservative hazard without one.
             if (physicalVariances == null) return true
             if (type.requiresDotNetSemanticInterfaceCarrier(
-                    declaredVariances, physicalVariances, constructorArgumentHasProperClrValueSubtype,
+                    declaredVariances, physicalVariances,
                 )
             ) return true
             if (early != null) {

@@ -40,6 +40,30 @@ class ExactRenderer {
     fun result(value: Source<String>): String = render(value) + ":" + render(null)
 }
 
+// Both natural overloads have distinct CLR signatures, in either representation.
+// The Source overload's object-input twin must retain its exact source MethodDef
+// instead of becoming ambiguous with the ordinary Any? overload at import time.
+class PublicRenderer {
+    fun render(value: Source<String>): String = value.read()
+    fun render(value: Any?): String = "other"
+
+    fun measure(value: Source<String>, seed: Long, adjustment: Long?): Long {
+        value.read()
+        return seed + (adjustment ?: 0L)
+    }
+}
+
+class BottomSource(private val failure: Throwable) : Source<Nothing> {
+    private var calls: Int = 0
+
+    override fun read(): Nothing {
+        calls++
+        throw failure
+    }
+
+    fun callCount(): Int = calls
+}
+
 class IteratorRenderer<T>(private val source: Iterator<T>) {
     private fun render(value: Iterator<T>): String = if (value.hasNext()) "iterator" else "empty"
     private fun render(value: Any?): String = "other"
@@ -67,6 +91,31 @@ fun box(): String {
     if (StarRenderer(source).result() != "star:other") return "star"
     val text = object : Source<String> { override fun read(): String = "text" }
     if (ExactRenderer().result(text) != "text:other") return "exact"
+    val publicRenderer = PublicRenderer()
+    if (publicRenderer.render(text) != "text") return "public natural overload"
+    if (publicRenderer.render(null) != "other") return "public null overload"
+    if (publicRenderer.measure(text, 40L, 2L) != 42L) return "public scalar parameters"
+    if (publicRenderer.measure(text, 43L, null) != 43L) return "public nullable scalar parameter"
+    val failure = IllegalStateException("bottom overload")
+    val bottom = BottomSource(failure)
+    try {
+        ExactRenderer().result(bottom)
+        return "bottom overload returned"
+    } catch (actual: Throwable) {
+        if (actual !== failure || bottom.callCount() != 1) return "bottom overload dispatch"
+    }
+    try {
+        publicRenderer.render(bottom)
+        return "public bottom overload returned"
+    } catch (actual: Throwable) {
+        if (actual !== failure || bottom.callCount() != 2) return "public bottom overload dispatch"
+    }
+    try {
+        publicRenderer.measure(bottom, 40L, null)
+        return "public scalar bottom returned"
+    } catch (actual: Throwable) {
+        if (actual !== failure || bottom.callCount() != 3) return "public scalar bottom dispatch"
+    }
     val iterator = object : Iterator<Int> {
         override fun hasNext(): Boolean = true
         override fun next(): Int = 7

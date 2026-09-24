@@ -553,6 +553,44 @@ dimension and must not affect convergence.
 
 #### Definitions, conversions, and calls
 
+A closed reference-looking argument does not make an unproved Kotlin-owned
+covariant view physically complete. For example, a `Source<String>` value may
+be a `Source<Nothing>` receiver, and `Source<String?>` may be a
+`Source<Nothing?>` receiver; neither implies CLR `Source<string>`. The negative
+carrier policy therefore retains the semantic boundary for unproved output
+views, independently of whether the argument has a primitive-value subtype.
+Positive producer, field-plan and MethodDef evidence takes precedence: a
+proven `Source<string>` producer and its exact stored result remain natural.
+This fallback must not reinterpret frozen natural MethodDefs or retained
+foreign declarations, or authorize a natural nested storage slot; those retain
+their separate physical contracts.
+
+A natural classifier-input entry and its semantic twin have independent result
+carriers as well as input carriers. A directly forwarded parameter proves this
+bounded composition: `I<A> -> I<A>` on the natural MethodDef and
+`object -> object` on its broad twin preserve the same receiver. The proof must
+cover the complete return body, not just a final return after potentially
+different earlier exits. Mixed results, properties and overridable methods do
+not gain this admission from one matching return expression.
+
+The alternate `Q` entry records the complete source physical signature and an
+independent result override from the final emitted signatures. The source
+signature binds the natural overload exactly: discarding the input being
+widened must not make distinct natural overloads ambiguous. No result override
+means the producer source's physical result;
+the admitted override is `object`. Consumers bind and validate that fact against
+the producer DLL, rather than infer the alternate result from the logical
+return type or from the presence of object inputs. This is not a new logical
+declaration, a new receiver, or permission to narrow a broad result back into
+the natural return construction. The copied nonvirtual twin must not bypass an
+override: the source MethodDef must be nonvirtual, final, or on a sealed owner.
+The physical relation must identify both endpoints uniquely before this guard
+is applied; finality cannot disambiguate an otherwise ambiguous source binding.
+Recording the full header must preserve unrelated carriers as well: ordinary
+scalar, nullable-value, array and nested external types cannot be dropped to
+fit a smaller validation grammar. Core-scoped primitive identities and exact
+nested TypeRef scope chains are physical facts, not new Kotlin type mappings.
+
 - Construction produces its authority-selected constructed carrier and closes
   guaranteed views only over recorded physical rules.
 - An identity-preserving reference upcast may change the produced carrier or

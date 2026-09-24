@@ -11,7 +11,7 @@ ADRs, and dated evidence in [`docs/archive`](docs/archive/README.md).
   local `dotnet` and `fork/dotnet` together.
 - Reviewed upstream base:
   `88a184ab89279617dbfe4e89ba9831ed1b43c863`.
-- Physical library ABI 71, generic-owner artifact schema 22, and compiler/
+- Physical library ABI 72, generic-owner artifact schema 22, and compiler/
   runtime surface 62 are current. Git owns the exact promoted commit identity.
 - The production-inert generic-owner authority consolidation is closed. It
   separates Kotlin logical authority, CLR declaration authority, per-value
@@ -49,34 +49,34 @@ Current representation rules are linked from the navigation section below.
 
 ## Latest verification
 
-The full production-erased gate completed on 2026-09-24 after verifying real
-retained-native interface operations and repairing source-proved safe upcasts.
+The full production-erased gate completed on 2026-09-24 after closing coherent
+Kotlin bottom-view operations, preserving natural paired-entry results and
+authenticating complete source MethodDef signatures.
 Direct JUnit XML audit found no failures, errors, or skips:
 
 | Lane | Suites | Tests |
 | --- | ---: | ---: |
-| Backend | 24 | 420 |
+| Backend | 28 | 460 |
 | Physical CLI model | 1 | 6 |
 | Full FIR2IR, both parsers and runtimes | 187 | 2,383 |
-| CLI/library integration | 2 | 129 |
-| **Full production total** | **214** | **2,938** |
-| Native-operation candidate matrix | 4 | 4 |
+| CLI/library integration | 2 | 130 |
+| **Full production total** | **218** | **2,979** |
+| Coherent-interface candidate matrix | 4 | 32 |
 
-The unfiltered FIR2IR run passed on 2026-09-13 before the requested OS-switch
-pause. Its semantic source hashes and all 187 XML files were verified unchanged
-on resumption; that completed run was not repeated. Backend and unfiltered
-CLI/library integration passed on 2026-09-24. The unchanged physical CLI model
-remained up to date and its six-test XML was audited. Both full invocations
-omit the rehearsal property. This replaces full checkpoint `3724aeab9c`;
-it is not a claim that every dependency freshly executed on the same day.
+FIR2IR and CLI/library integration were explicitly rerun unfiltered. The final
+aggregate omits the rehearsal property and reuses the freshly green full CLI
+outputs. Backend and physical-model tests were up to date and their complete
+XML was audited; the physical-model XML is unchanged from 2026-09-11. This
+replaces full checkpoint `96e600ca11`. It is not a claim that every dependency
+freshly executed in the final invocation.
 
 Candidate and erased execution cover PSI and LightTree on Framework 4.8 and
-.NET 10. The native operations use actual separate C# implementations, typed
-MethodDefs, same-object identity, call effects and original exceptions. CLI
-negatives retain the unknown/unrelated/value-variance safe-cast boundaries.
-The four fixture inverses and the affected CLI test were individually audited.
-See the [native call evidence](docs/archive/native-interface-operation-calls-2026-09-13.md)
-for commands, pinned inputs, the pause/resume boundary and exact coverage.
+.NET 10. Separate Kotlin/C# consumers verify bottom and nullable-bottom body
+execution, original exceptions, receiver identity, typed state/results and
+overload binding. All 32 focused inverse cases were individually audited in
+the full output. See the
+[coherent-interface evidence](docs/archive/coherent-interface-bottom-dispatch-2026-09-24.md)
+for commands, intermediate failures, ABI validation and exact exclusions.
 
 Earlier bounded candidate evidence remains indexed in the
 [archive](docs/archive/README.md). This full gate does not establish complete
@@ -104,10 +104,13 @@ can be valid with multiple variant sources and without an exact interface row.
 The existing native emitter is now execution-tested against those operation
 targets; it already binds the requested retained interface MethodDef and does
 not need the new model query to do so. Coherent Kotlin semantic-family dispatch
-through bottom producers, forwarding and generic/object storage is the next
-bounded execution proof. Conflicting foreign implementations of Kotlin-owned
-families require an explicit interop policy; neither researched target-priority
-policy is accepted.
+now executes through bottom producers, separate forwarding, `Any`/star recovery
+and `ValueBox<Any>`, while independently proved fields and natural C# results
+remain typed. This does not close nested typed generic storage: a logical
+`Box<Source<String>>` must still account for a valid bottom producer without
+inventing a natural construction. Conflicting foreign implementations of
+Kotlin-owned families require an explicit interop policy; neither researched
+target-priority policy is accepted.
 
 The extended standalone CLR probe passes eight assertion groups on net48-target/
 serviced CLR4 and .NET 10, including no-exact-row native calls and C# interface
@@ -117,7 +120,7 @@ reference-looking nested state. These are mechanism and Common-precedent proofs,
 not themselves Kotlin/.NET compiler integration, performance or deployment
 gates; they do not increase the full-test count. The subsequent native-call
 feature admits only source-proved safe upcasts; broader native casts remain
-unclosed. Runtime/Stdlib and schemas remain unchanged. Both
+unclosed. Runtime/Stdlib surfaces remain unchanged. Both
 [constructor experiments](docs/archive/selected-interface-view-storage-2026-09-12.md)
 remain parked with their original guard. Existing C# allocations, open generic
 factories and broad mutable writes remain hard storage/interop proof boundaries.

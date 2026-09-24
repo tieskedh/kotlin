@@ -578,6 +578,10 @@ sealed interface DotNetPhysicalDeclaration {
         /** Exact GenericParam arity of the alternate producer-emitted MethodDef. */
         val methodGenericParameterCount: Int,
         val objectParameterIndices: Set<Int>,
+        /** Exact final source MethodDef signature, before any selected input becomes object. */
+        val sourceSignature: DotNetGenericOwnerPhysicalMethodSignatureRecord,
+        /** Independent alternate result carrier; null retains the source MethodDef's result. */
+        val returnCarrier: DotNetGenericOwnerFunctionCarrierKind? = null,
     ) : DotNetPhysicalDeclaration {
         init {
             require(ownerPath.isNotEmpty()) {
@@ -595,6 +599,15 @@ sealed interface DotNetPhysicalDeclaration {
             require(objectParameterIndices.isNotEmpty() && objectParameterIndices.all { index -> index >= 0 }) {
                 "a generic-owner function input entry requires non-negative object parameter indices"
             }
+            require(returnCarrier == null || returnCarrier == DotNetGenericOwnerFunctionCarrierKind.OBJECT) {
+                "a generic-owner function input entry supports only an unchanged or object result carrier"
+            }
+            require(sourceSignature.isInstance == isInstance &&
+                    sourceSignature.genericArity == methodGenericParameterCount
+            ) {
+                "a generic-owner function input entry disagrees with its source signature header"
+            }
+            DotNetGenericOwnerPhysicalFamilyCodec.requireBoundedPhysicalMethodSignature(sourceSignature)
         }
     }
 
@@ -1376,7 +1389,7 @@ data class DotNetFriendAssemblyIdentity(
 
 /** Manifest codec for the provisional declaration-index schema. */
 object DotNetLibraryAbiCodec {
-    const val ABI_VERSION = "71"
+    const val ABI_VERSION = "72"
     const val ABI_VERSION_PROPERTY = "dotnet_abi_version"
     const val LOGICAL_IDENTITY_SCHEME = "kotlin-public-id-signature-legacy-v1"
     const val LOGICAL_IDENTITY_SCHEME_PROPERTY = "dotnet_logical_identity_scheme"
@@ -1629,6 +1642,8 @@ object DotNetLibraryAbiCodec {
             methodName,
             methodGenericParameterCount.toString(),
             objectParameterIndices.sorted().joinToString(","),
+            returnCarrier.encodeCarrierKind(),
+            DotNetGenericOwnerPhysicalFamilyCodec.encodePhysicalMethodSignature(sourceSignature),
             ownerPath.size.toString(),
         ) + ownerPath
 
@@ -1705,22 +1720,27 @@ object DotNetLibraryAbiCodec {
         fields: List<String>,
         logicalKey: String,
     ): DotNetPhysicalDeclaration.GenericOwnerFunctionInputEntry {
-        require(fields.size >= 8) {
+        require(fields.size >= 10) {
             "generic-owner function input entry '$logicalKey' has an incomplete CLR identity"
         }
-        val ownerSize = fields[6].toIntOrNull()
-        require(ownerSize != null && ownerSize > 0 && fields.size == 7 + ownerSize) {
+        val ownerSize = fields[8].toIntOrNull()
+        require(ownerSize != null && ownerSize > 0 && fields.size == 9 + ownerSize) {
             "generic-owner function input entry '$logicalKey' has an invalid CLR owner-path payload"
         }
-        val parameterIndices = fields[5].split(',').mapTo(linkedSetOf()) { encodedIndex ->
-            encodedIndex.toIntOrNull()
-                ?: throw IllegalArgumentException(
-                    "generic-owner function input entry '$logicalKey' has invalid parameter index " +
-                            "'$encodedIndex'"
-                )
+        val parameterIndices = buildSet {
+            for (encodedIndex in fields[5].split(',')) {
+                val index = encodedIndex.toIntOrNull()
+                    ?: throw IllegalArgumentException(
+                        "generic-owner function input entry '$logicalKey' has invalid parameter index " +
+                                "'$encodedIndex'"
+                    )
+                require(add(index)) {
+                    "generic-owner function input entry '$logicalKey' repeats parameter index $index"
+                }
+            }
         }
         return DotNetPhysicalDeclaration.GenericOwnerFunctionInputEntry(
-            ownerPath = fields.drop(7).requireOwnerPath(logicalKey, "generic-owner function input entry"),
+            ownerPath = fields.drop(9).requireOwnerPath(logicalKey, "generic-owner function input entry"),
             logicalFunctionKey = fields[1],
             methodName = fields[3].requireMethodName(logicalKey, "classifier-input entry"),
             isInstance = fields[2].decodeDispatch(logicalKey),
@@ -1729,6 +1749,13 @@ object DotNetLibraryAbiCodec {
                 "classifier-input entry",
             ),
             objectParameterIndices = parameterIndices,
+            sourceSignature = fields[7].let { encoded ->
+                require(encoded.length <= DotNetGenericOwnerPhysicalFamilyCodec.MAX_SERIALIZED_PHYSICAL_FIELD_CHARS) {
+                    "generic-owner function input entry '$logicalKey' has an oversized source signature"
+                }
+                DotNetGenericOwnerPhysicalFamilyCodec.decodePhysicalMethodSignature(encoded)
+            },
+            returnCarrier = fields[6].decodeCarrierKind(logicalKey, "alternate return", allowsNatural = true),
         ).also { entry ->
             require(entry.indexKey() == logicalKey) {
                 "generic-owner function input entry '$logicalKey' is inconsistent with its structured identity"
@@ -5147,6 +5174,11 @@ internal class DotNetExternalDeclarations(
         }) {
             "external generic-owner function input entry did not reconstruct its object parameters"
         }
+        require(entry.returnCarrier != DotNetGenericOwnerFunctionCarrierKind.OBJECT ||
+                signature.returnType == DotNetIlReturnType.Value(DotNetIlValueType.Object)
+        ) {
+            "external generic-owner function input entry did not reconstruct its object result"
+        }
         return DotNetIlFunctionInfo(owner, signature, entry.methodName)
     }
 
@@ -6365,7 +6397,7 @@ internal fun collectDotNetLibraryDeclarations(
         // different writers.  Authority applies only in the writer which actually retained this
         // physical input entry; mere file membership is not an emission fact.
         val inputEntryInfo = availableFunctions[inputEntry] ?: continue
-        check(source in availableFunctions) {
+        val sourceInfo = checkNotNull(availableFunctions[source]) {
             "generic-owner function input entry survived without its source MethodDef"
         }
         val authority = checkNotNull(genericOwnerFunctionInputEntryAuthorities[source]) {
@@ -6407,6 +6439,16 @@ internal fun collectDotNetLibraryDeclarations(
                         inputEntryInfo.signature.parameterTypes.getOrNull(index) == DotNetIlValueType.Object
             }
         }.toSet()
+        val returnCarrier = if (inputEntryInfo.signature.returnType == sourceInfo.signature.returnType) {
+            null
+        } else {
+            check(inputEntryInfo.signature.returnType == DotNetIlReturnType.Value(DotNetIlValueType.Object) &&
+                    mapper.isGenericOwnerForeignDispatchDeclaration(inputEntry)
+            ) {
+                "generic-owner function input entry has an unsupported alternate result carrier"
+            }
+            DotNetGenericOwnerFunctionCarrierKind.OBJECT
+        }
         val physicalEntry = DotNetPhysicalDeclaration.GenericOwnerFunctionInputEntry(
             ownerPath = inputEntryInfo.owner.physicalPathComponents(),
             logicalFunctionKey = logicalFunctionKey,
@@ -6414,6 +6456,15 @@ internal fun collectDotNetLibraryDeclarations(
             isInstance = inputEntryInfo.isInstance,
             methodGenericParameterCount = inputEntryInfo.signature.methodGenericParameterCount,
             objectParameterIndices = objectParameterIndices,
+            sourceSignature = sourceInfo.signature.toGenericOwnerPhysicalMethodSignatureRecord(mapper.coreLibrary) { classInfo ->
+                finalTypeDefObservations.singleOrNull { observation ->
+                    observation.physicalTypePath == classInfo.physicalPathComponents()
+                }?.category ?: error(
+                    "generic-owner function input entry source references an unobserved producer TypeDef " +
+                            classInfo.ilTypeRef
+                )
+            },
+            returnCarrier = returnCarrier,
         )
         put(physicalEntry.indexKey(), physicalEntry)
     }
