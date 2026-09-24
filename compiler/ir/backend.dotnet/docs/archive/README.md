@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`nested-bottom-storage-2026-09-24.md`](nested-bottom-storage-2026-09-24.md)
+  preserves separate constructor/later-write reproducers for coherent bottom
+  values in typed nested state and distinguishes the remaining interop choice
+  from already working operation dispatch.
 - [`coherent-interface-bottom-dispatch-2026-09-24.md`](coherent-interface-bottom-dispatch-2026-09-24.md)
   records real bottom-view operations, preserved natural forwarding, complete
   paired-entry MethodDef validation, hostile overloads and verification scope.

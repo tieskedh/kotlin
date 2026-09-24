@@ -1,0 +1,41 @@
+diff --git a/compiler/testData/codegen/dotnet/box/genericOwnerForeignOverrideSeparateCompilation.kt b/compiler/testData/codegen/dotnet/box/genericOwnerForeignOverrideSeparateCompilation.kt
+index 84a51f6a4e..0c4dc4113d 100644
+--- a/compiler/testData/codegen/dotnet/box/genericOwnerForeignOverrideSeparateCompilation.kt
++++ b/compiler/testData/codegen/dotnet/box/genericOwnerForeignOverrideSeparateCompilation.kt
+@@ -1185,0 +1186,12 @@
++private class RehearsalSeparateBottomProducer(private val failure: Throwable) :
++    RehearsalSeparateProducer<Nothing> {
++    private var calls: Int = 0
++
++    override fun produce(): Nothing {
++        calls += 1
++        throw failure
++    }
++
++    fun callCount(): Int = calls
++}
++
+@@ -2101,0 +2114,23 @@
++    val nestedBottomFailure: Throwable = IllegalStateException("separate nested bottom")
++    val nestedBottomProducer = RehearsalSeparateBottomProducer(nestedBottomFailure)
++    val nestedBottomStringView: RehearsalSeparateProducer<String> = nestedBottomProducer
++    val nestedBottomBox = exactProducerBox
++    nestedBottomBox.write(nestedBottomStringView)
++    if (!RehearsalSeparateProducerReader().same(nestedBottomBox.read(), nestedBottomProducer)) {
++        return "fail: separate bottom nested producer box identity, body count ${nestedBottomProducer.callCount()}"
++    }
++    if (nestedBottomProducer.callCount() != 0) {
++        return "fail: separate bottom nested producer box called body before dispatch"
++    }
++    try {
++        nestedBottomBox.read().produce()
++        return "fail: separate bottom nested producer box returned"
++    } catch (caught: Throwable) {
++        if (caught !== nestedBottomFailure) {
++            return "fail: separate bottom nested producer box dispatch exception $caught, body count ${nestedBottomProducer.callCount()}"
++        }
++    }
++    if (nestedBottomProducer.callCount() != 1) {
++        return "fail: separate bottom nested producer box body count"
++    }
++    nestedBottomBox.write(exactStringProducer)

@@ -106,9 +106,15 @@ targets; it already binds the requested retained interface MethodDef and does
 not need the new model query to do so. Coherent Kotlin semantic-family dispatch
 now executes through bottom producers, separate forwarding, `Any`/star recovery
 and `ValueBox<Any>`, while independently proved fields and natural C# results
-remain typed. This does not close nested typed generic storage: a logical
-`Box<Source<String>>` must still account for a valid bottom producer without
-inventing a natural construction. Conflicting foreign implementations of
+remain typed. The subsequent
+[nested-storage counterexamples](docs/archive/nested-bottom-storage-2026-09-24.md)
+reproduce invalid CLR casts both in a separate box factory and on a later write
+to an already allocated exact box. Both unchanged probes pass the erased
+inverse on both parsers/runtimes; their source is archived, not left in the
+active corpus. A broader construction/public surface and the treatment of
+existing narrow C# containers require an explicit interop decision before
+integration. Neither global state erasure nor pair transport follows from
+this result. Conflicting foreign implementations of
 Kotlin-owned families require an explicit interop policy; neither researched
 target-priority policy is accepted.
 
