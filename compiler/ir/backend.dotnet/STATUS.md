@@ -85,7 +85,15 @@ candidate Runtime/Stdlib closure or authorize a production generic-owner switch.
 ## Active work
 
 The source-built Runtime/Stdlib generic-owner rehearsal remains inside phase 1
-of the way forward, but the census is paused at the architecture boundary below.
+of the way forward. Broad owner/census expansion is paused for the
+[storage-cycle strategic gate](docs/programmes/generic-owner-storage-cycle.md):
+separate generic factories, another Kotlin library's widening/writes, and C#
+reads of the same object, followed by a general representation rule and an
+actual candidate/erased comparison. Bottom and ordinary non-bottom covariance,
+existing foreign allocations, runtime/allocation/size, compilation cost,
+compiler complexity and interop all belong to this gate. An early
+GO/CONSTRAIN/NO-GO selects further investment before the full census, without
+choosing a new public contract or authorizing production migration.
 The latest census, on `bd0f943a24`, contains 215 error
 lines, exactly unchanged from `f132c354f5`, `3724aeab9c` and `2a13f45341`;
 `AbstractMap` and its generated views no longer fail there. These are

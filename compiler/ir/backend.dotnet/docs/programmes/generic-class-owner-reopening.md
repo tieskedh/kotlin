@@ -64,10 +64,19 @@ this programme.
 ## Current work package
 
 The schema-22 declaration/value/operation/state consolidation is complete; its
-bounded grammar and evidence are indexed by the
-[archive](../archive/README.md). Before resuming the source-built Runtime/Stdlib
-census, close the operation-dispatch and independent storage-contract boundaries
-identified in [current status](../../STATUS.md). Then proceed in this order:
+bounded grammar and evidence are indexed by the [archive](../archive/README.md).
+Broad owner and Runtime/Stdlib census expansion is paused. First run the
+[complete storage-cycle decision gate](generic-owner-storage-cycle.md): prove
+separate generic construction, legal later Kotlin writes and honest C# reads;
+derive a general representability rule; and compare the current candidate with
+erased products for behavior, performance, allocation, size, compilation cost,
+compiler complexity and interop. Both bottom and non-bottom covariance matter.
+
+An early strategic GO, CONSTRAIN or NO-GO must select the next investment before
+more census expansion. It does not assume the natural-owner direction wins,
+approve a changed public contract, or replace the final production decision.
+Preserve existing working features and production erasure. If the selected
+direction warrants further rehearsal, proceed within that scope:
 
 1. **Recompute the next complete source closure.** Compile it in candidate and
    erased-inverse modes and let the first real failure select the next general
@@ -82,8 +91,9 @@ identified in [current status](../../STATUS.md). Then proceed in this order:
 4. **Freeze the complete selected rehearsal family.** Close the Runtime/Stdlib
    candidate, hostile matrix, deployment profiles, ordinary C# surface, and
    exact erased inverse. This remains a rehearsal, not a production cutover.
-5. **Run the go/no-go decision.** Record GO, CONSTRAIN, or NO-GO only after the
-   complete rehearsal census supplies the required evidence.
+5. **Run the final production go/no-go decision.** Use complete selected-family
+   evidence in addition to the earlier strategic gate; do not treat the small
+   storage cycle as ABI readiness.
 
 The current checkpoint and blockers live only in [`../../STATUS.md`](../../STATUS.md).
 

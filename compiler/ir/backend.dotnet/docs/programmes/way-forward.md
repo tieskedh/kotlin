@@ -33,17 +33,28 @@ not preserved through compatibility aliases. See the
 
 ## Primary critical path
 
-### 1. Complete the generic-owner rehearsal census
+### 1. Decide storage composition before extending the owner census
 
 The schema-22 physical-authority consolidation is the current foundation.
 Production remains on erased owners while the rehearsal prefers natural CLR-
 generic declarations and uses semantic capabilities only where the CLR cannot
-truthfully name the Kotlin view.
+truthfully name the Kotlin view. Broad expansion is paused; this is a candidate
+direction, not a conclusion to preserve at any cost.
 
-Advance the source-built Runtime/Stdlib census inside this phase once the owning
-operation and storage contracts are established. At an unresolved representation
-boundary, first close bounded architecture proofs; a successful dispatch proof
-alone does not establish storage or public-interop composition. Each real census
+First complete the [storage-cycle decision gate](generic-owner-storage-cycle.md):
+separate generic factories, another Kotlin library's legal widening/writes, and
+ordinary C# observation of the same object, including bottom and non-bottom
+covariance and existing foreign allocations. Derive one general argument/storage
+rule, compare actual candidate and erased products, and make an **early strategic
+GO / CONSTRAIN / NO-GO** decision. Do not wait for the complete census to decide
+whether that investment remains justified. A GO only permits further scoped
+rehearsal; it is not the final ABI/cutover decision below.
+
+Advance the selected source-built Runtime/Stdlib census only after this early
+gate and the owning operation/storage contracts are established. At an
+unresolved representation boundary, first close bounded architecture proofs;
+a successful dispatch proof alone does not establish storage or public-interop
+composition. Each real census
 failure may add only a structural rule derived from:
 
 - Kotlin IR/KLIB logical authority;

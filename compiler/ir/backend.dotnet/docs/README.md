@@ -46,6 +46,9 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [`programmes/generic-class-owner-reopening.md`](programmes/generic-class-owner-reopening.md)
   drives the hardest-model-first true-CLR-generic-owner architecture work while
   the accepted erased implementation remains the production baseline.
+  Its [storage-cycle strategic gate](programmes/generic-owner-storage-cycle.md)
+  precedes further broad census expansion and compares complete Kotlin/C#
+  storage composition with erased products before selecting further investment.
   Its [`carrier and admission matrix`](programmes/generic-class-owner-carrier-matrix.md)
   makes the experimental construction, carrier, slot-domain, cast, and
   override rules deterministic without authorizing a production ABI change.

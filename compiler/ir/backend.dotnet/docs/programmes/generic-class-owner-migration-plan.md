@@ -32,8 +32,16 @@ The target deliberately separates two moments.
 
 Postponing all architecture would let new code depend accidentally on erasure.
 Publishing a generic ABI now would freeze costs before representative apps can
-measure them. The rehearsal therefore advances now while production remains
-erased.
+measure them. Bounded rehearsal research therefore continues while production
+remains erased.
+
+Before broad owner/census expansion, the
+[storage-cycle strategic gate](generic-owner-storage-cycle.md) now decides
+whether to continue, constrain or stop that direction. It requires complete
+separate generic storage and honest C# observation plus an actual comparison
+with erased products. This early investment decision is distinct from the
+final production decision; it neither revokes working bounded proofs nor
+waives any entry condition below.
 
 ## Atomic migration unit
 
@@ -105,7 +113,8 @@ Before any cutover proposal, complete these stages in order:
    inverse remains exact, and existing Runtime `Map` stays unchanged. Multiple
    members/inputs, value classes, richer inheritance, and Runtime/Stdlib
    application remain later generalization rather than implicit admission.
-8. Close the remaining retained/foreign entry validation, including inherited,
+8. After the early storage-cycle gate selects further rehearsal, close the
+   remaining retained/foreign entry validation, including inherited,
    open, projected, vararg, and multiple-view generic cases plus SZ-array and
    bounded-element entry guards.
 9. Freeze and migrate the complete selected rehearsal family, deleting old
