@@ -1,0 +1,7 @@
+PASS: nested-out-replacement
+PASS: reference-only-in-projection
+PASS: open-projected-factory-and-writer
+PASS: nullable-factory-nested-storage
+PASS: nullable-substitution-idempotence
+PASS: nullable-base-separate-writer
+PASS: Common/JVM composition baseline; groups=6; separate-jars=3

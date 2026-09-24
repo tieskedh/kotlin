@@ -1,0 +1,194 @@
+{
+  "kind": "common-source-jvm-composition-precedent-only",
+  "status": "PASS",
+  "kotlinHome": "C:\\Users\\thijs\\IdeaProjects\\kotlin\\dist\\kotlinc",
+  "javaExecutable": "C:\\Users\\thijs\\.jdks\\ms-21.0.9\\bin\\java.exe",
+  "javaExecutableSha256": "B92EE09627964A55DBE0C17980A53CE378B2759276B98547981BB6C1F51C6394",
+  "compilerSha256": "26FB236DA1553F0A6243BBE7CA2F261D0C673FDA7F1B6A83B56365A1828E78D5",
+  "stdlibSha256": "8B1CA84573C51573493311619022916BFDB1CF688712C021DFB569C9462608F1",
+  "compilerClasspathHashes": {
+    "allopen-compiler-plugin.jar": "4FD8C5D2DD9661683049521A695820AE52365F545812094402DF2132F3E1A586",
+    "annotations-13.0.jar": "ACE2A10DC8E2D5FD34925ECAC03E4988B2C0F851650C94B8CEF49BA1BD111478",
+    "assignment-compiler-plugin.jar": "04032AB8C2AB2F2524D902617468E989EECC296BB7819AEC3BF5A2C2168AA92E",
+    "compose-compiler-plugin.jar": "E4ED4A9E2F467A6FFB2AA6ADC408E294589BFA8D25CF0778EE7E8D49BD95BED6",
+    "jklib-compiler.jar": "AE4F6A04364B0D08416127536AE871AC7528C6D0EE22BFA3E932508F44A5EB65",
+    "jvm-abi-gen.jar": "6D2FFEC0B09ED7E6CE36142D01CFD7C63BA26DA1CD1E3C6AF9230DB192D07D9E",
+    "kotlin-annotation-processing-cli.jar": "2E2B962DF40CC5B5D818FCC69C35E103158A4E0D5CA1716F0E6CF64FE843006F",
+    "kotlin-annotation-processing-runtime.jar": "9094C69B7C9BC931DA03D2180B4C4D1D5BAA3596BEC79750AC21E697662EE71E",
+    "kotlin-annotation-processing.jar": "1D2AB377359D554E07E60914FF54B702F6E2F20DCEEFCA1D67C15E50A0AB85A8",
+    "kotlin-annotations-jvm-sources.jar": "BC7074708D4A2EB28F88D9E35BA057CF03FF046D4136D4BE07885CB16D6A7CE7",
+    "kotlin-annotations-jvm.jar": "35C4F33E4AE6E92AB7F29E87C26185DB4283BA9BD077C1151C55CA6ECFCDC408",
+    "kotlin-compiler.jar": "26FB236DA1553F0A6243BBE7CA2F261D0C673FDA7F1B6A83B56365A1828E78D5",
+    "kotlin-daemon-client.jar": "EBE0CC15E09006584CF161061BADBF02DE09AE2DF67D2970667F74C47CD6FB31",
+    "kotlin-daemon.jar": "5569F37C0794CE965D5D1F3FE4B6EEEA1C14652AC6E2991791F3265F7E4E76D0",
+    "kotlin-main-kts.jar": "C0D9BCB64D3FBF7F11929BDF963509384CD5E513EF4FB3E020162205EFA926FF",
+    "kotlin-metadata-jvm-sources.jar": "EC7F25A80B3AE1C64CF2295F10A1A041FD70AC10A471051E121948F7BFD32CE5",
+    "kotlin-metadata-jvm.jar": "3FE003207784D176D457502BA6183ABED49E9F74800FEFAA5E5CF517226F9838",
+    "kotlin-preloader.jar": "D6C3AE5215BCCEB0A44E8065E6144FEA8D92E62DF92D24A5B03157EDDC202B89",
+    "kotlin-reflect-sources.jar": "C02EA56BE870A78AB71F33EBFCC104282F4FCA5958C26126766FEE12D6E2AC3A",
+    "kotlin-reflect.jar": "C95700E98E5AC98BEA3BE9BD31BC013D62DDB32F63143ACD8402CFFF34D8EC84",
+    "kotlin-runner.jar": "F7CCF48B62815F05C3BC6A6616626995BA0D4AF8FA8C6D842F875702D828E17B",
+    "kotlin-script-runtime-sources.jar": "BC3CA5EAC48B6300637FEAA26512D7A8781AFAAE3C3034B867066B62C3122D2C",
+    "kotlin-script-runtime.jar": "CE778CE971A3A983A3DA3D3EC7BD480C89BBA259274F8ECFE0A81F64888529B4",
+    "kotlin-scripting-common.jar": "43AB6F1B2CD8A8A4694088331252FE0FFC2567EC72A6A371ED1225B098F79F7C",
+    "kotlin-scripting-compiler-impl.jar": "1AE3FE6DD9E01BA7F103CBAEA560D3E2EBB300835341671D53D8525209D5D98C",
+    "kotlin-scripting-compiler.jar": "EFCAEB1C533C01A1BA221064AB37E0A85A4CB3BFD5B8249669225856A815338B",
+    "kotlin-scripting-jvm.jar": "6F9F3D9E09DC779ADEA7299DE4B6C268EB6BC9D3A25E1F2E8FB2B74182D01FE4",
+    "kotlin-serialization-compiler-plugin.jar": "1FA8593FF7D1E668FBAF3BD749BEDB1D9DB31CC91EC5854BD45B8C4753BA85F5",
+    "kotlin-stdlib-jdk7-sources.jar": "96651BC1F9ACD42DB2AE76C9E2C8E960E75006C3540B9DBB2810D8064C3170F6",
+    "kotlin-stdlib-jdk7.jar": "7DA61FD9D3AF65CCC31EDE95CB4363A5C4ED2EA160B4DB9E5F0CF7033E1B5A72",
+    "kotlin-stdlib-jdk8-sources.jar": "866D81C0BA21CD98981512C7840F770CBE5AB53A08A35FE6683DA477E2ED1094",
+    "kotlin-stdlib-jdk8.jar": "06F27BF020B19AD06622B3C000815484F3E0375B47472F9F47F439F085398005",
+    "kotlin-stdlib-js-sources.jar": "174824DB768B73E57D319B7D0768AF95D6554D8707663DB495875BA91CFE0617",
+    "kotlin-stdlib-sources.jar": "A84C23A7CFF4086C0647F596AA029BAD6B732F7468DF45D4D4F4B1FEEFB6D470",
+    "kotlin-stdlib.jar": "8B1CA84573C51573493311619022916BFDB1CF688712C021DFB569C9462608F1",
+    "kotlin-test-js-sources.jar": "E1D155F9D3558AA85453F06AD3C8F9F2A091D9A8C394800FEEDC89A8A2B3DFBB",
+    "kotlin-test-junit-sources.jar": "A6A6C79FCD3BB86B88A6DB49DC19FD644BC21DE959DDD99C2906E1E3969726EB",
+    "kotlin-test-junit.jar": "9B21F11BCE182ADCD3E000D4A540DA595CB588882E840B0BC7C26EBBEFA1C287",
+    "kotlin-test-junit5-sources.jar": "D358E69C14F8FE933CD4941F3C24683896E724D59164A20FEBD463AA5E81D128",
+    "kotlin-test-junit5.jar": "BABC3D3BCA7AD9AF000CF6A92E4567881D0EDFBC55A7E808A1BCA058923F6D1A",
+    "kotlin-test-sources.jar": "50570E7CD10E6DE61212082DE88392FCE5DF9F95DA307D7CA9A936ED9D21F089",
+    "kotlin-test-testng-sources.jar": "20FE037C63C35555D1FF5BD4420086394E434DA57B4B6BC9875A756B48A25F64",
+    "kotlin-test-testng.jar": "A651DBBB70C1479623E11110D697C3470989C46771BA2B9CEE21CBF126A3A556",
+    "kotlin-test.jar": "7FFCE5F39A655A818D505FDDA22DA763674B1911A9B179B302904E7C8BD90627",
+    "kotlinx-coroutines-core-jvm.jar": "9860906A1937490BF5F3B06D2F0E10EF451E65B95B269F22DAF68A3D1F5065C5",
+    "kotlinx-serialization-compiler-plugin.jar": "1FA8593FF7D1E668FBAF3BD749BEDB1D9DB31CC91EC5854BD45B8C4753BA85F5",
+    "lombok-compiler-plugin.jar": "AFB84A10ACA4C3891420BA9045895870DDA6A877993A353C3E2E276E4B844BE1",
+    "mutability-annotations-compat.jar": "F217DA6B03DB5319C42E0B26BD9FFFCB2011057651CECC1EB8DB190C73774394",
+    "noarg-compiler-plugin.jar": "9031A2EE60A92E7DBE72222EE1439664412E5BA2922FA5BC49CD3492C7CA3A9A",
+    "parcelize-compiler.jar": "0A1E764A438F0D4F8936D45E5E147E66FB74CBA24A3BA7D0A62A4156B8B4A62F",
+    "parcelize-runtime.jar": "2E26CD5EEC2D16C21AF33ED1439DDFF64A7E27CA321B1DA153A286F22DCF4B35",
+    "power-assert-compiler-plugin.jar": "E866A75FEB26C11E48488501790FE6619E6B8102C930E3D1CB042355F5AEEB50",
+    "sam-with-receiver-compiler-plugin.jar": "36BC50244D5D4AC7CDC09603046826BD7BAF4B0059460A25635E36416418899D",
+    "scripting-compiler.jar": "EFCAEB1C533C01A1BA221064AB37E0A85A4CB3BFD5B8249669225856A815338B"
+  },
+  "sourceHashes": {
+    "Library.kt": "4AA44E6C578F472BA8ADA51B58D98A9D09E165760B62184B4BD72BA5316E2343",
+    "Writers.kt": "85BAFAF1EB03B327367E42306901C8047D6DEC88043D7714C5BC114C324D0C6A",
+    "Consumer.kt": "878B116AD77CD7DCFCD336968CBA03A9BE6F942F0D627D8A9E332362B3090F1C"
+  },
+  "runnerSha256": "37A72C6A3BF571A1398EFF38940E67E8B2B1A9053732B05AED3CC2DDD46970C8",
+  "compilerVersion": [
+    "info: kotlinc-jvm 2.5.255-SNAPSHOT (JRE 21.0.9+10-LTS)"
+  ],
+  "javaVersion": [
+    "openjdk version \"21.0.9\" 2025-10-21 LTS",
+    "OpenJDK Runtime Environment Microsoft-12574459 (build 21.0.9+10-LTS)",
+    "OpenJDK 64-Bit Server VM Microsoft-12574459 (build 21.0.9+10-LTS, mixed mode, sharing)"
+  ],
+  "artifactHashes": {
+    "library.jar": "51A61FCCC80D204F6E3B7286CFF13ADC4C75BF466AECC13AFBD4117EF71C2FE1",
+    "writers.jar": "FD0324949C93D20A3942AAD611B743721CF65B696F359C31FA6C34433D86BC65",
+    "consumer.jar": "3359E2D50641B8CC801AB8B1F69AA4F626B2008466B9B5F7DB718F11270EFB50"
+  },
+  "toolRuns": [
+    {
+      "executable": "C:\\Users\\thijs\\.jdks\\ms-21.0.9\\bin\\java.exe",
+      "arguments": [
+        "-cp",
+        "C:\\Users\\thijs\\IdeaProjects\\kotlin\\dist\\kotlinc\\lib\\*",
+        "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler",
+        "-version"
+      ],
+      "exitCode": 0,
+      "log": "compiler-version.log"
+    },
+    {
+      "executable": "C:\\Users\\thijs\\.jdks\\ms-21.0.9\\bin\\java.exe",
+      "arguments": [
+        "-version"
+      ],
+      "exitCode": 0,
+      "log": "java-version.log"
+    },
+    {
+      "executable": "C:\\Users\\thijs\\.jdks\\ms-21.0.9\\bin\\java.exe",
+      "arguments": [
+        "-cp",
+        "C:\\Users\\thijs\\IdeaProjects\\kotlin\\dist\\kotlinc\\lib\\*",
+        "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler",
+        "-Werror",
+        "-no-reflect",
+        "-no-stdlib",
+        "-Xrender-internal-diagnostic-names",
+        "-module-name",
+        "composition_library",
+        "-classpath",
+        "C:\\Users\\thijs\\IdeaProjects\\kotlin\\dist\\kotlinc\\lib\\kotlin-stdlib.jar",
+        "-d",
+        "D:\\CodexTemp\\hybrid-owner-research-20260924\\kotlin-results\\library.jar",
+        "D:\\CodexTemp\\hybrid-owner-research-20260924\\kotlin-results\\Library.kt"
+      ],
+      "exitCode": 0,
+      "log": "library-compile.log"
+    },
+    {
+      "executable": "C:\\Users\\thijs\\.jdks\\ms-21.0.9\\bin\\java.exe",
+      "arguments": [
+        "-cp",
+        "C:\\Users\\thijs\\IdeaProjects\\kotlin\\dist\\kotlinc\\lib\\*",
+        "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler",
+        "-Werror",
+        "-no-reflect",
+        "-no-stdlib",
+        "-Xrender-internal-diagnostic-names",
+        "-module-name",
+        "composition_writers",
+        "-classpath",
+        "D:\\CodexTemp\\hybrid-owner-research-20260924\\kotlin-results\\library.jar;C:\\Users\\thijs\\IdeaProjects\\kotlin\\dist\\kotlinc\\lib\\kotlin-stdlib.jar",
+        "-d",
+        "D:\\CodexTemp\\hybrid-owner-research-20260924\\kotlin-results\\writers.jar",
+        "D:\\CodexTemp\\hybrid-owner-research-20260924\\kotlin-results\\Writers.kt"
+      ],
+      "exitCode": 0,
+      "log": "writers-compile.log"
+    },
+    {
+      "executable": "C:\\Users\\thijs\\.jdks\\ms-21.0.9\\bin\\java.exe",
+      "arguments": [
+        "-cp",
+        "C:\\Users\\thijs\\IdeaProjects\\kotlin\\dist\\kotlinc\\lib\\*",
+        "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler",
+        "-Werror",
+        "-no-reflect",
+        "-no-stdlib",
+        "-Xrender-internal-diagnostic-names",
+        "-module-name",
+        "composition_consumer",
+        "-classpath",
+        "D:\\CodexTemp\\hybrid-owner-research-20260924\\kotlin-results\\writers.jar;D:\\CodexTemp\\hybrid-owner-research-20260924\\kotlin-results\\library.jar;C:\\Users\\thijs\\IdeaProjects\\kotlin\\dist\\kotlinc\\lib\\kotlin-stdlib.jar",
+        "-d",
+        "D:\\CodexTemp\\hybrid-owner-research-20260924\\kotlin-results\\consumer.jar",
+        "D:\\CodexTemp\\hybrid-owner-research-20260924\\kotlin-results\\Consumer.kt"
+      ],
+      "exitCode": 0,
+      "log": "consumer-compile.log"
+    },
+    {
+      "executable": "C:\\Users\\thijs\\.jdks\\ms-21.0.9\\bin\\java.exe",
+      "arguments": [
+        "-cp",
+        "D:\\CodexTemp\\hybrid-owner-research-20260924\\kotlin-results\\consumer.jar;D:\\CodexTemp\\hybrid-owner-research-20260924\\kotlin-results\\writers.jar;D:\\CodexTemp\\hybrid-owner-research-20260924\\kotlin-results\\library.jar;C:\\Users\\thijs\\IdeaProjects\\kotlin\\dist\\kotlinc\\lib\\kotlin-stdlib.jar",
+        "hybrid.composition.ConsumerKt"
+      ],
+      "exitCode": 0,
+      "log": "consumer-run.log"
+    }
+  ],
+  "assertions": [
+    "PASS: nested-out-replacement",
+    "PASS: reference-only-in-projection",
+    "PASS: open-projected-factory-and-writer",
+    "PASS: nullable-factory-nested-storage",
+    "PASS: nullable-substitution-idempotence",
+    "PASS: nullable-base-separate-writer",
+    "PASS: Common/JVM composition baseline; groups=6; separate-jars=3"
+  ],
+  "failure": null,
+  "exclusions": [
+    "DotNet implementation",
+    "CLR storage or C# contract",
+    "hybrid ABI admission",
+    "performance measurement"
+  ]
+}

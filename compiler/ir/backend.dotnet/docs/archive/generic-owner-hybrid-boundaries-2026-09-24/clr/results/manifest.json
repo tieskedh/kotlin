@@ -1,0 +1,776 @@
+{
+  "label": "standalone-CLR-mechanism-only-not-Kotlin",
+  "createdUtc": "2026-09-24T19:59:37.3479305Z",
+  "host": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\dotnet.exe",
+  "hostSha256": "b74c001a6f6f5c979f88eda19a8f782346ee17ecea6add3647ad05f5c6e2b8bd",
+  "compiler": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\sdk\\10.0.100\\Roslyn\\bincore\\csc.dll",
+  "compilerSha256": "b8d69d09c4c9c395932e7f3b023422d653a7f713ce4fc8eec701560dc7077d81",
+  "profiles": [
+    "net48",
+    "net10"
+  ],
+  "sources": [
+    {
+      "name": "Profile.cs",
+      "sha256": "5d8802623565e76d916b13fd26988755f15fc02cfbfacb021ee5828f81ae747f"
+    },
+    {
+      "name": "Producer.cs",
+      "sha256": "a6bbb5132d900f6b24d1aba32825c79d987c9c3a1286d4b7596ce6c1d46e33af"
+    },
+    {
+      "name": "Writers.cs",
+      "sha256": "8c6aa0be28c487d127b2a3f2af8ad052c26d19342df3d2b4532443420d39222a"
+    },
+    {
+      "name": "Consumer.cs",
+      "sha256": "8731601036603307d2be82cac4eef43b1e25a7a90a6c8799c48c73b1b44ecb38"
+    },
+    {
+      "name": "UnrestrictedNullable.cs",
+      "sha256": "46c8a48ef9de5d74444e1e31699d3f07b62b4e4fadf3a8216260dedb61f58102"
+    },
+    {
+      "name": "Invoke-Framework.ps1",
+      "sha256": "f64b0fa881d8806715a684ae319ad421ba282471b97a31d9362963b0d7802849"
+    },
+    {
+      "name": "Run-Probe.ps1",
+      "sha256": "3457066a8206337c13b39d5c93fe6626a015490e9c927a5cb23e59218f820344"
+    },
+    {
+      "name": "README.md",
+      "sha256": "6e849a1e2ca4bfa25a123a1e336a4b0e3f5c056894d97e7a6a31dfe0c88dc987"
+    }
+  ],
+  "runs": [
+    {
+      "profile": "net48",
+      "exitCode": 0,
+      "expectedCS0453": true,
+      "referenceAssemblies": [
+        {
+          "path": "C:\\WINDOWS\\Microsoft.NET\\Framework64\\v4.0.30319\\mscorlib.dll",
+          "sha256": "5bffb20e1217bad314143d7e5c4c809bf9f522e8a0a063c8e7e9b25113de26eb"
+        },
+        {
+          "path": "C:\\WINDOWS\\Microsoft.NET\\Framework64\\v4.0.30319\\System.dll",
+          "sha256": "2b3c17c6208a0b4b6beb94e1a066f99ba06cdb2ea919479e99d47e8c6d96dc71"
+        },
+        {
+          "path": "C:\\WINDOWS\\Microsoft.NET\\Framework64\\v4.0.30319\\System.Core.dll",
+          "sha256": "fd1097aed825d392a5dc8d19384381d4bb2a43498ea1c9d917f5d80c66600e1b"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "D:\\CodexTemp\\hybrid-owner-research-20260924\\clr-results-verified\\net48\\Producer.dll",
+          "bytes": 4096,
+          "sha256": "eb99a3493d5f0aff841cbf5decc3c1cc3d8a769aa7c325a34ddd7c9996bfcb12"
+        },
+        {
+          "path": "D:\\CodexTemp\\hybrid-owner-research-20260924\\clr-results-verified\\net48\\Writers.dll",
+          "bytes": 3584,
+          "sha256": "f241f211f573bc6ea3951ca55b01fa657b19d1917baabf73e9274e74e7712b5d"
+        },
+        {
+          "path": "D:\\CodexTemp\\hybrid-owner-research-20260924\\clr-results-verified\\net48\\Consumer.exe",
+          "bytes": 13312,
+          "sha256": "596f6924014cf633b587ffc73efaf624eb17f6c719ddb0d267e283a9aee6b98d"
+        }
+      ]
+    },
+    {
+      "profile": "net10",
+      "exitCode": 0,
+      "expectedCS0453": true,
+      "referenceAssemblies": [
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\Microsoft.CSharp.dll",
+          "sha256": "4456a9fe3d6d6c670507e83da0a863c66eff8afa6b4abfe3d743209c0d7b3a57"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\Microsoft.VisualBasic.Core.dll",
+          "sha256": "e0fef42b089f8ae37e7a11d99859734f7129fd9761b1480ebad62b72c800b945"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\Microsoft.VisualBasic.dll",
+          "sha256": "adde636f1dabf2025fce3098623ffd17a7f7b1cdecfa93d91f884972e290ac0e"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\Microsoft.Win32.Primitives.dll",
+          "sha256": "bc805fe10630fea3e3b6fb298568de84a967d51bae7c4c85bf74be34e61a1f92"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\Microsoft.Win32.Registry.dll",
+          "sha256": "71d41f751b0e19a6dec07206db995d05c2acb7423c5413dff40a95d1963bd9bf"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\mscorlib.dll",
+          "sha256": "64001957dff2ae0b1844dfa33a2e0e67a2e0cb6ac46a653a7f37b6867b5e18e5"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\netstandard.dll",
+          "sha256": "bb4fa062db4c5e34e03fed15d8d499bb96a0a8c64ab764027f9d508cc3c54777"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.AppContext.dll",
+          "sha256": "a33a18d1d7bddbd1ae354ec97a33911020ca9417db3f17dcc7a8f8ed753a71e6"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Buffers.dll",
+          "sha256": "52bbfcf4a0e7f1ac4064a85b1a3f04d95a139047d68b2bdfa4647dd337c3376e"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Collections.Concurrent.dll",
+          "sha256": "8e71be14a80fa69d6aefa0cc2096575da2253fd1dad5c8b2eec6efd7c63b66a7"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Collections.dll",
+          "sha256": "0e238729f28638f1c1ca88e33923b0f52d79c062480e2f3ed3df9964544a3331"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Collections.Immutable.dll",
+          "sha256": "c56e049d6f480f7225397851fe1db95b7013619f7142a82b076e26ca9984dcce"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Collections.NonGeneric.dll",
+          "sha256": "230cf203ec9d6b57f2e7410c1487b79da0037df22109eab7968822a881b0bcba"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Collections.Specialized.dll",
+          "sha256": "2c3d8d082288ff1bda17cfea892d06c09915458d638084251fa9cb8797420118"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.ComponentModel.Annotations.dll",
+          "sha256": "f11f5c4e076d976be855e88a380d89c07f7091fd361068ffbae6afd7cbb347a7"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.ComponentModel.DataAnnotations.dll",
+          "sha256": "71327c2b0d8ac528dcd39dea17ebae7b04aa077aa1c23c761c86231fab54a336"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.ComponentModel.dll",
+          "sha256": "800f2c7cb84f6e5a4f76ed9d9a63a3ed0a005febe3b57af90ba93e87e35983b4"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.ComponentModel.EventBasedAsync.dll",
+          "sha256": "94d3f611336c401054bee8e28d39e1b352e22d584fe727cf45342b7ffe4f0fef"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.ComponentModel.Primitives.dll",
+          "sha256": "a8936daaba4f0b6d76b743d818008af6387a064a47d56fca04d8c8c595088ccf"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.ComponentModel.TypeConverter.dll",
+          "sha256": "e7a8054a2ab2d6f13c496dbff207573e4a3ba817094ec0a477f63f2f881a2796"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Configuration.dll",
+          "sha256": "43565850e4fa9c8dd6db1942452f38c1c722b1a92c98c8dc3bbb9b5f491f194d"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Console.dll",
+          "sha256": "0bc3cba8d432b4f7b3c3f8423c685079a9434404b22c5f3e8c9696b4b7144229"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Core.dll",
+          "sha256": "5527a5cadfdd1e90183691e5d082e874cb62b258834b843f18b94efd55d5ca6b"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Data.Common.dll",
+          "sha256": "cc66649e68db69bfacf20a143bf91105e9507b6157978b0e62976770ce88d40e"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Data.DataSetExtensions.dll",
+          "sha256": "16273da46db1ce01b72f07a00f59a433422abb2545dc6876d27f13bbe8aa1b0a"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Data.dll",
+          "sha256": "7d3c48a3ef05884cbb9d36e3aed1b4339dd5767c625782d6e3cae078d90fb4da"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Diagnostics.Contracts.dll",
+          "sha256": "09be5f1ee79aac593dd88513afba6dbb99d5a92f715c0f561422867ce61f9e8e"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Diagnostics.Debug.dll",
+          "sha256": "2d3a86400e2609c3498efced0d80aab73d92d9a29048bbd38b14b45af62560ed"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Diagnostics.DiagnosticSource.dll",
+          "sha256": "0596711f52f1dc337f3b528f0a5e83473a052462fa6393663d6500a6efdd7423"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Diagnostics.FileVersionInfo.dll",
+          "sha256": "3ee23311d78b39dab83889d99424e1546f87e7a0f0a6b2192c7e2f0f2fac860f"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Diagnostics.Process.dll",
+          "sha256": "ef354d04c90f1dc2147449e1de0be1b9546d715fe689f36642926262407cdbf3"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Diagnostics.StackTrace.dll",
+          "sha256": "b1ed143446f5bf4bfee01718a013669c6d28329a8a2927994ac2136357ace2ff"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Diagnostics.TextWriterTraceListener.dll",
+          "sha256": "cfc816d273ff497b9a07557dd1c66723d2df9289e667b00dfad9f7c315cc7aaf"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Diagnostics.Tools.dll",
+          "sha256": "ee395de3621ba77013b0b17f75ed4d75ba63eae4728dbd2b626a980298c92e68"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Diagnostics.TraceSource.dll",
+          "sha256": "45baa13eca9f1e9696ba135da3dd4199a28fadee2ffee278d946cc9a9d324cf4"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Diagnostics.Tracing.dll",
+          "sha256": "d70868502498c995110e1ebe091dad1b46da7af43c617fbe68fbeb2f6c414081"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.dll",
+          "sha256": "52d67354df0c5f2f4800b34d3dc6a5387752054c93f8990ba41d1707bda9235e"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Drawing.dll",
+          "sha256": "5738ee47fc93563bcd9f6411ac7c41f565ac2f1f03139f2f32b1066b99e92996"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Drawing.Primitives.dll",
+          "sha256": "196553528acd98f499fa52978fca642076da8d90a5f6d779caab58ee3ce6c6c1"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Dynamic.Runtime.dll",
+          "sha256": "097f8480fed46948334ea18ac78b0e040ab582b6323616ffcaf2ba177cb449dd"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Formats.Asn1.dll",
+          "sha256": "6f4c094cada71901be2ba5df37392941c9991ddc7d5900d54fafb649f9b2d9d9"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Formats.Tar.dll",
+          "sha256": "5ae5106d28a674506561cc7a8829054c9042f2ae5cc43053496f5e8ed5a415c3"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Globalization.Calendars.dll",
+          "sha256": "2c63e95ca97396afe5b1933ed4bbf60382b17b34492b01fabc964b1c9a47678b"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Globalization.dll",
+          "sha256": "408a38eeddfe973793b7f1fd3399b5bef8fa8c0223c69723c6c178fdd4db170f"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Globalization.Extensions.dll",
+          "sha256": "c36d2a33db7e79e774e7d81666678820876f55737d9821414285deb72a438442"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.IO.Compression.Brotli.dll",
+          "sha256": "1ed034809007c05a23b27be6aaabcf3d11099f989ba711cd228f1383e0b2265a"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.IO.Compression.dll",
+          "sha256": "7df99efc83f670191ac3b5076d1d56e7b3aa5b6c9d6a5804a5d816c5f54521fb"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.IO.Compression.FileSystem.dll",
+          "sha256": "f6d8fd95befdc8a0f05583849331e772667ee1b2b2f3ac0d3d7f54d24cdfc471"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.IO.Compression.ZipFile.dll",
+          "sha256": "8287004a629694ec38fd811ecf0faef364d0bbef2206f4b90b7fb373eedc347c"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.IO.dll",
+          "sha256": "94105228a3673676363a7d322524212b19d674106ad67177e111afb67d2bed23"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.IO.FileSystem.AccessControl.dll",
+          "sha256": "bb0291512d846937bf29e80e66aeca8a147c552a3f4cbb4d004236148d98ec5c"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.IO.FileSystem.dll",
+          "sha256": "0162a93afa5823f4dd5eee0c231d3f4f98cae6f30f8a9e7e6ff4b532d9247191"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.IO.FileSystem.DriveInfo.dll",
+          "sha256": "7f22b2f393919ad9fe7f612792b6c0262ffb5ddd726595b82855b86d374545be"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.IO.FileSystem.Primitives.dll",
+          "sha256": "6b434b4e06210110f28c5f38e882af688aec02bd48553e4650f8c1015dbc8922"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.IO.FileSystem.Watcher.dll",
+          "sha256": "e4328a7c11f2948b63af3df6ac80a195ecfd173ed727bef95f3b87f2920e74fc"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.IO.IsolatedStorage.dll",
+          "sha256": "8aa814dcb45a9384b28ee050d987709b3d20e109c68f987ef898299c7ead42d7"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.IO.MemoryMappedFiles.dll",
+          "sha256": "bd55a5c7c5c7bbf3462203dc3fbc4ba93b7c9b6e19f364e5bbf88613ee5bbabe"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.IO.Pipelines.dll",
+          "sha256": "7369112be80af4dafcc9805088340612791053f23ccccc956dc917cff51edbe5"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.IO.Pipes.AccessControl.dll",
+          "sha256": "de195860094456069eba4df71a2e437c849e204da5a08b6ab96e0919519591c3"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.IO.Pipes.dll",
+          "sha256": "ede5def0992036992d1c31fa2e0a0092081f6d180aab8bd50a587f0cf8947b20"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.IO.UnmanagedMemoryStream.dll",
+          "sha256": "678762d511cae70f4d3aa64b0983b28ed0fa11cda3a31bf3e7f2d069238e1c8e"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Linq.AsyncEnumerable.dll",
+          "sha256": "95997cf00da1c0322a5fd99e96f4cba24b524f7f5ffab00e16df13549a3f346a"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Linq.dll",
+          "sha256": "11d7b8c54326b1fd80ac25c8b20bff17767092127e511363fab43f3e170c4fea"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Linq.Expressions.dll",
+          "sha256": "5bee9501e66a8dd96d113cc18dbc789eabdf2c58ea73be4f18041cb90e66484c"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Linq.Parallel.dll",
+          "sha256": "6fec08c865efdf7b66cd11a855854f2ca233a4158a3eb2e6ac238042f39246b3"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Linq.Queryable.dll",
+          "sha256": "cd035b6ae0c54a8db8c5e631cd6bf0ae7e0f58b6bcf90b9f9a2616c06e9674e5"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Memory.dll",
+          "sha256": "bd3387e5041171f13a0a547941693fe162703f9ff3282948f75ed9b81b6763ad"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Net.dll",
+          "sha256": "2db3f2ce7e1c02b393211b7dae3d709652906c57c076deb77a2f2e0cf09547b2"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Net.Http.dll",
+          "sha256": "d43fb3d24a28510d3f1eded3726ec922c096390b0298d8f5516c7161c1e173f9"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Net.Http.Json.dll",
+          "sha256": "e253f86391d209e207df96312c95225b83b47d79e47bbe330d5ad7f23e59b7c6"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Net.HttpListener.dll",
+          "sha256": "203efd2800d597a296efb7d51ef727964eea65db2979218a522c52d6b445b43c"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Net.Mail.dll",
+          "sha256": "9bf1ab00c2d066c5a7ddfe911bd966676667659e7c5b8507537770ccb23ad982"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Net.NameResolution.dll",
+          "sha256": "e13dbe23a231bce37186d8f4b9bb7e10019e7f9b025219c98302e77d7f38281e"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Net.NetworkInformation.dll",
+          "sha256": "2eac119924051110568ca1754a8e3a43e45d00bdd994b613f6f558e95be0467e"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Net.Ping.dll",
+          "sha256": "a741a6a4dca86e9d255be378a4a8b87a58a15e70fd3ff6d26ff8897f44ed26df"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Net.Primitives.dll",
+          "sha256": "bddb617f01ae4bca84e3e0b65650526d69413d88e3dba1366abeecddbed37665"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Net.Quic.dll",
+          "sha256": "68254539efa179a6a503ac76abadacdad5211f3e2df85df352d18dc932a0b1c6"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Net.Requests.dll",
+          "sha256": "fea6b87b07656efbcddfd542623bbdcb7c94f671358f3a98c809a64fe0cd076e"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Net.Security.dll",
+          "sha256": "668d49de66f0c7e84e92f9e31b16d07dbf7b603d25f909dba2e2a1b93dc33000"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Net.ServerSentEvents.dll",
+          "sha256": "041b81099fe303bf66e465d28c7353aa3dd61fd1e950cf2b0f1eddccc5236b3b"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Net.ServicePoint.dll",
+          "sha256": "eef8e7e948e12e3ee487add72b8117057187edf6c10d0003b20956c78ddaba29"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Net.Sockets.dll",
+          "sha256": "098b7d2eaaf7f3225b1f9e27e8f5dc06ca6d52bf95e4c7eb9ca88088736c6476"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Net.WebClient.dll",
+          "sha256": "61aa7dc1fdb9c4e43352e90d230b7268363cc38d833b21b276ac753c33ef333c"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Net.WebHeaderCollection.dll",
+          "sha256": "17152bbc726e6f79485b554f1027d118417655b813447e8ec93e138ab3b45410"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Net.WebProxy.dll",
+          "sha256": "e6b82c2f951b442250d7b7d1f6bf5e70f49048b97e7c9d0b7b39b74f084feaa9"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Net.WebSockets.Client.dll",
+          "sha256": "6662ea4e776b7a3bba093e5226979814472420b995c5d703469222eda80d162f"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Net.WebSockets.dll",
+          "sha256": "36120547ad4601a3158b4d3ee2ee81e8b71bfa8e9c6f937d682343ce33ced724"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Numerics.dll",
+          "sha256": "d81223bc453f6898d58eef31685bb90118760773d6285f77a126aadf08301535"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Numerics.Vectors.dll",
+          "sha256": "9a62481e5b0e8851affe22d01bd9dba08b0be9e204f6d196d2e3e78444f7d28f"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.ObjectModel.dll",
+          "sha256": "7efb53c2e558ad9f023d061e91eb5313f88bd32da15a60a9983a4b00ba68589c"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Reflection.DispatchProxy.dll",
+          "sha256": "6ff088d8299f1c4d54e2e378e4168e6390a4492da47445418557bd921a8e362b"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Reflection.dll",
+          "sha256": "44495a0b4c86e31180c24760e22909793d838b23d10e0b2d9803981784780810"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Reflection.Emit.dll",
+          "sha256": "9c078312a0f46f82e3b14bd5f98ccc5377c3c24e81f6fafee588493aa84492f3"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Reflection.Emit.ILGeneration.dll",
+          "sha256": "5f3552b547d83ef023c21c38f761b6bd026735307ac4ae9a4b35962d041ae776"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Reflection.Emit.Lightweight.dll",
+          "sha256": "64bc7c72acbebf6456e6762adbef8cf1edc7c1d6aed75688b836304da95a0d90"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Reflection.Extensions.dll",
+          "sha256": "db83c2bfd43f9c501ce62da393f10fa4fa85f7a66e772070067c03dd885520b4"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Reflection.Metadata.dll",
+          "sha256": "a93906e255527fdfb212fac5e64f9244674aa76fa9a95a53c05e31fb39fbb438"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Reflection.Primitives.dll",
+          "sha256": "360465e08faa72efe48d35cf5d5c1baaa212e663fb27b5e15fdf4f478edbcb02"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Reflection.TypeExtensions.dll",
+          "sha256": "a4b56296409d157cd822b908350c01b2c0ab2efe97587b8825f0602ac93e722c"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Resources.Reader.dll",
+          "sha256": "1b28811b1694a5881fd524d4596a573a88bfb0e50f4311f5d9d6458fd05724e7"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Resources.ResourceManager.dll",
+          "sha256": "ed0c4427c92ce3a8c7344fafe912fe4e429fad85c18ea92c2c9d93206930501b"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Resources.Writer.dll",
+          "sha256": "608c56f9b5a5bdd1e665271c2383e3f1a822cc9df75c10b92f02297bdd420c6b"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Runtime.CompilerServices.Unsafe.dll",
+          "sha256": "fd0fe08e80949984a5055dbb1aeed1f975adacdcf5f5d22654629d239c0f6ddd"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Runtime.CompilerServices.VisualC.dll",
+          "sha256": "f4ca3b0e181302fa97b43fd697cf705060e959101a78e6ce5d9ad45dcf2de69f"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Runtime.dll",
+          "sha256": "062b97f438271d33ed773d99a6ace9daef530223fbfa62230e39899c51224d78"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Runtime.Extensions.dll",
+          "sha256": "ddcd655e757700858b0e66505c98488cb079213e88992cdbd9c877cf793efff4"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Runtime.Handles.dll",
+          "sha256": "f3d2a035c1720d537eea31925376497a4f6619cd7962692bc7665a383fc11ce0"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Runtime.InteropServices.dll",
+          "sha256": "7788017c0bd3bb42aab7c4bb9fad598e5b99e976ac6b8031904f17ea7847f424"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Runtime.InteropServices.JavaScript.dll",
+          "sha256": "c20f2d6199f9abd37320fdf3ab84b6a3e074502fa29f5d377e9d1e0ea0e517c2"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Runtime.InteropServices.RuntimeInformation.dll",
+          "sha256": "19a50b75f25f3d3d9f52965a4d43dc8a0bf873208d86b8b564e97a5c50e77221"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Runtime.Intrinsics.dll",
+          "sha256": "690f6771a5f6713bf5115b8bff83bf272417d4797db769b61a7efac0f4eb006b"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Runtime.Loader.dll",
+          "sha256": "421105cb05f85a6d75bad38b7547124705647102e62c31f9907156993fc11aa7"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Runtime.Numerics.dll",
+          "sha256": "2dbcf20cc5eb11387ab85bc41f198c056edfc6284f065491ae46d2663a28c59d"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Runtime.Serialization.dll",
+          "sha256": "7ed92b85c8c9d145e61ea50e80287658b84377d2672a9a9640f139997678f802"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Runtime.Serialization.Formatters.dll",
+          "sha256": "ddd05f053f5bcc968b2804093e75eabf5b494332a1d22fe28ca1129697895b0d"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Runtime.Serialization.Json.dll",
+          "sha256": "bc0daa890009d3d9a7c00f2fa7f56408e9297f7078a1dd225c2b6f14a6840413"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Runtime.Serialization.Primitives.dll",
+          "sha256": "69cc0d4ce3020715c8914642a0b9931c1046ebd3f2edec4105c8e22b9a41c5c9"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Runtime.Serialization.Xml.dll",
+          "sha256": "4de9083bd0012473813436c754d7c3c6991b205721c39638bbaac3e0d6fd3453"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Security.AccessControl.dll",
+          "sha256": "145f680a9ec4af74514e9181f6e0412121d65565e45b33990934329c26437215"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Security.Claims.dll",
+          "sha256": "ffcb6367e0d90a449fbddc40ff62d5b505abb9b263a3a88aed9d1ef0833972b5"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Security.Cryptography.Algorithms.dll",
+          "sha256": "54fcedee55839ee908659345c96e8df29262ea4bb129c24feb45eb040063c707"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Security.Cryptography.Cng.dll",
+          "sha256": "e34147f4ad84bce4c27a2c3d3bfd32700fb4356536c630850028ff63d15b3a59"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Security.Cryptography.Csp.dll",
+          "sha256": "d3f5780a778d8a33a6f094cebaa26e7bb37cda3f7d6ebcebe4811faaec1ab3fa"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Security.Cryptography.dll",
+          "sha256": "6e9961ee12317cae869b2dcaeea6a4189d5b42ea8ea34b47d0d0338a9ef6155c"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Security.Cryptography.Encoding.dll",
+          "sha256": "d650fb55f415b817803fccfa8fd9cce34cd8c4a67a908ed8bd80a704a0fdd746"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Security.Cryptography.OpenSsl.dll",
+          "sha256": "915803c4e8e152c2970d961adb96868f0ce75762d76c3539c9dbf73a9059d668"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Security.Cryptography.Primitives.dll",
+          "sha256": "cab9014ba7d99dbd80d9d6553e07adf3cd8e626b7c17759b34fb02dcea7cb257"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Security.Cryptography.X509Certificates.dll",
+          "sha256": "5d1cac0dbd4088967ad152cf90c4168db21b0ff1fcd46f0344c2c68c6a29e011"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Security.dll",
+          "sha256": "60c1ea5afd81f82db98c08466d013edf14feb5dc87a2df064fc7dfde48adb22c"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Security.Principal.dll",
+          "sha256": "2f624443f1cf566947ff1e89624ceafe9f489ffe83b7777caa27f6bfefb0e4ca"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Security.Principal.Windows.dll",
+          "sha256": "4ebbf864cbac9f6b851589d7883e757b06ca118856b29e66453803f4e2e2e4b5"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Security.SecureString.dll",
+          "sha256": "8bc239fc24de117aa9fdde4ea96eb89665aa198783c45b03b70501e22d7624d7"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.ServiceModel.Web.dll",
+          "sha256": "9f5755b5d76e51dcdcde3ebfacf8acc8d041378128ecda3c4a54bbb89e545e99"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.ServiceProcess.dll",
+          "sha256": "c8b8d9d791b90da4ff5c674fba18181c46f8a64bfc5ad8fc6f292bd10d20438f"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Text.Encoding.CodePages.dll",
+          "sha256": "de1cd75282a723e1ca0d8e0d9f83bfa676fbbb2f924c7519bbfbcca5666cb31c"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Text.Encoding.dll",
+          "sha256": "a5181030cb30e8ba066baa36cccaf5828fef8121d171992381d34fbf01c8635e"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Text.Encoding.Extensions.dll",
+          "sha256": "065ff2a8207df21d6fa4de4bc3e2f3450f363a14ed998cc9f2eeeeaf982f80b3"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Text.Encodings.Web.dll",
+          "sha256": "f5817901ca6a5bf18763a139e09785915a281bf40d4026fafece4be70113c9d3"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Text.Json.dll",
+          "sha256": "410af83b34c8af66c6afb2719e70c3616cd03bdee3566199ca9c3f8ac9ba3ae9"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Text.RegularExpressions.dll",
+          "sha256": "e1a06d4985c99478ba9f59451c113bb147f422a279ab3822d17a9e1df04ab7f5"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Threading.AccessControl.dll",
+          "sha256": "a786d91227012f3650bdbec4fd0e4c47bc849047f01820b3848f56ff6b1c01a0"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Threading.Channels.dll",
+          "sha256": "ebba96be3d8d23bf2d2755fcf160b90d776f5ec8faa8ae1dcbaa92391653d2b3"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Threading.dll",
+          "sha256": "82c0aebb958a39dee209dafc2440f6b753f9fc33a32937a612e44eec53799517"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Threading.Overlapped.dll",
+          "sha256": "5eec07b1258de39900087d71adebbd88e10baa974e78b88611995646a806858d"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Threading.Tasks.Dataflow.dll",
+          "sha256": "22d4967f5f116b277aa6f3626f92cbc11b5cbc76f1ab1e2b3203c24799f03337"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Threading.Tasks.dll",
+          "sha256": "d6a05525fbc5281dbd0f8eac2444d80b9d68c7712bb2c9071bdc1c994050e44e"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Threading.Tasks.Extensions.dll",
+          "sha256": "35e762025d75d878b0a83756a7851ec7003fcb171f5fb6f79df55d278d960ad5"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Threading.Tasks.Parallel.dll",
+          "sha256": "a40b6afdaab05667746b87a019c693408757c39d26cc134876113c4a8e66f4a0"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Threading.Thread.dll",
+          "sha256": "0b7f4429736e5519e86e448dd4d8d44fb1a2f6248ca4989bc5ac07f652746edb"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Threading.ThreadPool.dll",
+          "sha256": "9332fd15f13c8c7885d53862463157005eaf6540270d9b848447ea42e118bc75"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Threading.Timer.dll",
+          "sha256": "444560a05db55b6c94fcf355638add826b23bb4775408675fe5a94e1f22dc4fe"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Transactions.dll",
+          "sha256": "5406d91024afe237f0e3727585e51bc50655b65f31640c3f85de2b47605aa0f5"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Transactions.Local.dll",
+          "sha256": "220e551b6f673b393a4c562d52ad8f94b94b231b38e6376f7563e2947aaafe68"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.ValueTuple.dll",
+          "sha256": "c24b24b5432b383b5d6412c7b5c2795c57eed51c63da03a5a242700742732457"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Web.dll",
+          "sha256": "c92dbcf7c9973f93b1182998871f271933ee60283733378d6812d65503202330"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Web.HttpUtility.dll",
+          "sha256": "e690df6f5ec9edf5f0d623dc4e7ee9b379c104d6bb59edeccbc3106273943f4f"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Windows.dll",
+          "sha256": "99bff280a84add5b28fcd6530a2f8c1ba7f21d6325141698c7dd8039f0e87150"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Xml.dll",
+          "sha256": "d9f59e036aac979682817d2968b3823384d97e1f8075f148e747c1767ab4e95a"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Xml.Linq.dll",
+          "sha256": "f2ed8f3f0136a240d70790343a9c8e9dc8604b8f3cd96c9f6baa51a54c11296b"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Xml.ReaderWriter.dll",
+          "sha256": "b5441e8f76cf9781e9ab3a52f60bb90f21fcac37f29d047678c7cb2de6e74777"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Xml.Serialization.dll",
+          "sha256": "d2c5017e05d1b41f4eab9b235a92fcfd6cb03a3310dc123d1b6d92e7c488673d"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Xml.XDocument.dll",
+          "sha256": "480014aed129bac977a6d1e6b6cd5b6a87bf91eef9f4a73deb0a115ba6a01db8"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Xml.XmlDocument.dll",
+          "sha256": "4e9909aa5b91953cba3331690fd1b92c17db229b90e7c3dc6b2028996f549561"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Xml.XmlSerializer.dll",
+          "sha256": "e401c2fceaed5033025437e1d7dd1b7f7e1b277093d277c99f3bad11f4c4e9df"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Xml.XPath.dll",
+          "sha256": "69ac32e069b06d039e67a86b6f1f1ebc3179359270e663130c18091901ee1180"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\System.Xml.XPath.XDocument.dll",
+          "sha256": "a1aeea9b572f8e07cac07bb73500417fc96f06704b78f8712a2508141caaa17d"
+        },
+        {
+          "path": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\10.0.0\\ref\\net10.0\\WindowsBase.dll",
+          "sha256": "101bbe08e12fd7ff496e8fa3e18c5051f75a6a19dc30ffba31c109612eba2726"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "D:\\CodexTemp\\hybrid-owner-research-20260924\\clr-results-verified\\net10\\Producer.dll",
+          "bytes": 4096,
+          "sha256": "8a8ea3030cc0c42b90259c3b971a392f02a3db2452c2dad5be21bd7af56ddcc0"
+        },
+        {
+          "path": "D:\\CodexTemp\\hybrid-owner-research-20260924\\clr-results-verified\\net10\\Writers.dll",
+          "bytes": 3072,
+          "sha256": "1af4d154f8454a4db9f3a18e7fbabf57e113c5a309f80046a75702dea78e546d"
+        },
+        {
+          "path": "D:\\CodexTemp\\hybrid-owner-research-20260924\\clr-results-verified\\net10\\Consumer.dll",
+          "bytes": 12800,
+          "sha256": "6fa64dca6fb99c791a358131feb68b1e9d406b42ec428ca2f166d604af1e035f"
+        }
+      ]
+    }
+  ]
+}

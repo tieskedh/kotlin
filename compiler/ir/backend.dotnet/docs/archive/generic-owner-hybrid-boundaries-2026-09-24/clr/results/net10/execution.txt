@@ -1,0 +1,27 @@
+MECHANISM ONLY runtime=10.0.9 pointerBytes=8
+FACTORY ClrComposition.Box`1[T] Make[T](T)
+FACTORY ClrComposition.Box`1[ClrComposition.IProducer] MakeNested[T](ClrComposition.IProducer)
+FACTORY ClrComposition.Box`1[ClrComposition.IBoxView] MakeProjected[T](ClrComposition.IBoxView)
+FACTORY ClrComposition.IBoxView MakeNullable[T](System.Object)
+STATE actual=ClrComposition.Box`1[System.Int32] field=System.Int32 read=Int32 Read() view=System.Object ClrComposition.IBoxView.ReadObject()
+PASS typed scalar Box<int> and separate generic writer
+STATE actual=ClrComposition.Box`1[ClrComposition.IProducer] field=ClrComposition.IProducer read=ClrComposition.IProducer Read() view=System.Object ClrComposition.IBoxView.ReadObject()
+PASS Make<IProducer> int/string/bottom cycle
+STATE actual=ClrComposition.Box`1[ClrComposition.IProducer] field=ClrComposition.IProducer read=ClrComposition.IProducer Read() view=System.Object ClrComposition.IBoxView.ReadObject()
+PASS open MakeNested<T> int/string/bottom cycle
+STATE actual=ClrComposition.Box`1[System.Int32] field=System.Int32 read=Int32 Read() view=System.Object ClrComposition.IBoxView.ReadObject()
+STATE actual=ClrComposition.Box`1[System.String] field=System.String read=System.String Read() view=System.Object ClrComposition.IBoxView.ReadObject()
+STATE actual=ClrComposition.Box`1[ClrComposition.IBoxView] field=ClrComposition.IBoxView read=ClrComposition.IBoxView Read() view=System.Object ClrComposition.IBoxView.ReadObject()
+PASS projected read-only views of different invariant boxes
+STATE actual=ClrComposition.Box`1[System.Object] field=System.Object read=System.Object Read() view=System.Object ClrComposition.IBoxView.ReadObject()
+STATE actual=ClrComposition.Box`1[System.Nullable`1[System.Int32]] field=System.Nullable`1[System.Int32] read=System.Nullable`1[System.Int32] Read() view=System.Object ClrComposition.IBoxView.ReadObject()
+STATE actual=ClrComposition.Box`1[ClrComposition.IBoxView] field=ClrComposition.IBoxView read=ClrComposition.IBoxView Read() view=System.Object ClrComposition.IBoxView.ReadObject()
+PASS broad open nullable and exact closed nullable share only view
+EXPECTED InvalidCastException Box<object> -> Box<Nullable<int>>
+PASS negative same Box<object> is not Box<int?>
+EXPECTED InvalidCastException FixedObjectBase<int> -> Base<Nullable<int>>
+BASE actual=ClrComposition.FixedObjectBase`1[System.Int32] base=ClrComposition.Base`1[System.Object]
+PASS negative metadata-fixed Base<object> is not Base<int?>
+STATE actual=ClrComposition.ObservedStringBox field=System.String read=System.String Read() view=System.Object ClrComposition.IBoxView.ReadObject()
+PASS separate C# subclass typed and view routes preserve override
+SUMMARY scenarios=8 failures=0

@@ -1,0 +1,5 @@
+"profile","scenario","epoch","samples","minNsPerCycle","medianNsPerCycle","maxNsPerCycle","allocationBytesPerCycle","label"
+"net48","broad","candidate","7","127,30804","127,899","129,49395","24","exploratory-overlap-only"
+"net48","broad","erased","7","24,93446","25,51364","27,07617","72","exploratory-overlap-only"
+"net48","scalar","candidate","7","3,4217","3,81526","3,99188","24","exploratory-overlap-only"
+"net48","scalar","erased","7","10,39541","10,76567","11,30214","72","exploratory-overlap-only"

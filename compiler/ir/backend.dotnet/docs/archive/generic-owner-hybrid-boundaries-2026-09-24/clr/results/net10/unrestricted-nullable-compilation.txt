@@ -1,0 +1,1 @@
+D:\CodexTemp\hybrid-owner-research-20260924\clr-results-verified\sources\UnrestrictedNullable.cs(5,38): error CS0453: The type 'T' must be a non-nullable value type in order to use it as parameter 'T' in the generic type or method 'Nullable<T>'

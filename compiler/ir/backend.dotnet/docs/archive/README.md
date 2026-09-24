@@ -14,6 +14,10 @@ Use:
 
 Archived snapshots:
 
+- [`generic-owner-hybrid-boundaries-2026-09-24.md`](generic-owner-hybrid-boundaries-2026-09-24.md)
+  investigates substitution-closed exact/canonical subsets, shared-view benefits
+  and outward-contract costs, with separate JVM/CLR probes and actual-product
+  Framework cost attribution; it admits no replacement ABI.
 - [`generic-owner-storage-cycle-2026-09-24.md`](generic-owner-storage-cycle-2026-09-24.md)
   records separately compiled factories/writers and ordinary C# observations,
   passing broad/scalar paths, narrow-storage failures and public-contract

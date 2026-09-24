@@ -1,0 +1,158 @@
+{
+  "protocol": 1,
+  "label": "exploratory-overlap-only",
+  "createdUtc": "2026-09-24T19:49:41.0944720Z",
+  "limitations": "Unrelated Compose/apps may be active. Correct shared subset only; narrow failing cycles excluded. No Kotlin compile/startup/AOT/trimming measurement.",
+  "machine": "DESKTOP-4SD9DN3",
+  "os": "Microsoft Windows NT 10.0.26200.0",
+  "logicalProcessors": 8,
+  "powershell": "7.6.5",
+  "iterations": 10000000,
+  "warmup": 1000000,
+  "samples": 7,
+  "profiles": [
+    "net48"
+  ],
+  "scenarios": [
+    "scalar",
+    "broad"
+  ],
+  "artifactDirectory": "D:\\CodexTemp\\generic-owner-storage-cycle-20260924",
+  "dotNetHost": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\dotnet.exe",
+  "hostSha256": "b74c001a6f6f5c979f88eda19a8f782346ee17ecea6add3647ad05f5c6e2b8bd",
+  "compiler": "C:\\Users\\thijs\\AppData\\Local\\kotlinc-dotnet\\toolchain\\dotnet\\sdk\\10.0.100\\Roslyn\\bincore\\csc.dll",
+  "compilerSha256": "b8d69d09c4c9c395932e7f3b023422d653a7f713ce4fc8eec701560dc7077d81",
+  "templateSha256": "6c7a3c358e72557ac90dbcff9163ee496b6be8ad96bae5ca4bb57046d5faa997",
+  "driverSha256": "85a07a7d9025a83add9dfe38776172434bc18e40482f46ba190032137fa7ec1d",
+  "frameworkLauncherSha256": "9cb2cadcfdfa35b9110cbf56e7da29d4d402f6549e0e456319b7bb367298da1e",
+  "sharedFrozenMatrixSource": "D:\\CodexTemp\\generic-owner-storage-cycle-20260924\\isolated-candidate-lighttree-net10\\genericOwnerStorageCycle.kt",
+  "sharedFrozenMatrixSourceSha256": "2b91786078f7605b16e8cc56ac47527facecbdb61827c244dc18a561c81c3a47",
+  "inheritedRuntimeEnvironment": [
+    null,
+    null,
+    null,
+    null
+  ],
+  "inputs": [
+    {
+      "epoch": "candidate",
+      "profile": "net48",
+      "path": "D:\\CodexTemp\\generic-owner-storage-cycle-20260924\\isolated-candidate-lighttree-net48\\lib1.dll",
+      "sha256": "ad38eebcc47e596ce317b658e38d017289f2d85ab04a05e81b693766f34b79d1"
+    },
+    {
+      "epoch": "candidate",
+      "profile": "net48",
+      "path": "D:\\CodexTemp\\generic-owner-storage-cycle-20260924\\isolated-candidate-lighttree-net48\\lib2.dll",
+      "sha256": "afa958eb178b4ce01591daeac12e20e4ff8c1845f30875f04cd2bab1eacefc0e"
+    },
+    {
+      "epoch": "candidate",
+      "profile": "net48",
+      "path": "D:\\CodexTemp\\generic-owner-storage-cycle-20260924\\isolated-candidate-lighttree-net48\\Kotlin.Runtime.dll",
+      "sha256": "1f564a82c941d0b743c23063f8ace97e63207a25c4a87ad6cad3eb66876cccd0"
+    },
+    {
+      "epoch": "candidate",
+      "profile": "net48",
+      "path": "D:\\CodexTemp\\generic-owner-storage-cycle-20260924\\isolated-candidate-lighttree-net48\\Kotlin.Stdlib.dll",
+      "sha256": "6073e4c80eaa8d14ff31003ebf69f99a7f660956d75f40aae21be233bf779a06"
+    },
+    {
+      "epoch": "candidate",
+      "profile": "net48",
+      "path": "D:\\CodexTemp\\generic-owner-storage-cycle-20260924\\isolated-candidate-lighttree-net48\\lib1.il",
+      "sha256": "39bfc0b612f54db53090b1d3cef2b814cd9c8a14e99a6620aab2b083edbe7cef"
+    },
+    {
+      "epoch": "candidate",
+      "profile": "net48",
+      "path": "D:\\CodexTemp\\generic-owner-storage-cycle-20260924\\isolated-candidate-lighttree-net48\\lib2.il",
+      "sha256": "1c31bb19abccdf74617da25ea05febc84e4ba1481a979d3d2a78fd6965c4e722"
+    },
+    {
+      "epoch": "candidate",
+      "profile": "net48",
+      "path": "D:\\CodexTemp\\generic-owner-storage-cycle-20260924\\isolated-candidate-lighttree-net48\\lib1-physical.txt",
+      "sha256": "f565566b8cb4e0bfc9100e820e44ab2c23333d8e988fc5cdb21fa0b3a27ab6d1"
+    },
+    {
+      "epoch": "candidate",
+      "profile": "net48",
+      "path": "D:\\CodexTemp\\generic-owner-storage-cycle-20260924\\isolated-candidate-lighttree-net48\\lib2-physical.txt",
+      "sha256": "a242b1ec1d281a6a15429b2c31f79a2b7646e500b475b43731dc8760c898809e"
+    },
+    {
+      "epoch": "candidate",
+      "profile": "net48",
+      "path": "D:\\CodexTemp\\generic-owner-storage-cycle-20260924\\isolated-candidate-lighttree-net48\\StorageCycle.cs",
+      "sha256": "d6bfc0111822c3a549cbab20d95b9f147778211af9ee83eaf50413089139cc99"
+    },
+    {
+      "epoch": "candidate",
+      "profile": "net48",
+      "path": "D:\\CodexTemp\\generic-owner-storage-cycle-20260924\\isolated-candidate-lighttree-net48\\StorageCycle-results.txt",
+      "sha256": "a26cd7c5fa0deb02c0a82fbb201a89a7399b734835c7dc5f6a8bb6b1ebe157ff"
+    },
+    {
+      "epoch": "erased",
+      "profile": "net48",
+      "path": "D:\\CodexTemp\\generic-owner-storage-cycle-20260924\\isolated-erased-lighttree-net48\\lib1.dll",
+      "sha256": "eca80de07f446d2b363d03ea342b78dcda298c170839946ca956e9199d45db1a"
+    },
+    {
+      "epoch": "erased",
+      "profile": "net48",
+      "path": "D:\\CodexTemp\\generic-owner-storage-cycle-20260924\\isolated-erased-lighttree-net48\\lib2.dll",
+      "sha256": "74a3ab6753f8a98fbbfb36bfbdee35a3982adf1e76ea993d26785994b9246008"
+    },
+    {
+      "epoch": "erased",
+      "profile": "net48",
+      "path": "D:\\CodexTemp\\generic-owner-storage-cycle-20260924\\isolated-erased-lighttree-net48\\Kotlin.Runtime.dll",
+      "sha256": "1f564a82c941d0b743c23063f8ace97e63207a25c4a87ad6cad3eb66876cccd0"
+    },
+    {
+      "epoch": "erased",
+      "profile": "net48",
+      "path": "D:\\CodexTemp\\generic-owner-storage-cycle-20260924\\isolated-erased-lighttree-net48\\Kotlin.Stdlib.dll",
+      "sha256": "6073e4c80eaa8d14ff31003ebf69f99a7f660956d75f40aae21be233bf779a06"
+    },
+    {
+      "epoch": "erased",
+      "profile": "net48",
+      "path": "D:\\CodexTemp\\generic-owner-storage-cycle-20260924\\isolated-erased-lighttree-net48\\lib1.il",
+      "sha256": "113b278bdf0f2bc8871ca2cc676244c08d579c0a86a614265fc8863b45b99ffd"
+    },
+    {
+      "epoch": "erased",
+      "profile": "net48",
+      "path": "D:\\CodexTemp\\generic-owner-storage-cycle-20260924\\isolated-erased-lighttree-net48\\lib2.il",
+      "sha256": "bf86ad238c991c3d13642fb0a831aaa6db4cd6fd0228a5b3683ec69ccc0c6e27"
+    },
+    {
+      "epoch": "erased",
+      "profile": "net48",
+      "path": "D:\\CodexTemp\\generic-owner-storage-cycle-20260924\\isolated-erased-lighttree-net48\\lib1-physical.txt",
+      "sha256": "75e8618de199239c7016e78c83b668ad571c13657435a99cbfbad361ab5ee08f"
+    },
+    {
+      "epoch": "erased",
+      "profile": "net48",
+      "path": "D:\\CodexTemp\\generic-owner-storage-cycle-20260924\\isolated-erased-lighttree-net48\\lib2-physical.txt",
+      "sha256": "f871f4c579712aa46aa51a204fc253571761dee209570cad77391f63bdcadc23"
+    },
+    {
+      "epoch": "erased",
+      "profile": "net48",
+      "path": "D:\\CodexTemp\\generic-owner-storage-cycle-20260924\\isolated-erased-lighttree-net48\\StorageCycle.cs",
+      "sha256": "e35436269ef98e7e775c7de9de952599f854f2ac57510a12d8be5a9891cd5c4d"
+    },
+    {
+      "epoch": "erased",
+      "profile": "net48",
+      "path": "D:\\CodexTemp\\generic-owner-storage-cycle-20260924\\isolated-erased-lighttree-net48\\StorageCycle-results.txt",
+      "sha256": "008e3d2cc8838ad14c80464a7b4f3c59f6f72a7f547c204b9202735374413e45"
+    }
+  ]
+}

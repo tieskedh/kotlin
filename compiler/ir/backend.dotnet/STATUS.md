@@ -123,14 +123,18 @@ existing narrow C# box cannot enter the broad writer. An open nested writer
 also exposes a separate implementation gap. The earlier
 [constructor/write counterexamples](docs/archive/nested-bottom-storage-2026-09-24.md)
 remain reproduced. These are archived negative experiments, not a new green
-candidate checkpoint; compiler and production ABI are unchanged. Investigate
-CONSTRAIN/hybrid boundaries before a broader GO: no complete admission subset
-or replacement contract has yet been proved. Broader public surfaces and the
-treatment of existing narrow C# containers require an explicit interop decision.
-Neither global state erasure nor pair transport follows from these results.
-Exploratory measurements of actual emitted products show scalar gains and fewer
-allocations on the passing overlap, but roughly fivefold slower broad paths on
-Framework despite gains on .NET 10. These are not whole-application results;
+candidate checkpoint; compiler and production ABI are unchanged. The subsequent
+[hybrid-boundary research](docs/archive/generic-owner-hybrid-boundaries-2026-09-24.md)
+supports bounded exact/canonical investigation, not a complete admission rule.
+Same-object nominal views solve a subset; open-nullable substitution, fixed
+ancestry and logical argument checks remain hard composition gates. Six JVM
+precedent groups and eight standalone CLR mechanism groups per profile do not
+constitute Kotlin/.NET integration. Broader public surfaces and existing narrow
+C# containers still require an explicit interop decision. Neither global state
+erasure nor pair transport follows. Matched diagnostics localize the earlier
+fivefold Framework gap to repeated interface conversion/receiver provenance and
+its JIT consequences, not a semantic dispatcher. Actual emitted products still
+show scalar gains and fewer overlap allocations; whole-application performance,
 compiler time/memory and complete-contract costs remain unmeasured.
 Conflicting foreign implementations of
 Kotlin-owned families require an explicit interop policy; neither researched
